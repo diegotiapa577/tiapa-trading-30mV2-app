@@ -25,26 +25,16 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-// ===============================
-// 🔐 Función para firmar parámetros
-// ===============================
 function signParams(params) {
   const queryString = new URLSearchParams(params).toString();
   return crypto.createHmac("sha256", API_SECRET).update(queryString).digest("hex");
 }
 
-// ===============================
-// ⏰ Obtener hora del servidor Binance
-// ===============================
 async function getServerTime() {
   const res = await fetch(`${BINANCE_FUTURES_URL}/fapi/v1/time`);
   const data = await res.json();
   return data.serverTime;
 }
-
-// ===============================
-// 🔹 ENDPOINTS FUTURES (gráficos, precios, funding)
-// ===============================
 
 // 📈 Klines desde FUTURES Testnet
 app.get("/api/binance/klines", async (req, res) => {
@@ -94,16 +84,32 @@ app.get("/api/binance/futures/funding", async (req, res) => {
   }
 });
 
-// ===============================
-// 🔸 ENDPOINTS FUTURES (Trading y posiciones)
-// ===============================
+// 📈 Open Interest (OI) - exclusivo de futuros
+app.get("/api/binance/futures/open-interest", async (req, res) => {
+  const { symbol = "BTCUSDT" } = req.query;
+  const url = `${BINANCE_FUTURES_URL}/fapi/v1/openInterest?symbol=${symbol}`;
+  
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    
+    res.json({
+      openInterest: parseFloat(data.openInterest) || 0,
+      symbol: data.symbol || symbol
+    });
+  } catch (err) {
+    console.error("Error en /open-interest:", err.message);
+    res.status(500).json({ error: "Error al obtener open interest" });
+  }
+});
 
 // ✅ Cuenta
 app.get("/api/binance/futures/account", async (req, res) => {
   if (!API_KEY || !API_SECRET) return res.status(500).json({ error: "Claves no configuradas" });
   try {
     const timestamp = await getServerTime();
-    const recvWindow = 60000; // 60 segundos → máximo permitido
+    const recvWindow = 60000;
     const params = { timestamp, recvWindow };
     const signature = signParams(params);
     const url = `${BINANCE_FUTURES_URL}/fapi/v2/account?${new URLSearchParams(params)}&signature=${signature}`;
@@ -135,7 +141,7 @@ app.get("/api/binance/futures/positions", async (req, res) => {
   }
 });
 
-// 🚀 Abrir orden (Market)
+// 🚀 Abrir orden
 app.post("/api/binance/futures/order", async (req, res) => {
   if (!API_KEY || !API_SECRET) return res.status(500).json({ error: "Claves no configuradas" });
   const { symbol, side, quantity, leverage, positionSide = "BOTH" } = req.body;
@@ -144,23 +150,14 @@ app.post("/api/binance/futures/order", async (req, res) => {
   try {
     const timestamp = await getServerTime();
     const recvWindow = 60000;
-
-    // Configurar apalancamiento
     const levParams = { symbol, leverage, timestamp, recvWindow };
     const levSignature = signParams(levParams);
     const levUrl = `${BINANCE_FUTURES_URL}/fapi/v1/leverage?${new URLSearchParams(levParams)}&signature=${levSignature}`;
     await fetch(levUrl, { method: "POST", headers: { "X-MBX-APIKEY": API_KEY } });
-
-    // Crear orden
     const orderParams = { symbol, side, type: "MARKET", quantity, positionSide, timestamp, recvWindow };
     const orderSig = signParams(orderParams);
     const orderUrl = `${BINANCE_FUTURES_URL}/fapi/v1/order?${new URLSearchParams(orderParams)}&signature=${orderSig}`;
-
-    const response = await fetch(orderUrl, {
-      method: "POST",
-      headers: { "X-MBX-APIKEY": API_KEY },
-    });
-
+    const response = await fetch(orderUrl, { method: "POST", headers: { "X-MBX-APIKEY": API_KEY } });
     const result = await response.json();
     if (result.code) throw new Error(JSON.stringify(result));
     res.json(result);
@@ -186,18 +183,12 @@ app.post("/api/binance/futures/close-position", async (req, res) => {
     const pos = positions.find(p => p.symbol === symbol && p.positionSide === positionSide);
     if (!pos || Math.abs(parseFloat(pos.positionAmt)) < 0.0001)
       return res.status(400).json({ error: "No hay posición abierta" });
-
     const side = parseFloat(pos.positionAmt) > 0 ? "SELL" : "BUY";
     const quantity = Math.abs(parseFloat(pos.positionAmt)).toFixed(3);
     const closeParams = { symbol, side, type: "MARKET", quantity, positionSide, timestamp, recvWindow };
     const closeSig = signParams(closeParams);
     const closeUrl = `${BINANCE_FUTURES_URL}/fapi/v1/order?${new URLSearchParams(closeParams)}&signature=${closeSig}`;
-
-    const closeRes = await fetch(closeUrl, {
-      method: "POST",
-      headers: { "X-MBX-APIKEY": API_KEY },
-    });
-
+    const closeRes = await fetch(closeUrl, { method: "POST", headers: { "X-MBX-APIKEY": API_KEY } });
     const result = await closeRes.json();
     if (result.code) throw new Error(JSON.stringify(result));
     res.json(result);
@@ -207,9 +198,6 @@ app.post("/api/binance/futures/close-position", async (req, res) => {
   }
 });
 
-// ===============================
-// 🚀 Iniciar servidor
-// ===============================
 app.get("/favicon.ico", (req, res) => res.status(204).end());
 
 app.listen(PORT, () => {
