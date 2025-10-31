@@ -1,3 +1,4 @@
+// ✅ Open Interest activo - 2025-04-05
 let chart;
 let dataSeries;
 let precios = [];
