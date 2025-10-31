@@ -8,7 +8,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 // 🔑 URL CORREGIDA: solo Futures Testnet (sin espacios)
 const BINANCE_FUTURES_URL = "https://testnet.binancefuture.com";
