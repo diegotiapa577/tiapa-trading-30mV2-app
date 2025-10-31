@@ -257,6 +257,51 @@ function prepararDatosParaIA(klines, fundingRate = 0, openInterest = 0) {
   return { X: tf.tensor2d(X), y: tf.tensor2d(y, [y.length, 1]) };
 }
 
+async function obtenerDatosBacktesting(symbol = 'BTCUSDT', interval = '15m', days = 30) {
+  const res = await fetch(`/api/binance/futures/backtest-data?symbol=${symbol}&interval=${interval}&days=${days}`);
+  if (!res.ok) throw new Error(`Error al obtener datos: ${res.status}`);
+  return await res.json();
+}
+async function ejecutarBacktesting() {
+  const simbolo = document.getElementById('bt-simbolo').value.toUpperCase();
+  const intervalo = document.getElementById('bt-intervalo').value;
+  const dias = parseInt(document.getElementById('bt-dias').value);
+  
+  document.getElementById('bt-estado').textContent = 'Descargando datos...';
+  
+  try {
+    // 1. Obtener datos históricos
+    const klines = await obtenerDatosBacktesting(simbolo, intervalo, dias);
+    document.getElementById('bt-estado').textContent = `Simulando ${klines.length} velas...`;
+    
+    // 2. Simular trading
+    const resultados = simularTrading(klines);
+    
+    // 3. Mostrar resultados
+    document.getElementById('bt-operaciones').textContent = resultados.operaciones;
+    document.getElementById('bt-winrate').textContent = `${resultados.winRate.toFixed(2)}%`;
+    document.getElementById('bt-profitfactor').textContent = resultados.profitFactor.toFixed(2);
+    document.getElementById('bt-drawdown').textContent = `${resultados.maxDrawdown.toFixed(2)}%`;
+    document.getElementById('bt-roetotal').textContent = `${resultados.roeTotal.toFixed(2)}%`;
+    document.getElementById('bt-resultados').style.display = 'block';
+    
+    document.getElementById('bt-estado').textContent = '✅ Simulación completada';
+  } catch (err) {
+    console.error('Error en backtesting:', err);
+    document.getElementById('bt-estado').textContent = `❌ Error: ${err.message}`;
+  }
+}
+
+function simularTrading(klines) {
+  // Aquí irá la lógica de simulación (la implementaremos en el próximo paso)
+  return {
+    operaciones: 0,
+    winRate: 0,
+    profitFactor: 0,
+    maxDrawdown: 0,
+    roeTotal: 0
+  };
+}
 async function crearModelo(inputShape = 24) {
   const model = tf.sequential();
   model.add(tf.layers.dense({ units: 64, activation: 'relu', inputShape: [inputShape] }));

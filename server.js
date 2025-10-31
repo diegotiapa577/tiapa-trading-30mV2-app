@@ -1,3 +1,4 @@
+// ✅ Open Interest activo - 2025-04-05
 // server.js
 import express from "express";
 import cors from "cors";
@@ -63,7 +64,31 @@ app.get("/api/binance/ticker", async (req, res) => {
     res.status(500).json({ error: "Error al obtener precio" });
   }
 });
-
+// 📉 Datos históricos para backtesting
+app.get("/api/binance/futures/backtest-data", async (req, res) => {
+  const { symbol = "BTCUSDT", interval = "15m", days = 30 } = req.query;
+  const limit = Math.min(1500, days * (interval === '1m' ? 1440 : interval === '5m' ? 288 : interval === '15m' ? 96 : 24));
+  
+  try {
+    const url = `${BINANCE_FUTURES_URL}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+    const response = await fetch(url);
+    const klines = await response.json();
+    
+    const data = klines.map(k => ({
+      time: Math.floor(k[0] / 1000),
+      open: parseFloat(k[1]),
+      high: parseFloat(k[2]),
+      low: parseFloat(k[3]),
+      close: parseFloat(k[4]),
+      volume: parseFloat(k[5])
+    }));
+    
+    res.json(data);
+  } catch (err) {
+    console.error("Error en /backtest-data:", err.message);
+    res.status(500).json({ error: "Error al obtener datos históricos" });
+  }
+});
 // 💸 Funding Rate (desde premiumIndex)
 app.get("/api/binance/futures/funding", async (req, res) => {
   const { symbol = "BTCUSDT" } = req.query;
