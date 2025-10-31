@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AI Trading Dashboard - Testnet</title>
-  <!-- ✅ URLs CORRECTAS sin espacios -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.16.0/dist/tf.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <style>
@@ -18,41 +17,42 @@
       flex: 1 1 150px;
       text-align: center; 
     }
-    #chart, #equityChart { height: 400px; width: 100%; }
+    #chart { height: 400px; width: 100%; }
     button { padding: 10px 15px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
-    input { padding: 6px; margin: 3px 5px; width: 70px; text-align: center; }
+    input, select { padding: 6px; margin: 3px 5px; width: 70px; text-align: center; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     th, td { padding: 8px; text-align: left; border-bottom: 1px solid #333; }
     th { background: #1e1e1e; }
     tr:hover { background: #252525; }
     .actions { display: flex; gap: 10px; flex-wrap: wrap; }
     label { display: block; margin: 4px 0 2px; font-size: 0.9em; }
-#prediccion-contenedor {
-  text-align: center;
-  padding: 8px 0;
-}
-#prediccion-direccion {
-  font-size: 1.1em;
-  margin-bottom: 6px;
-}
-#prediccion-porcentaje {
-  font-size: 1.3em;
-  font-weight: bold;
-  margin-bottom: 8px;
-}
-#prediccion-barra {
-  width: 100%;
-  height: 10px;
-  background: #333;
-  border-radius: 5px;
-  overflow: hidden;
-}
-#prediccion-progreso {
-  height: 100%;
-  width: 0%;
-  background: linear-gradient(to right, #ff5252, #4caf50);
-  transition: width 0.5s ease;
-}
+
+    #prediccion-contenedor {
+      text-align: center;
+      padding: 8px 0;
+    }
+    #prediccion-direccion {
+      font-size: 1.1em;
+      margin-bottom: 6px;
+    }
+    #prediccion-porcentaje {
+      font-size: 1.3em;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+    #prediccion-barra {
+      width: 100%;
+      height: 10px;
+      background: #333;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    #prediccion-progreso {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(to right, #ff5252, #4caf50);
+      transition: width 0.5s ease;
+    }
   </style>
 </head>
 <body>
@@ -72,10 +72,10 @@
         <input type="number" id="maxOperaciones" value="3" min="1" max="10">
         
         <label for="takeProfit">Take-Profit (%)</label>
-        <input type="number" id="takeProfit" value="1" step="0.1" min="0.1">
+        <input type="number" id="takeProfit" value="5" step="0.1" min="0.1">
         
         <label for="stopLoss">Stop-Loss (%)</label>
-        <input type="number" id="stopLoss" value="1" step="0.1" min="0.1">
+        <input type="number" id="stopLoss" value="3" step="0.1" min="0.1">
         
         <label for="simbolo">Símbolo</label>
         <input type="text" id="simbolo" value="BTCUSDT" style="width: 100px; text-align: center;">
@@ -103,22 +103,22 @@
       </div>
       
       <div class="stat-box">
-  <h3>Predicción IA</h3>
-  <div id="prediccion-contenedor">
-    <div id="prediccion-direccion">-</div>
-    <div id="prediccion-porcentaje">0%</div>
-    <div id="prediccion-barra">
-      <div id="prediccion-progreso"></div>
-    </div>
-  </div>
-</div>
+        <h3>Predicción IA</h3>
+        <div id="prediccion-contenedor">
+          <div id="prediccion-direccion">-</div>
+          <div id="prediccion-porcentaje">0%</div>
+          <div id="prediccion-barra">
+            <div id="prediccion-progreso"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="actions">
       <button onclick="entrenarRed()">🧠 Entrenar Red Neuronal</button>
       <label>
-      <input type="checkbox" id="auto-trading"> Auto-Trading (IA)
-       </label>
+        <input type="checkbox" id="auto-trading"> Auto-Trading (IA)
+      </label>
       <br>
       <button onclick="iniciarStreaming()">▶️ Iniciar Streaming</button>
       <button onclick="detenerStreaming()">⏹️ Stop Streaming</button>
@@ -128,35 +128,42 @@
     </div>
 
     <div id="chart"></div>
-  
+
     <div>
-       <div>
-  <h3>🧪 Backtesting</h3>
-  <label for="bt-simbolo">Símbolo</label>
-  <input type="text" id="bt-simbolo" value="BTCUSDT" style="width: 100px;">
-  
-  <label for="bt-intervalo">Intervalo</label>
-  <select id="bt-intervalo">
-    <option value="15m">15m</option>
-    <option value="1h">1h</option>
-    <option value="4h">4h</option>
-  </select>
-  
-  <label for="bt-dias">Días</label>
-  <input type="number" id="bt-dias" value="30" min="1" max="60" style="width: 60px;">
-  
-  <button onclick="ejecutarBacktesting()">▶️ Ejecutar Simulación</button>
-  <span id="bt-estado">Listo para simular</span>
-  
-  <div id="bt-resultados" style="margin-top: 10px; display: none;">
-    <h4>Resultados del Backtesting</h4>
-    <p><strong>Operaciones:</strong> <span id="bt-operaciones">0</span></p>
-    <p><strong>Win Rate:</strong> <span id="bt-winrate">0%</span></p>
-    <p><strong>Profit Factor:</strong> <span id="bt-profitfactor">0.00</span></p>
-    <p><strong>Máximo Drawdown:</strong> <span id="bt-drawdown">0.00%</span></p>
-    <p><strong>ROE Total:</strong> <span id="bt-roetotal">0.00%</span></p>
-  </div>
-</div>
+      <h3>📈 Curva de Capital (Equity)</h3>
+      <div id="equityChart"></div>
+    </div>
+
+    <!-- 🧪 BACKTESTING -->
+    <div>
+      <h3>🧪 Backtesting</h3>
+      <label for="bt-simbolo">Símbolo</label>
+      <input type="text" id="bt-simbolo" value="BTCUSDT" style="width: 100px;">
+      
+      <label for="bt-intervalo">Intervalo</label>
+      <select id="bt-intervalo">
+        <option value="15m">15m</option>
+        <option value="1h">1h</option>
+        <option value="4h">4h</option>
+      </select>
+      
+      <label for="bt-dias">Días</label>
+      <input type="number" id="bt-dias" value="30" min="1" max="60" style="width: 60px;">
+      
+      <button onclick="ejecutarBacktesting()">▶️ Ejecutar Simulación</button>
+      <span id="bt-estado">Listo para simular</span>
+      
+      <div id="bt-resultados" style="margin-top: 10px; display: none;">
+        <h4>Resultados del Backtesting</h4>
+        <p><strong>Operaciones:</strong> <span id="bt-operaciones">0</span></p>
+        <p><strong>Win Rate:</strong> <span id="bt-winrate">0%</span></p>
+        <p><strong>Profit Factor:</strong> <span id="bt-profitfactor">0.00</span></p>
+        <p><strong>Máximo Drawdown:</strong> <span id="bt-drawdown">0.00%</span></p>
+        <p><strong>ROE Total:</strong> <span id="bt-roetotal">0.00%</span></p>
+      </div>
+    </div>
+
+    <div>
       <h3>📊 Historial de Operaciones</h3>
       <table id="historial">
         <thead>
