@@ -292,14 +292,135 @@ async function ejecutarBacktesting() {
   }
 }
 
-function simularTrading(klines) {
-  // Aquí irá la lógica de simulación (la implementaremos en el próximo paso)
+ffunction simularTrading(klines) {
+  if (klines.length < 30) {
+    throw new Error("No hay suficientes datos para simular");
+  }
+
+  let operaciones = [];
+  let capital = 1000; // capital inicial
+  let posicionAbierta = null;
+  let maxEquity = capital;
+  let drawdownMax = 0;
+
+  // Preparar datos para IA (solo una vez)
+  const fundingRate = 0; // en backtesting, asumimos funding rate constante
+  const openInterest = 0; // o podrías obtenerlo de datos históricos si lo guardas
+
+  for (let i = 30; i < klines.length; i++) {
+    const closes = klines.slice(0, i).map(k => k.close);
+    const ultimos10Precios = closes.slice(-10);
+    const rsi = calcularRSI(closes, 14);
+    const ema = calcularEMA(closes, 20);
+    const { macdLine, signalLine } = calcularMACD(closes, 12, 26, 9);
+    const { media: bbMedia, superior: bbSuperior, inferior: bbInferior } = calcularBandasBollinger(closes, 20, 2);
+    const atr = calcularATR(klines.slice(0, i), 14);
+    const obv = calcularOBV(klines.slice(0, i));
+
+    const rsiActual = rsi[rsi.length - 1] || 50;
+    const emaActual = ema[ema.length - 1] || closes[closes.length - 1];
+    const macdActual = macdLine[macdLine.length - 1] || 0;
+    const signalActual = signalLine[signalLine.length - 1] || 0;
+    const bbMedio = bbMedia[bbMedia.length - 1] || closes[closes.length - 1];
+    const bbSup = bbSuperior[bbSuperior.length - 1] || closes[closes.length - 1];
+    const bbInf = bbInferior[bbInferior.length - 1] || closes[closes.length - 1];
+    const anchoBB = bbSup - bbInf;
+    const posicionBB = anchoBB > 0 ? (closes[closes.length - 1] - bbInf) / anchoBB : 0.5;
+    const atrActual = atr[atr.length - 1] || 0;
+    const obvActual = obv[obv.length - 1] || 0;
+
+    const features = [
+      ...ultimos10Precios.map((p, idx) => idx === 0 ? 0 : (p - ultimos10Precios[idx - 1]) / ultimos10Precios[idx - 1]),
+      0, // volumen promedio (no usado en backtesting simple)
+      rsiActual / 100,
+      closes[closes.length - 1] > emaActual ? 1 : 0,
+      rsiActual > 70 ? 1 : 0,
+      rsiActual < 30 ? 1 : 0,
+      macdActual / 1000,
+      signalActual / 1000,
+      (macdActual - signalActual) / 1000,
+      posicionBB,
+      anchoBB / closes[closes.length - 1],
+      atrActual / closes[closes.length - 1],
+      obvActual / 1e9,
+      fundingRate,
+      openInterest / 1e6
+    ];
+
+    // Simular predicción (en backtesting real, usarías el modelo entrenado)
+    // Por ahora, usamos una señal aleatoria con tendencia
+    const prediccionRaw = Math.random() > 0.5 ? 0.6 : 0.4;
+    const confianza = prediccionRaw > 0.5 ? prediccionRaw : 1 - prediccionRaw;
+    const direccion = prediccionRaw > 0.5 ? 'SUBIDA' : 'BAJADA';
+
+    // Lógica de trading
+    const precioActual = klines[i].close;
+    const leverage = 10;
+    const takeProfit = 0.05; // 5%
+    const stopLoss = 0.03;  // 3%
+
+    if (posicionAbierta) {
+      const roePct = ((precioActual - posicionAbierta.precioEntrada) / posicionAbierta.precioEntrada) * leverage * (posicionAbierta.esLong ? 1 : -1) * 100;
+      
+      // Cerrar por TP/SL
+      if (roePct >= takeProfit * 100 || roePct <= -stopLoss * 100) {
+        const ganancia = ((precioActual - posicionAbierta.precioEntrada) / posicionAbierta.precioEntrada) * posicionAbierta.montoInvertido * leverage;
+        operaciones.push({
+          ganancia: ganancia,
+          resultado: ganancia >= 0 ? 'GANANCIA' : 'PÉRDIDA'
+        });
+        capital += ganancia;
+        posicionAbierta = null;
+      }
+    } else {
+      // Abrir nueva posición
+      if (confianza > 0.55) {
+        const montoInvertido = capital * 0.1; // 10% del capital
+        const esLong = direccion === 'SUBIDA';
+        posicionAbierta = {
+          precioEntrada: precioActual,
+          montoInvertido,
+          esLong,
+          timestamp: klines[i].time
+        };
+      }
+    }
+
+    // Calcular drawdown
+    if (capital > maxEquity) {
+      maxEquity = capital;
+    }
+    const drawdown = ((maxEquity - capital) / maxEquity) * 100;
+    if (drawdown > drawdownMax) {
+      drawdownMax = drawdown;
+    }
+  }
+
+  // Cerrar posición abierta al final
+  if (posicionAbierta) {
+    const precioFinal = klines[klines.length - 1].close;
+    const ganancia = ((precioFinal - posicionAbierta.precioEntrada) / posicionAbierta.precioEntrada) * posicionAbierta.montoInvertido * 10;
+    operaciones.push({
+      ganancia: ganancia,
+      resultado: ganancia >= 0 ? 'GANANCIA' : 'PÉRDIDA'
+    });
+    capital += ganancia;
+  }
+
+  // Calcular métricas
+  const ganancias = operaciones.filter(o => o.ganancia > 0).length;
+  const winRate = operaciones.length > 0 ? (ganancias / operaciones.length) * 100 : 0;
+  const gananciasTotales = operaciones.filter(o => o.ganancia > 0).reduce((sum, o) => sum + o.ganancia, 0);
+  const perdidasTotales = Math.abs(operaciones.filter(o => o.ganancia < 0).reduce((sum, o) => sum + o.ganancia, 0));
+  const profitFactor = perdidasTotales > 0 ? gananciasTotales / perdidasTotales : gananciasTotales;
+  const roeTotal = ((capital - 1000) / 1000) * 100;
+
   return {
-    operaciones: 0,
-    winRate: 0,
-    profitFactor: 0,
-    maxDrawdown: 0,
-    roeTotal: 0
+    operaciones: operaciones.length,
+    winRate,
+    profitFactor,
+    maxDrawdown: drawdownMax,
+    roeTotal
   };
 }
 async function crearModelo(inputShape = 24) {
