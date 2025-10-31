@@ -1,4 +1,3 @@
-// ✅ Open Interest activo - 2025-04-05
 let chart;
 let dataSeries;
 let precios = [];
@@ -195,7 +194,14 @@ async function obtenerFundingRate(symbol = 'BTCUSDT') {
   return data.fundingRate;
 }
 
-function prepararDatosParaIA(klines, fundingRate = 0) {
+async function obtenerOpenInterest(symbol = 'BTCUSDT') {
+  const res = await fetch(`/api/binance/futures/open-interest?symbol=${symbol}`);
+  if (!res.ok) throw new Error(`Error al obtener open interest: ${res.status}`);
+  const data = await res.json();
+  return data.openInterest;
+}
+
+function prepararDatosParaIA(klines, fundingRate = 0, openInterest = 0) {
   const closes = klines.map(k => k.close);
   const volumes = klines.map(k => k.volume);
   const rsi = calcularRSI(closes, 14);
@@ -239,7 +245,8 @@ function prepararDatosParaIA(klines, fundingRate = 0) {
       anchoBB / closes[i],
       atrActual / closes[i],
       obvActual / 1e9,
-      fundingRate // ← Funding Rate como feature #14
+      fundingRate,
+      openInterest / 1e6
     ];
 
     const cambioFuturo = closes[i + 1] > closes[i] ? 1 : 0;
@@ -250,7 +257,7 @@ function prepararDatosParaIA(klines, fundingRate = 0) {
   return { X: tf.tensor2d(X), y: tf.tensor2d(y, [y.length, 1]) };
 }
 
-async function crearModelo(inputShape = 23) {
+async function crearModelo(inputShape = 24) {
   const model = tf.sequential();
   model.add(tf.layers.dense({ units: 64, activation: 'relu', inputShape: [inputShape] }));
   model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
@@ -271,8 +278,9 @@ async function entrenarRed() {
   try {
     const klines = await obtenerDatos(simboloActual, '1m', 1000);
     const fundingRate = await obtenerFundingRate(simboloActual);
+    const openInterest = await obtenerOpenInterest(simboloActual);
 
-    const { X, y } = prepararDatosParaIA(klines, fundingRate);
+    const { X, y } = prepararDatosParaIA(klines, fundingRate, openInterest);
 
     if (X.shape[0] === 0) {
       alert('No hay suficientes datos para entrenar');
@@ -293,7 +301,7 @@ async function entrenarRed() {
   }
 }
 
-async function predecir(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, macdActual, signalActual, posicionBB, anchoBB, atrActual, obvActual, precioActual, fundingRate = 0) {
+async function predecir(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, macdActual, signalActual, posicionBB, anchoBB, atrActual, obvActual, precioActual, fundingRate = 0, openInterest = 0) {
   if (!modelo) return null;
 
   if (ultimosPrecios.length < 10) {
@@ -318,9 +326,13 @@ async function predecir(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, 
     anchoBB / precioActual,
     atrActual / precioActual,
     obvActual / 1e9,
-    fundingRate
+    fundingRate,
+    openInterest / 1e6
   ];
-
+console.log("🔍 [DEBUG] Número de features:", features.length);
+if (features.length !== 24) {
+  console.warn("⚠️ [DEBUG] ¡El modelo espera 24 features, pero se recibieron:", features.length, "!");
+}
   const input = tf.tensor2d([features]);
   const prediccion = modelo.predict(input);
   const valor = await prediccion.data();
@@ -625,6 +637,16 @@ async function iniciarStreaming() {
     console.warn("⚠️ No se pudo obtener funding rate, usando 0");
   }
 
+  let openInterest = 0;
+try {
+  console.log("🔍 Intentando obtener Open Interest para:", simboloActual);
+  openInterest = await obtenerOpenInterest(simboloActual);
+  console.log("✅ Open Interest recibido:", openInterest);
+} catch (err) {
+  console.error("❌ ERROR al obtener Open Interest:", err);
+  openInterest = 0;
+}
+
   try {
     let klines = await obtenerDatos(simboloActual, '1m', 50);
     precios = klines.map(k => k.close);
@@ -709,6 +731,7 @@ async function iniciarStreaming() {
           const obvActual = obv[obv.length - 1] || 0;
 
           try {
+            console.log("🔍 [DEBUG] Llamando a predecir() con fundingRate:", fundingRate, "y openInterest:", openInterest);
             prediccionRaw = await predecir(
               ultimos10Precios,
               ultimos10Volumenes,
@@ -721,7 +744,8 @@ async function iniciarStreaming() {
               atrActual,
               obvActual,
               ultimoPrecio,
-              fundingRate
+              fundingRate,
+              openInterest
             );
           } catch (err) {
             console.warn('⚠️ Error en predicción:', err.message);
