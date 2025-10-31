@@ -130,6 +130,33 @@
     <div id="chart"></div>
   
     <div>
+       <div>
+  <h3>🧪 Backtesting</h3>
+  <label for="bt-simbolo">Símbolo</label>
+  <input type="text" id="bt-simbolo" value="BTCUSDT" style="width: 100px;">
+  
+  <label for="bt-intervalo">Intervalo</label>
+  <select id="bt-intervalo">
+    <option value="15m">15m</option>
+    <option value="1h">1h</option>
+    <option value="4h">4h</option>
+  </select>
+  
+  <label for="bt-dias">Días</label>
+  <input type="number" id="bt-dias" value="30" min="1" max="60" style="width: 60px;">
+  
+  <button onclick="ejecutarBacktesting()">▶️ Ejecutar Simulación</button>
+  <span id="bt-estado">Listo para simular</span>
+  
+  <div id="bt-resultados" style="margin-top: 10px; display: none;">
+    <h4>Resultados del Backtesting</h4>
+    <p><strong>Operaciones:</strong> <span id="bt-operaciones">0</span></p>
+    <p><strong>Win Rate:</strong> <span id="bt-winrate">0%</span></p>
+    <p><strong>Profit Factor:</strong> <span id="bt-profitfactor">0.00</span></p>
+    <p><strong>Máximo Drawdown:</strong> <span id="bt-drawdown">0.00%</span></p>
+    <p><strong>ROE Total:</strong> <span id="bt-roetotal">0.00%</span></p>
+  </div>
+</div>
       <h3>📊 Historial de Operaciones</h3>
       <table id="historial">
         <thead>
