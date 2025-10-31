@@ -292,7 +292,7 @@ async function ejecutarBacktesting() {
   }
 }
 
-ffunction simularTrading(klines) {
+function simularTrading(klines) {
   if (klines.length < 30) {
     throw new Error("No hay suficientes datos para simular");
   }
@@ -349,7 +349,9 @@ ffunction simularTrading(klines) {
 
     // Simular predicción (en backtesting real, usarías el modelo entrenado)
     // Por ahora, usamos una señal aleatoria con tendencia
-    const prediccionRaw = Math.random() > 0.5 ? 0.6 : 0.4;
+    // Simular una IA con tendencia (55% de aciertos)
+    const tendencia = klines[i].close > klines[i-1].close ? 'SUBIDA' : 'BAJADA';
+    const prediccionRaw = Math.random() > 0.45 ? (tendencia === 'SUBIDA' ? 0.6 : 0.4) : (tendencia === 'SUBIDA' ? 0.4 : 0.6);
     const confianza = prediccionRaw > 0.5 ? prediccionRaw : 1 - prediccionRaw;
     const direccion = prediccionRaw > 0.5 ? 'SUBIDA' : 'BAJADA';
 
