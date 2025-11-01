@@ -247,7 +247,6 @@ function prepararDatosParaIA(klines, fundingRate = 0, openInterest = 0) {
       anchoBB / closes[i],
       atrActual / closes[i],
       obvActual / 1e9,
-      fundingRate,
       openInterest / 1e6
     ];
 
@@ -379,7 +378,6 @@ function simularTrading(klines) {
       anchoBB / closes[closes.length - 1],
       atrActual / closes[closes.length - 1],
       obvActual / 1e9,
-      fundingRate,
       openInterest / 1e6
     ];
 
@@ -461,7 +459,7 @@ function simularTrading(klines) {
     roeTotal
   };
 }
-async function crearModelo(inputShape = 24) {
+async function crearModelo(inputShape = 23) {
   const model = tf.sequential();
   model.add(tf.layers.dense({ units: 64, activation: 'relu', inputShape: [inputShape] }));
   model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
@@ -530,11 +528,10 @@ async function predecir(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, 
     anchoBB / precioActual,
     atrActual / precioActual,
     obvActual / 1e9,
-    fundingRate,
     openInterest / 1e6
   ];
 console.log("🔍 [DEBUG] Número de features:", features.length);
-if (features.length !== 24) {
+if (features.length !== 23) {
   console.warn("⚠️ [DEBUG] ¡El modelo espera 24 features, pero se recibieron:", features.length, "!");
 }
   const input = tf.tensor2d([features]);
@@ -948,7 +945,6 @@ try {
               atrActual,
               obvActual,
               ultimoPrecio,
-              fundingRate,
               openInterest
             );
           } catch (err) {
