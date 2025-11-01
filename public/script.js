@@ -14,7 +14,9 @@ let streamingInterval = null;
 let simboloActual = 'BTCUSDT';
 
 // === INDICADORES TÉCNICOS ===
-
+// ---- Modificaciones reciertes para uso en la nube-----
+// ---- Modificaciones reciertes para uso en la nube-----
+// ---- Modificaciones reciertes para uso en la nube-----
 function calcularRSI(precios, periodo = 14) {
   if (precios.length < periodo + 1) return Array(precios.length).fill(50);
   const rsi = Array(periodo).fill(50);
@@ -249,18 +251,52 @@ function prepararDatosParaIA(klines, fundingRate = 0, openInterest = 0) {
       openInterest / 1e6
     ];
 
-    const cambioFuturo = closes[i + 1] > closes[i] ? 1 : 0;
-    X.push(features);
-    y.push(cambioFuturo);
+    // Predecir si el precio subirá ≥0.5% en los próximos 15 minutos (15 velas de 1m)
+    // Predecir si el precio subirá ≥0.5% en los próximos 15 minutos (15 velas de 1m)
+    // Predecir si el precio subirá ≥0.5% en los próximos 15 minutos (15 velas de 1m)
+    // Predecir si el precio subirá ≥0.5% en los próximos 15 minutos (15 velas de 1m)
+    // Predecir si el precio subirá ≥0.5% en los próximos 15 minutos (15 velas de 1m)
+const indiceFuturo = i + 15;
+if (indiceFuturo >= closes.length) {
+  // No hay suficientes datos futuros → saltar
+  continue;
+}
+const precioFuturo = closes[indiceFuturo];
+const cambioPorcentual = (precioFuturo - closes[i]) / closes[i];
+const cambioFuturo = cambioPorcentual >= 0.005 ? 1 : 0; // ≥0.5%
+
+X.push(features);
+y.push(cambioFuturo);
   }
 
   return { X: tf.tensor2d(X), y: tf.tensor2d(y, [y.length, 1]) };
 }
 
 async function obtenerDatosBacktesting(symbol = 'BTCUSDT', interval = '15m', days = 30) {
-  const res = await fetch(`/api/binance/futures/backtest-data?symbol=${symbol}&interval=${interval}&days=${days}`);
+  // Calcular límite según días e intervalo
+  const minutosPorDia = 1440;
+  let velasPorDia;
+  if (interval === '1m') velasPorDia = 1440;
+  else if (interval === '5m') velasPorDia = 288;
+  else if (interval === '15m') velasPorDia = 96;
+  else if (interval === '1h') velasPorDia = 24;
+  else if (interval === '4h') velasPorDia = 6;
+  else velasPorDia = 24; // por defecto
+
+  const limit = Math.min(1500, days * velasPorDia);
+
+  // Usar el endpoint que SÍ existe
+  const res = await fetch(`/api/binance/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
   if (!res.ok) throw new Error(`Error al obtener datos: ${res.status}`);
-  return await res.json();
+  const klinesRaw = await res.json();
+  return klinesRaw.map(k => ({
+    time: Math.floor(k[0] / 1000),
+    open: parseFloat(k[1]),
+    high: parseFloat(k[2]),
+    low: parseFloat(k[3]),
+    close: parseFloat(k[4]),
+    volume: parseFloat(k[5])
+  }));
 }
 async function ejecutarBacktesting() {
   const simbolo = document.getElementById('bt-simbolo').value.toUpperCase();
@@ -988,7 +1024,7 @@ try {
           }
 
         } else {
-          if (prediccionRaw != null && !isNaN(prediccionRaw) && confianza > 0.55) {
+          if (prediccionRaw != null && !isNaN(prediccionRaw) && confianza >= 0.60) {
             const side = prediccionRaw > 0.5 ? 'BUY' : 'SELL';
             console.log(`🤖 Auto-trading: abriendo ${side} en ${simboloActual} (confianza: ${confianza.toFixed(2)})`);
             abrirPosicionReal(side);
