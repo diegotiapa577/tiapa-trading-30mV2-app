@@ -314,7 +314,7 @@ app.post("/api/binance/futures/close-position", async (req, res) => {
     if (result.code) throw new Error(JSON.stringify(result));
     
     // Enviar alerta por Telegram al cerrar
-const pnl = parseFloat(posicion.unRealizedProfit) || 0;
+const pnl = parseFloat(pos.unRealizedProfit) || 0;
 const emoji = pnl >= 0 ? '✅' : '❌';
 const ganancia = Math.abs(pnl).toFixed(2);
 const tipo = pnl >= 0 ? 'Ganancia' : 'Pérdida';
