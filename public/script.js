@@ -4,7 +4,7 @@ let precios = [];
 let modelo = null;
 let capitalInicial = 1000;
 let capitalActual = 1000;
-let porcentajeInvertir = 10;
+//let porcentajeInvertir = 10;
 let maxOperaciones = 3;
 let takeProfitPct = 1.0;
 let stopLossPct = 1.0;
@@ -588,7 +588,7 @@ function renderizarHistorial() {
 
 function reiniciarCapital() {
   const capitalEl = document.getElementById('capital');
-  const porcentajeEl = document.getElementById('porcentaje');
+  //const porcentajeEl = document.getElementById('porcentaje');
   const maxOpEl = document.getElementById('maxOperaciones');
   const tpEl = document.getElementById('takeProfit');
   const slEl = document.getElementById('stopLoss');
@@ -596,8 +596,10 @@ function reiniciarCapital() {
   const apalancamientoEl = document.getElementById('apalancamiento');
   
   capitalInicial = parseFloat(capitalEl.value) || 1000;
-  porcentajeInvertir = parseFloat(porcentajeEl.value) || 10;
+  //porcentajeInvertir = parseFloat(porcentajeEl.value) || 10;
   maxOperaciones = parseInt(maxOpEl.value) || 3;
+  
+  
   takeProfitPct = parseFloat(tpEl.value) || 1.0;
   stopLossPct = parseFloat(slEl.value) || 1.0;
   simboloActual = simboloEl.value.toUpperCase() || 'BTCUSDT';
@@ -649,19 +651,37 @@ function registrarOperacionReal(symbol, side, precioEntrada, precioSalida, canti
     montoInvertido,
     timestampEntrada: Date.now() - 60000,
     timestampSalida: Date.now(),
-    resultado: gananciaAbs >= 0 ? 'GANANCIA' : 'PÉRDIDA'
+    resultado: gananciaAbs >= 0 ? 'GANANCIA' : 'PÉRDIDA',
+    simbolo: symbol
   };
 
-  operaciones.push(operacion);
+  // Cargar historial existente o crear nuevo
+  let historial = JSON.parse(localStorage.getItem('historialOperaciones') || '[]');
+  
+  // Añadir nueva operación al inicio
+  historial.unshift(operacion);
+  
+  // Mantener solo las últimas 10
+  if (historial.length > 10) {
+    historial = historial.slice(0, 10);
+  }
+  
+  // Guardar en localStorage
+  localStorage.setItem('historialOperaciones', JSON.stringify(historial));
+  
+  // Actualizar variables globales y UI
+  operaciones = historial;
   actualizarPanelFinanciero();
   renderizarHistorial();
 }
-
 // === TRADING REAL EN TESTNET ===
 
 async function abrirPosicionReal(side) {
-  const leverage = parseInt(document.getElementById('apalancamiento').value) || 10;
-  const porcentaje = parseFloat(document.getElementById('porcentaje').value) || 10;
+ // Obtener montos con valores por defecto si los elementos no existen
+const montoCompraEl = document.getElementById('montoCompra');
+const montoVentaEl = document.getElementById('montoVenta');
+const montoUSDT = montoCompraEl ? parseFloat(montoCompraEl.value) || 10 : 10;
+const montoBTC = montoVentaEl ? parseFloat(montoVentaEl.value) || 0.001 : 0.001;
   
   try {
     const tickerRes = await fetch(`/api/binance/ticker?symbol=${simboloActual}`);
@@ -671,25 +691,50 @@ async function abrirPosicionReal(side) {
     if (isNaN(precio)) throw new Error('Precio inválido');
     
     let cantidad;
-    if (simboloActual === 'BTCUSDT') {
-      cantidad = "0.001";
-    } else if (simboloActual === 'ETHUSDT') {
-      cantidad = "0.01";
-    } else {
-      cantidad = "0.001";
-    }
+const precioActual = parseFloat(ticker.price);
 
-    const response = await fetch('/api/binance/futures/order', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        symbol: simboloActual,
-        side: side,
-        quantity: cantidad,
-        leverage: leverage,
-        positionSide: 'BOTH'
-      })
-    });
+if (simboloActual === 'BTCUSDT') {
+  if (side === 'BUY') {
+    // Compra: invertir X USDT → convertir a BTC
+    const montoUSDT = parseFloat(document.getElementById('montoCompra').value) || 10;
+    cantidad = (montoUSDT / precioActual).toFixed(6);
+  } else {
+    // Venta: usar X BTC directamente
+    cantidad = (parseFloat(document.getElementById('montoVenta').value) || 0.001).toFixed(6);
+  }
+} else if (simboloActual === 'ETHUSDT') {
+  if (side === 'BUY') {
+    const montoUSDT = parseFloat(document.getElementById('montoCompra').value) || 10;
+    cantidad = (montoUSDT / precioActual).toFixed(5);
+  } else {
+    cantidad = (parseFloat(document.getElementById('montoVenta').value) || 0.01).toFixed(5);
+  }
+} else {
+  // Por defecto, tratar como par USDT
+  if (side === 'BUY') {
+    const montoUSDT = parseFloat(document.getElementById('montoCompra').value) || 10;
+    cantidad = (montoUSDT / precioActual).toFixed(6);
+  } else {
+    // Para pares no-BTC, asumir que "venta" también usa USDT equivalente (o ajustar según necesidad)
+    const montoUSDT = parseFloat(document.getElementById('montoVenta').value) || 10;
+    cantidad = (montoUSDT / precioActual).toFixed(6);
+  }
+}
+    // Obtener leverage del input del dashboard
+const apalancamientoEl = document.getElementById('apalancamiento');
+const leverage = apalancamientoEl ? parseInt(apalancamientoEl.value) || 10 : 10;
+
+const response = await fetch('/api/binance/futures/order', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    symbol: simboloActual,
+    side: side,
+    quantity: cantidad,
+    leverage: leverage,
+    positionSide: 'BOTH'
+  })
+});
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
@@ -989,20 +1034,68 @@ try {
           const esLong = size > 0;
           const esShort = size < 0;
 
-          const roePct = ((markPrice - entryPrice) / entryPrice) * leverage * (esLong ? 1 : -1) * 100;
-          const takeProfit = parseFloat(document.getElementById('takeProfit').value) || 1.0;
-          const stopLoss = parseFloat(document.getElementById('stopLoss').value) || 1.0;
+          // Calcular ATR en tiempo real
+// Obtener klines de 5m solo para calcular ATR (más estable)
+// Calcular ATR usando velas de 5m (más estable)
+let atrActual = 0;
+try {
+  const klines5m = await obtenerDatos(simboloActual, '5m', 50);
+  if (klines5m.length >= 15) {
+    const atrArray = calcularATR(klines5m, 14);
+    atrActual = atrArray[atrArray.length - 1] || 0;
+  }
+} catch (e) {
+  // Calcular ATR usando velas de 5m (más estable que 1m)
+let atrActual = 0;
+try {
+  // Obtener las últimas 50 velas de 5m
+  const klines5m = await obtenerDatos(simboloActual, '5m', 50);
+  if (klines5m.length >= 20) {
+    const atrArray = calcularATR(klines5m, 14);
+    atrActual = atrArray[atrArray.length - 1] || 0;
+  } else {
+    throw new Error("Insuficientes velas 5m");
+  }
+} catch (e) {
+  console.warn("⚠️ Usando ATR de 1m como respaldo");
+  // Fallback: usar ATR de 1m si falla 5m
+  const klinesATR = klines.slice(-50);
+  const atrArray = calcularATR(klinesATR, 14);
+  atrActual = atrArray[atrArray.length - 1] || 0;
+}
+}
+
+// TP/SL dinámico (en USDT)
+const slDinamico = atrActual*2;           // 1x ATR
+const tpDinamico = atrActual*4;       // 2x ATR
+
+// Convertir a porcentaje del precio de entrada
+const stopLossPct = (slDinamico / entryPrice) * 100;
+const takeProfitPct = (tpDinamico / entryPrice) * 100;
+// Mostrar en consola (para debug)
+console.log(`📊 TP/SL dinámico: TP=${takeProfitPct.toFixed(2)}%, SL=${stopLossPct.toFixed(2)}% (ATR=${atrActual.toFixed(2)})`);
+// Mostrar en el dashboard
+// Mostrar en el dashboard (solo si los elementos existen)
+const tpEl = document.getElementById('tp-dinamico');
+const slEl = document.getElementById('sl-dinamico');
+const atrEl = document.getElementById('atr-valor');
+
+if (tpEl) tpEl.textContent = `TP: ${takeProfitPct.toFixed(2)}%`;
+if (slEl) slEl.textContent = `SL: ${stopLossPct.toFixed(2)}%`;
+if (atrEl) atrEl.textContent = `ATR: ${atrActual.toFixed(2)}`;
+
+const roePct = ((markPrice - entryPrice) / entryPrice) * leverage * (esLong ? 1 : -1) * 100;
 
           let debeCerrarPorTPSL = false;
           let motivoCierre = '';
 
-          if (roePct >= takeProfit) {
-            debeCerrarPorTPSL = true;
-            motivoCierre = `Take-Profit (${roePct.toFixed(2)}% ≥ ${takeProfit}%)`;
-          } else if (roePct <= -stopLoss) {
-            debeCerrarPorTPSL = true;
-            motivoCierre = `Stop-Loss (${roePct.toFixed(2)}% ≤ -${stopLoss}%)`;
-          }
+          if (roePct >= takeProfitPct) {
+          debeCerrarPorTPSL = true;
+          motivoCierre = `Take-Profit (${roePct.toFixed(2)}% ≥ ${takeProfitPct.toFixed(2)}%)`;
+          } else if (roePct <= -stopLossPct) {
+          debeCerrarPorTPSL = true;
+           motivoCierre = `Stop-Loss (${roePct.toFixed(2)}% ≤ -${stopLossPct.toFixed(2)}%)`;
+           }
 
           if (debeCerrarPorTPSL) {
             console.log(`🎯 ${motivoCierre} → Cerrando posición en ${simboloActual}`);
@@ -1019,13 +1112,34 @@ try {
             }
           }
 
-        } else {
-          if (prediccionRaw != null && !isNaN(prediccionRaw) && confianza >= 0.60) {
-            const side = prediccionRaw > 0.5 ? 'BUY' : 'SELL';
-            console.log(`🤖 Auto-trading: abriendo ${side} en ${simboloActual} (confianza: ${confianza.toFixed(2)})`);
-            abrirPosicionReal(side);
-          }
-        }
+        }  else {
+  if (prediccionRaw != null && !isNaN(prediccionRaw) && confianza >= 0.60) {
+    // === Filtro de tendencia EMA20/50 ===
+    const closesEMA = precios;
+    const ema20 = calcularEMA(closesEMA, 20);
+    const ema50 = calcularEMA(closesEMA, 50);
+    const ema20Actual = ema20[ema20.length - 1];
+    const ema50Actual = ema50[ema50.length - 1];
+
+    const esTendenciaAlcista = ema20Actual > ema50Actual;
+    const esTendenciaBajista = ema20Actual < ema50Actual;
+    const side = prediccionRaw > 0.5 ? 'BUY' : 'SELL';
+    let debeOperar = false;
+
+    if (side === 'BUY' && esTendenciaAlcista) {
+      debeOperar = true;
+    } else if (side === 'SELL' && esTendenciaBajista) {
+      debeOperar = true;
+    }
+
+    if (debeOperar) {
+      console.log(`🤖 Auto-trading: abriendo ${side} en ${simboloActual} (confianza: ${(confianza * 100).toFixed(1)}%)`);
+      abrirPosicionReal(side);
+    } else {
+      console.log(`⚠️ Señal ignorada: ${side} sin tendencia clara`);
+    }
+  }
+}
 
       } catch (err) {
         console.error('Error en streaming:', err);
@@ -1051,14 +1165,15 @@ window.onload = () => {
   initChart();
   
   const capitalEl = document.getElementById('capital');
-  const porcentajeEl = document.getElementById('porcentaje');
+  // const porcentajeEl = document.getElementById('porcentaje');
   const maxOpEl = document.getElementById('maxOperaciones');
+  
   const tpEl = document.getElementById('takeProfit');
   const slEl = document.getElementById('stopLoss');
   const simboloEl = document.getElementById('simbolo');
   
   capitalInicial = parseFloat(capitalEl.value) || 1000;
-  porcentajeInvertir = parseFloat(porcentajeEl.value) || 10;
+  //porcentajeInvertir = parseFloat(porcentajeEl.value) || 10;
   maxOperaciones = parseInt(maxOpEl.value) || 3;
   takeProfitPct = parseFloat(tpEl.value) || 1.0;
   stopLossPct = parseFloat(slEl.value) || 1.0;
@@ -1078,4 +1193,66 @@ window.onload = () => {
   window.cerrarPosicion = cerrarPosicion;
 
   setInterval(actualizarPosicionesAbiertas, 10000);
+
+// Cargar historial desde localStorage al iniciar
+const historialGuardado = JSON.parse(localStorage.getItem('historialOperaciones') || '[]');
+if (historialGuardado.length > 0) {
+  operaciones = historialGuardado;
+  actualizarPanelFinanciero();
+  renderizarHistorial();
+}
+
 };
+
+// === ACTUALIZAR CAPITAL DE BINANCE TESTNET ===
+async function actualizarCapitalTestnet() {
+  try {
+    const response = await fetch('/api/binance/futures/account');
+    if (!response.ok) {
+      console.warn("⚠️ No se pudo obtener la cuenta de Testnet");
+      return;
+    }
+    
+    const data = await response.json();
+    let saldoUSDT = 0;
+
+    // Testnet suele devolver availableBalance en la raíz
+    if (data.availableBalance !== undefined) {
+      saldoUSDT = parseFloat(data.availableBalance) || 0;
+    }
+    // Fallback: buscar en assets (por si cambia la API)
+    else if (data.assets && Array.isArray(data.assets)) {
+      const usdtAsset = data.assets.find(a => a.asset === 'USDT');
+      saldoUSDT = usdtAsset ? parseFloat(usdtAsset.walletBalance) || 0 : 0;
+    }
+
+    // Obtener precio actual de BTC
+    const tickerRes = await fetch('/api/binance/ticker?symbol=BTCUSDT');
+    const ticker = await tickerRes.json();
+    const precioBTC = parseFloat(ticker.price) || 1;
+
+    const saldoBTC = saldoUSDT / precioBTC;
+
+    // Obtener monto de compra para mostrar
+    const montoCompraEl = document.getElementById('montoCompra');
+    const montoInvertir = montoCompraEl ? parseFloat(montoCompraEl.value) || 10 : 10;
+
+    // Actualizar el dashboard
+    const saldoUsdtEl = document.getElementById('saldo-usdt');
+    const saldoBtcEl = document.getElementById('saldo-btc');
+    const montoInvertirEl = document.getElementById('monto-invertir');
+
+    if (saldoUsdtEl) saldoUsdtEl.textContent = `USDT: $${saldoUSDT.toFixed(2)}`;
+    if (saldoBtcEl) saldoBtcEl.textContent = `BTC: ${saldoBTC.toFixed(6)}`;
+    if (montoInvertirEl) montoInvertirEl.textContent = `Invertir: $${montoInvertir.toFixed(2)}`;
+
+  } catch (err) {
+    console.error("❌ Error en actualizarCapitalTestnet:", err);
+  }
+}
+
+// Llamar al cargar la página y luego cada minuto
+window.addEventListener('load', () => {
+  actualizarCapitalTestnet();
+  setInterval(actualizarCapitalTestnet, 60000);
+});
