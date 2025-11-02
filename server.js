@@ -277,6 +277,10 @@ app.post("/api/binance/futures/order", async (req, res) => {
     const response = await fetch(orderUrl, { method: "POST", headers: { "X-MBX-APIKEY": API_KEY } });
     const result = await response.json();
     if (result.code) throw new Error(JSON.stringify(result));
+  // Enviar alerta por Telegram
+    const mensajeApertura = `🟢 Nueva posición\nSímbolo: ${symbol}\nLado: ${side}\nCantidad: ${quantity}`;
+    enviarMensajeTelegram(mensajeApertura);
+          
     res.json(result);
   } catch (error) {
     console.error("Error en /order:", error.message);
@@ -308,6 +312,16 @@ app.post("/api/binance/futures/close-position", async (req, res) => {
     const closeRes = await fetch(closeUrl, { method: "POST", headers: { "X-MBX-APIKEY": API_KEY } });
     const result = await closeRes.json();
     if (result.code) throw new Error(JSON.stringify(result));
+    
+    // Enviar alerta por Telegram al cerrar
+const pnl = parseFloat(posicion.unRealizedProfit) || 0;
+const emoji = pnl >= 0 ? '✅' : '❌';
+const ganancia = Math.abs(pnl).toFixed(2);
+const tipo = pnl >= 0 ? 'Ganancia' : 'Pérdida';
+const mensajeCierre = `${emoji} Posición cerrada\nSímbolo: ${symbol}\nPnL: ${pnl >= 0 ? '+' : ''}${ganancia} USDT\n(${tipo})`;
+enviarMensajeTelegram(mensajeCierre);
+    
+    
     res.json(result);
   } catch (error) {
     console.error("Error en /close-position:", error.message);
@@ -316,6 +330,35 @@ app.post("/api/binance/futures/close-position", async (req, res) => {
 });
 
 app.get("/favicon.ico", (req, res) => res.status(204).end());
+
+// === ALERTAS POR TELEGRAM ===
+async function enviarMensajeTelegram(mensaje) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  
+  if (!token || !chatId) {
+    console.warn("⚠️ Telegram no configurado");
+    return;
+  }
+
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  const data = {
+    chat_id: chatId,
+    text: mensaje,
+    parse_mode: "HTML"
+  };
+
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    console.log("✅ Alerta enviada a Telegram");
+  } catch (err) {
+    console.error("❌ Error al enviar alerta:", err.message);
+  }
+}
 
 app.listen(PORT, () => {
   console.log(`✅ Servidor en http://localhost:${PORT}`);
