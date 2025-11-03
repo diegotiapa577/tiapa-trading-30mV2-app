@@ -3,221 +3,282 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>AI Trading Dashboard - Testnet</title>
+  <title>Trading Predictivo IA Futuro</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.16.0/dist/tf.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #121212; color: white; }
-    .container { display: flex; flex-direction: column; gap: 20px; max-width: 1200px; margin: auto; }
-    .stats { display: flex; gap: 20px; flex-wrap: wrap; }
-    .stat-box { 
-      background: #1e1e1e; 
-      padding: 15px; 
-      border-radius: 8px; 
-      flex: 1 1 150px;
-      text-align: center; 
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      padding: 16px;
+      background: #121212;
+      color: white;
+      line-height: 1.5;
     }
-    #chart { height: 400px; width: 100%; }
-    button { padding: 10px 15px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
-    input, select { padding: 6px; margin: 3px 5px; width: 70px; text-align: center; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { padding: 8px; text-align: left; border-bottom: 1px solid #333; }
-    th { background: #1e1e1e; }
-    tr:hover { background: #252525; }
-    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
-    label { display: block; margin: 4px 0 2px; font-size: 0.9em; }
-
-    #prediccion-contenedor {
-      text-align: center;
-      padding: 8px 0;
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 16px;
     }
-    #prediccion-direccion {
+    .panel {
+      background: #1e1e1e;
+      padding: 16px;
+      border-radius: 10px;
+    }
+    .main-content {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    #chart {
+      height: 420px;
+      background: #1e1e1e;
+      border-radius: 10px;
+      padding: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+    th, td {
+      padding: 10px 8px;
+      text-align: left;
+      border-bottom: 1px solid #333;
+      font-size: 0.9em;
+    }
+    th { background: #252525; }
+    tr:hover { background: #2a2a2a; }
+    button {
+      padding: 6px 12px;
+      margin: 4px 2px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .btn-success { background: #4caf50; color: white; }
+    .btn-danger { background: #f44336; color: white; }
+    .btn-primary { background: #007bff; color: white; }
+    input, select {
+      width: 100%;
+      padding: 6px;
+      margin: 4px 0;
+      border-radius: 4px;
+      background: #2a2a2a;
+      border: 1px solid #444;
+      color: white;
+    }
+    label {
+      display: block;
+      margin: 8px 0 4px;
+      font-size: 0.85em;
+      color: #aaa;
+    }
+    h2, h3 {
+      margin-top: 0;
       font-size: 1.1em;
-      margin-bottom: 6px;
+      border-bottom: 1px solid #333;
+      padding-bottom: 6px;
     }
-    #prediccion-porcentaje {
+    .ai-box {
+      text-align: center;
+      padding: 12px 0;
+    }
+    .ai-value {
       font-size: 1.3em;
       font-weight: bold;
-      margin-bottom: 8px;
+      margin: 8px 0;
     }
-    #prediccion-barra {
-      width: 100%;
-      height: 10px;
-      background: #333;
-      border-radius: 5px;
-      overflow: hidden;
+    .ai-actions {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
     }
-    #prediccion-progreso {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(to right, #ff5252, #4caf50);
-      transition: width 0.5s ease;
+    .toggle-link {
+      color: #007bff;
+      cursor: pointer;
+      font-size: 0.9em;
+      float: right;
+    }
+    .hidden { display: none; }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .stat-item {
+      background: #252525;
+      padding: 6px;
+      border-radius: 6px;
+      text-align: center;
+      font-size: 0.9em;
+    }
+    h1 {
+      text-align: center;
+      margin: 0 0 20px;
+      font-size: 1.8em;
+      color: white;
     }
   </style>
 </head>
 <body>
+  <h1>🤖 Trading Predictivo IA Futuro (Binance Testnet)</h1>
   <div class="container">
-    <h1>🤖 AI Trading Dashboard (Binance Testnet + TensorFlow.js)</h1>
-
-    <div class="stats">
-      <div class="stat-box">
-             
-        <h3>Configuración</h3>
-        
-        <label for="capital">Capital Inicial ($)</label>
-        <input type="number" id="capital" value="1000" step="100">
-        
-        <label for="montoCompra">Monto Compra (USDT)</label>
+    <!-- Panel de Control -->
+    <div class="panel">
+      <h2>🎛️ Panel de Control 
+        <span class="toggle-link" onclick="toggleAvanzado()">⚙️ Avanzado</span>
+      </h2>
+      <!-- Configuración Esencial -->
+      <div id="config-esencial">
+        <label>Monto Compra (USDT)</label>
         <input type="number" id="montoCompra" value="10" step="1" min="1">
-
-        <label for="montoVenta">Monto Venta (BTC)</label>
+        <label>Monto Venta (BTC)</label>
         <input type="number" id="montoVenta" value="0.001" step="0.0001" min="0.0001">
-          
-        <label for="maxOperaciones">Máx. operaciones</label>
-        <input type="number" id="maxOperaciones" value="3" min="1" max="10">
-
-
-        <label for="takeProfit">Take-Profit (%)</label>
+        <label>Take-Profit (%)</label>
         <input type="number" id="takeProfit" value="5" step="0.1" min="0.1">
-        
-        <label for="stopLoss">Stop-Loss (%)</label>
+        <label>Stop-Loss (%)</label>
         <input type="number" id="stopLoss" value="3" step="0.1" min="0.1">
-        
-        <label for="simbolo">Símbolo</label>
-        <input type="text" id="simbolo" value="BTCUSDT" style="width: 100px; text-align: center;">
-        
-        <label for="apalancamiento">Apalancamiento (x)</label>
-        <input type="number" id="apalancamiento" value="10" min="1" max="125">
-        
-        <br><br>
-        <button id="btn-reiniciar">🔁 Reiniciar Capital</button>
-      </div>
-      
-      <div class="stat-box">
-        <h3>Ganancias</h3>
-        <p id="ganancias">$0.00</p>
-      </div>
-      
-      <div class="stat-box">
-        <h3>Pérdidas</h3>
-        <p id="perdidas">$0.00</p>
-      </div>
-      
-      <div class="stat-box">
-        <h3>ROI</h3>
-        <p id="roi">0.00%</p>
-      </div>
-      <div class="stat-box">
-      <h3>🎯 TP/SL Dinámico</h3>
-      <p id="tp-dinamico">TP: —</p>
-      <p id="sl-dinamico">SL: —</p>
-      <p id="atr-valor">ATR: —</p>
-      </div>
-        <div class="stat-box">
-        <h3>💰 Capital Testnet</h3>
-        <p id="saldo-usdt">USDT: —</p>
-        <p id="saldo-btc">BTC: —</p>
-        <p id="monto-invertir">Invertir: —</p>
-        </div>
-      <div class="stat-box">
-        <h3>Predicción IA</h3>
-        <div id="prediccion-contenedor">
-          <div id="prediccion-direccion">-</div>
-       h3   <div id="prediccion-porcentaje">0%</div>
-          <div id="prediccion-barra">
-            <div id="prediccion-progreso"></div>
-          </div>
+        <label>Apalancamiento (x)</label>
+        <input type="number" id="apalancamiento" value="4" min="1" max="125">
+        <label>Símbolo</label>
+        <input type="text" id="simbolo" value="BTCUSDT" style="text-align: center;">
+        <label>
+          <input type="checkbox" id="auto-trading"> Auto-Trading (IA)
+        </label>
+        <div class="ai-actions">
+          <button class="btn-success" onclick="abrirLong()">🟢 LONG</button>
+          <button class="btn-danger" onclick="abrirShort()">🔴 SHORT</button>
+          <button class="btn-primary" onclick="cerrarTodas()">CloseOperation</button>
+          <button class="btn-primary" onclick="entrenarRed()">🧠 Entrenar Red</button>
         </div>
       </div>
+      <!-- Configuración Avanzada -->
+      <div id="config-avanzado" class="hidden">
+        <hr>
+        <label>Capital Inicial ($)</label>
+        <input type="number" id="capital" value="1000" step="100">
+        <label>Máx. operaciones</label>
+        <input type="number" id="maxOperaciones" value="3" min="1" max="10">
+        <label>TP = ATR ×</label>
+        <input type="number" id="multiploTP" value="4" step="0.5" min="1">
+        <label>SL = ATR ×</label>
+        <input type="number" id="multiploSL" value="2" step="0.5" min="0.5">
+        <button class="btn-primary" onclick="reiniciarCapital()">🔁 Reiniciar Capital</button>
+        <button class="btn-primary" onclick="exportarCSV()">📤 Exportar CSV</button>
+        <button class="btn-primary" onclick="abrirModalBacktesting()">🧪 Backtesting</button>
+        <button class="toggle-link" onclick="toggleAvanzado()" style="float:none; margin-top:10px;">← Volver</button>
+      </div>
+      <!-- Capital Testnet + TP/SL Dinámico -->
+      <hr>
+      <h3>💰 Capital Testnet</h3>
+      <div class="stats-grid">
+        <div class="stat-item">USDT: <span id="saldo-usdt">—</span></div>
+        <div class="stat-item">BTC: <span id="saldo-btc">—</span></div>
+        <div class="stat-item">Invertir: <span id="monto-invertir">—</span></div>
+        <div class="stat-item">ATR: <span id="atr-valor">—</span></div>
+      </div>
+      <div style="margin-top:10px; font-size:0.9em; color:#aaa;">
+        <span id="tp-dinamico">TP: —</span> | 
+        <span id="sl-dinamico">SL: —</span>
+      </div>
+      <!-- Métricas rápidas -->
+      <div class="stats-grid" style="margin-top:12px;">
+        <div class="stat-item">Ganancias: <span id="ganancias">$0.00</span></div>
+        <div class="stat-item">Pérdidas: <span id="perdidas">$0.00</span></div>
+        <div class="stat-item">ROI: <span id="roi">0.00%</span></div>
+      </div>
     </div>
-
-    <div class="actions">
-      <button onclick="entrenarRed()">🧠 Entrenar Red Neuronal</button>
-      <label>
-        <input type="checkbox" id="auto-trading"> Auto-Trading (IA)
-      </label>
-      <br>
-      <button onclick="iniciarStreaming()">▶️ Iniciar Streaming</button>
-      <button onclick="detenerStreaming()">⏹️ Stop Streaming</button>
-      <button onclick="operacionPrueba()">🧪 Operación de Prueba (Testnet)</button>
-      <button id="btn-exportar">📤 Exportar a CSV</button>
-      <span id="estado">Esperando...</span>
+    <!-- Contenido Principal -->
+    <div class="main-content">
+      <!-- Controles de Streaming -->
+      <div class="panel" style="text-align: center; padding: 12px;">
+        <button class="btn-primary" onclick="iniciarStreaming()">▶️ Iniciar Streaming</button>
+        <button class="btn-primary" onclick="detenerStreaming()">⏹️ Parar Streaming</button>
+        <button class="btn-primary" onclick="operacionPrueba()">🧪 Prueba Manual</button>
+        <span id="estado" style="margin-left: 15px; color: #aaa;">Esperando...</span>
+      </div>
+      <!-- Gráfico de Velas -->
+      <div id="chart"></div>
+      <!-- Predicción IA -->
+      <div class="panel ai-box">
+        <h2>🧠 Predicción IA</h2>
+        <div id="prediccion-direccion">-</div>
+        <div class="ai-value" id="prediccion-porcentaje">0%</div>
+        <div id="prediccion-barra" style="width:100%; height:8px; background:#333; border-radius:4px; overflow:hidden;">
+          <div id="prediccion-progreso" style="height:100%; width:0%; background:linear-gradient(to right, #ff5252, #4caf50); transition:width 0.5s;"></div>
+        </div>
+      </div>
+      <!-- Posiciones Abiertas -->
+      <div class="panel">
+        <h2>🔓 Posiciones Abiertas (Testnet)</h2>
+        <table id="operaciones-abiertas">
+          <thead>
+            <tr><th>Símbolo</th><th>Tipo</th><th>Precio</th><th>ROE</th><th>PnL</th><th>Acción</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <!-- Historial -->
+      <div class="panel">
+        <h2>📜 Últimas 10 Órdenes</h2>
+        <table id="historial">
+          <thead>
+            <tr><th>Hora</th><th>Símbolo</th><th>Tipo</th><th>Precio</th><th>Resultado</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
-
-    <div id="chart"></div>
-
-    <div>
-      <h3>📈 Curva de Capital (Equity)</h3>
-      <div id="equityChart"></div>
-    </div>
-
-    <!-- 🧪 BACKTESTING -->
-    <div>
-      <h3>🧪 Backtesting</h3>
-      <label for="bt-simbolo">Símbolo</label>
-      <input type="text" id="bt-simbolo" value="BTCUSDT" style="width: 100px;">
-      
-      <label for="bt-intervalo">Intervalo</label>
+  </div>
+  <!-- Modal Backtesting -->
+  <div id="modal-backtesting" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; display:none; align-items:center; justify-content:center;">
+    <div class="panel" style="width:90%; max-width:600px;">
+      <h2>🧪 Backtesting</h2>
+      <label>Símbolo</label>
+      <input type="text" id="bt-simbolo" value="BTCUSDT">
+      <label>Intervalo</label>
       <select id="bt-intervalo">
         <option value="15m">15m</option>
         <option value="1h">1h</option>
         <option value="4h">4h</option>
       </select>
-      
-      <label for="bt-dias">Días</label>
-      <input type="number" id="bt-dias" value="30" min="1" max="60" style="width: 60px;">
-      
-      <button onclick="ejecutarBacktesting()">▶️ Ejecutar Simulación</button>
-      <span id="bt-estado">Listo para simular</span>
-      
-      <div id="bt-resultados" style="margin-top: 10px; display: none;">
-        <h4>Resultados del Backtesting</h4>
+      <label>Días</label>
+      <input type="number" id="bt-dias" value="30" min="1" max="60" style="width:80px;">
+      <br><br>
+      <button class="btn-primary" onclick="ejecutarBacktesting()">▶️ Ejecutar Simulación</button>
+      <button onclick="cerrarModalBacktesting()">✖️ Cerrar</button>
+      <div id="bt-resultados" style="margin-top:15px; display:none;">
         <p><strong>Operaciones:</strong> <span id="bt-operaciones">0</span></p>
         <p><strong>Win Rate:</strong> <span id="bt-winrate">0%</span></p>
-        <p><strong>Profit Factor:</strong> <span id="bt-profitfactor">0.00</span></p>
-        <p><strong>Máximo Drawdown:</strong> <span id="bt-drawdown">0.00%</span></p>
         <p><strong>ROE Total:</strong> <span id="bt-roetotal">0.00%</span></p>
       </div>
     </div>
-
-    <div>
-      <h3>📊 Historial de Operaciones</h3>
-      <table id="historial">
-        <thead>
-          <tr>
-            <th>Entrada</th>
-            <th>Salida</th>
-            <th>Precio Entrada</th>
-            <th>Precio Salida</th>
-            <th>Ganancia</th>
-            <th>Resultado</th>
-          </tr>
-        </thead>
-        <tbody>
-        </tbody>
-      </table>
-    </div>
-
-    <div>
-      <h3>🔓 Posiciones Abiertas (Testnet)</h3>
-      <table id="operaciones-abiertas">
-        <thead>
-          <tr>
-            <th>Símbolo</th>
-            <th>Tipo</th>
-            <th>Precio Entrada</th>
-            <th>ROE (%)</th>
-            <th>PnL</th>
-            <th>Acción</th>
-          </tr>
-        </thead>
-        <tbody>
-          <!-- Se llena dinámicamente -->
-        </tbody>
-      </table>
-    </div>
   </div>
-
+  <script>
+    function toggleAvanzado() {
+      const esencial = document.getElementById('config-esencial');
+      const avanzado = document.getElementById('config-avanzado');
+      esencial.classList.toggle('hidden');
+      avanzado.classList.toggle('hidden');
+    }
+    function abrirModalBacktesting() {
+      document.getElementById('modal-backtesting').style.display = 'flex';
+    }
+    function cerrarModalBacktesting() {
+      document.getElementById('modal-backtesting').style.display = 'none';
+    }
+    // Acciones de trading (delegadas a script.js)
+    function abrirLong() { abrirPosicionReal('BUY'); }
+    function abrirShort() { abrirPosicionReal('SELL'); }
+    function cerrarTodas() { alert('Cerrar todas las posiciones (implementar en script.js)'); }
+  </script>
   <script src="script.js"></script>
 </body>
 </html>

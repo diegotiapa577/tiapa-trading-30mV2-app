@@ -4,25 +4,20 @@ let precios = [];
 let modelo = null;
 let capitalInicial = 1000;
 let capitalActual = 1000;
-//let porcentajeInvertir = 10;
 let maxOperaciones = 3;
-let takeProfitPct = 1.0;
-let stopLossPct = 1.0;
+let takeProfitPct = 5.0;
+let stopLossPct = 3.0;
 let operaciones = [];
 let ultimoPrecio = 0;
 let streamingInterval = null;
 let simboloActual = 'BTCUSDT';
 
 // === INDICADORES TÉCNICOS ===
-// ---- Modificaciones reciertes para uso en la nube-----
-// ---- Modificaciones reciertes para uso en la nube-----
-// ---- Modificaciones reciertes para uso en la nube-----
 function calcularRSI(precios, periodo = 14) {
   if (precios.length < periodo + 1) return Array(precios.length).fill(50);
   const rsi = Array(periodo).fill(50);
   let gananciaProm = 0;
   let perdidaProm = 0;
-
   for (let i = 1; i <= periodo; i++) {
     const cambio = precios[i] - precios[i - 1];
     if (cambio > 0) gananciaProm += cambio;
@@ -30,15 +25,12 @@ function calcularRSI(precios, periodo = 14) {
   }
   gananciaProm /= periodo;
   perdidaProm /= periodo;
-
   for (let i = periodo; i < precios.length; i++) {
     const cambio = precios[i] - precios[i - 1];
     const ganancia = cambio > 0 ? cambio : 0;
     const perdida = cambio < 0 ? -cambio : 0;
-
     gananciaProm = (gananciaProm * (periodo - 1) + ganancia) / periodo;
     perdidaProm = (perdidaProm * (periodo - 1) + perdida) / periodo;
-
     const rs = perdidaProm === 0 ? 100 : gananciaProm / perdidaProm;
     rsi.push(100 - (100 / (1 + rs)));
   }
@@ -68,7 +60,6 @@ function calcularBandasBollinger(precios, periodo = 20, desv = 2) {
   const medias = [];
   const superior = [];
   const inferior = [];
-
   for (let i = 0; i < precios.length; i++) {
     if (i < periodo - 1) {
       medias.push(NaN);
@@ -91,19 +82,16 @@ function calcularATR(klines, periodo = 14) {
   if (klines.length < periodo + 1) {
     return Array(klines.length).fill(0);
   }
-
   const tr = [];
   for (let i = 1; i < klines.length; i++) {
     const high = klines[i].high;
     const low = klines[i].low;
     const prevClose = klines[i - 1].close;
-    
     const tr1 = high - low;
     const tr2 = Math.abs(high - prevClose);
     const tr3 = Math.abs(low - prevClose);
     tr.push(Math.max(tr1, tr2, tr3));
   }
-
   let atr = [];
   let suma = 0;
   for (let i = 0; i < periodo - 1; i++) {
@@ -112,12 +100,10 @@ function calcularATR(klines, periodo = 14) {
   }
   const atrInicial = suma / (periodo - 1);
   atr.push(atrInicial);
-
   for (let i = periodo; i < tr.length; i++) {
     const nuevoATR = (atr[atr.length - 1] * (periodo - 1) + tr[i]) / periodo;
     atr.push(nuevoATR);
   }
-
   while (atr.length < klines.length) {
     atr.unshift(0);
   }
@@ -126,13 +112,10 @@ function calcularATR(klines, periodo = 14) {
 
 function calcularOBV(klines) {
   if (klines.length === 0) return [];
-  
   const obv = [0];
-  
   for (let i = 1; i < klines.length; i++) {
     const cambioPrecio = klines[i].close - klines[i - 1].close;
     const volumen = klines[i].volume;
-    
     if (cambioPrecio > 0) {
       obv.push(obv[i - 1] + volumen);
     } else if (cambioPrecio < 0) {
@@ -141,29 +124,25 @@ function calcularOBV(klines) {
       obv.push(obv[i - 1]);
     }
   }
-  
   return obv;
 }
 
 // === GRÁFICOS ===
-
 function initChart() {
   if (typeof LightweightCharts === 'undefined') {
     console.error('❌ LightweightCharts no cargado');
     return;
   }
-
   const chartContainer = document.getElementById('chart');
   chart = LightweightCharts.createChart(chartContainer, {
     width: chartContainer.clientWidth,
-    height: 400,
-    layout: { backgroundColor: '#121212', textColor: 'white' },
+    height: 420,
+    layout: { backgroundColor: '#1e1e1e', textColor: 'white' },
     grid: { vertLines: { color: '#333' }, horzLines: { color: '#333' } },
     crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
     priceScale: { borderColor: '#444' },
     timeScale: { borderColor: '#444', timeVisible: true }
   });
-
   dataSeries = chart.addCandlestickSeries({
     upColor: '#26a69a',
     downColor: '#ef5350',
@@ -174,7 +153,6 @@ function initChart() {
 }
 
 // === DATOS Y MODELO ===
-
 async function obtenerDatos(symbol = 'BTCUSDT', interval = '1m', limit = 500) {
   const res = await fetch(`/api/binance/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
   if (!res.ok) throw new Error(`Error al obtener klines: ${res.status}`);
@@ -212,15 +190,12 @@ function prepararDatosParaIA(klines, fundingRate = 0, openInterest = 0) {
   const { media: bbMedia, superior: bbSuperior, inferior: bbInferior } = calcularBandasBollinger(closes, 20, 2);
   const atr = calcularATR(klines, 14);
   const obv = calcularOBV(klines);
-
   const X = [];
   const y = [];
-
   for (let i = 30; i < klines.length - 1; i++) {
     const ventanaCierre = closes.slice(i - 10, i);
     const cambios = ventanaCierre.map((p, idx) => idx === 0 ? 0 : (p - ventanaCierre[idx - 1]) / ventanaCierre[idx - 1]);
     const volumenProm = volumes.slice(i - 10, i).reduce((a, b) => a + b, 0) / 10;
-
     const rsiActual = rsi[i] || 50;
     const emaActual = ema[i] || closes[i];
     const macdActual = macdLine[i] || 0;
@@ -232,7 +207,6 @@ function prepararDatosParaIA(klines, fundingRate = 0, openInterest = 0) {
     const posicionBB = anchoBB > 0 ? (closes[i] - bbInf) / anchoBB : 0.5;
     const atrActual = atr[i] || 0;
     const obvActual = obv[i] || 0;
-
     const features = [
       ...cambios,
       volumenProm / 1e6,
@@ -249,229 +223,29 @@ function prepararDatosParaIA(klines, fundingRate = 0, openInterest = 0) {
       obvActual / 1e9,
       openInterest / 1e6
     ];
-
-    // Predecir si el precio subirá ≥0.5% en los próximos 15 minutos (15 velas de 1m)
-    // Predecir si el precio subirá ≥0.5% en los próximos 15 minutos (15 velas de 1m)
-    // Predecir si el precio subirá ≥0.5% en los próximos 15 minutos (15 velas de 1m)
-    // Predecir si el precio subirá ≥0.5% en los próximos 15 minutos (15 velas de 1m)
-    // Predecir si el precio subirá ≥0.5% en los próximos 15 minutos (15 velas de 1m)
-const indiceFuturo = i + 15;
-if (indiceFuturo >= closes.length) {
-  // No hay suficientes datos futuros → saltar
-  continue;
-}
-const precioFuturo = closes[indiceFuturo];
-const cambioPorcentual = (precioFuturo - closes[i]) / closes[i];
-const cambioFuturo = cambioPorcentual >= 0.005 ? 1 : 0; // ≥0.5%
-
-X.push(features);
-y.push(cambioFuturo);
+    const indiceFuturo = i + 15;
+    if (indiceFuturo >= closes.length) continue;
+    const precioFuturo = closes[indiceFuturo];
+    const cambioPorcentual = (precioFuturo - closes[i]) / closes[i];
+    const cambioFuturo = cambioPorcentual >= 0.005 ? 1 : 0;
+    X.push(features);
+    y.push(cambioFuturo);
   }
-
   return { X: tf.tensor2d(X), y: tf.tensor2d(y, [y.length, 1]) };
 }
 
-async function obtenerDatosBacktesting(symbol = 'BTCUSDT', interval = '15m', days = 30) {
-  // Calcular límite según días e intervalo
-  const minutosPorDia = 1440;
-  let velasPorDia;
-  if (interval === '1m') velasPorDia = 1440;
-  else if (interval === '5m') velasPorDia = 288;
-  else if (interval === '15m') velasPorDia = 96;
-  else if (interval === '1h') velasPorDia = 24;
-  else if (interval === '4h') velasPorDia = 6;
-  else velasPorDia = 24; // por defecto
-
-  const limit = Math.min(1500, days * velasPorDia);
-
-  // Usar el endpoint que SÍ existe
-  const res = await fetch(`/api/binance/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
-  if (!res.ok) throw new Error(`Error al obtener datos: ${res.status}`);
-  const klinesRaw = await res.json();
-  return klinesRaw.map(k => ({
-    time: Math.floor(k[0] / 1000),
-    open: parseFloat(k[1]),
-    high: parseFloat(k[2]),
-    low: parseFloat(k[3]),
-    close: parseFloat(k[4]),
-    volume: parseFloat(k[5])
-  }));
-}
-async function ejecutarBacktesting() {
-  const simbolo = document.getElementById('bt-simbolo').value.toUpperCase();
-  const intervalo = document.getElementById('bt-intervalo').value;
-  const dias = parseInt(document.getElementById('bt-dias').value);
-  
-  document.getElementById('bt-estado').textContent = 'Descargando datos...';
-  
-  try {
-    // 1. Obtener datos históricos
-    const klines = await obtenerDatosBacktesting(simbolo, intervalo, dias);
-    document.getElementById('bt-estado').textContent = `Simulando ${klines.length} velas...`;
-    
-    // 2. Simular trading
-    const resultados = simularTrading(klines);
-    
-    // 3. Mostrar resultados
-    document.getElementById('bt-operaciones').textContent = resultados.operaciones;
-    document.getElementById('bt-winrate').textContent = `${resultados.winRate.toFixed(2)}%`;
-    document.getElementById('bt-profitfactor').textContent = resultados.profitFactor.toFixed(2);
-    document.getElementById('bt-drawdown').textContent = `${resultados.maxDrawdown.toFixed(2)}%`;
-    document.getElementById('bt-roetotal').textContent = `${resultados.roeTotal.toFixed(2)}%`;
-    document.getElementById('bt-resultados').style.display = 'block';
-    
-    document.getElementById('bt-estado').textContent = '✅ Simulación completada';
-  } catch (err) {
-    console.error('Error en backtesting:', err);
-    document.getElementById('bt-estado').textContent = `❌ Error: ${err.message}`;
-  }
-}
-
-function simularTrading(klines) {
-  if (klines.length < 30) {
-    throw new Error("No hay suficientes datos para simular");
-  }
-
-  let operaciones = [];
-  let capital = 1000; // capital inicial
-  let posicionAbierta = null;
-  let maxEquity = capital;
-  let drawdownMax = 0;
-
-  // Preparar datos para IA (solo una vez)
-  const fundingRate = 0; // en backtesting, asumimos funding rate constante
-  const openInterest = 0; // o podrías obtenerlo de datos históricos si lo guardas
-
-  for (let i = 30; i < klines.length; i++) {
-    const closes = klines.slice(0, i).map(k => k.close);
-    const ultimos10Precios = closes.slice(-10);
-    const rsi = calcularRSI(closes, 14);
-    const ema = calcularEMA(closes, 20);
-    const { macdLine, signalLine } = calcularMACD(closes, 12, 26, 9);
-    const { media: bbMedia, superior: bbSuperior, inferior: bbInferior } = calcularBandasBollinger(closes, 20, 2);
-    const atr = calcularATR(klines.slice(0, i), 14);
-    const obv = calcularOBV(klines.slice(0, i));
-
-    const rsiActual = rsi[rsi.length - 1] || 50;
-    const emaActual = ema[ema.length - 1] || closes[closes.length - 1];
-    const macdActual = macdLine[macdLine.length - 1] || 0;
-    const signalActual = signalLine[signalLine.length - 1] || 0;
-    const bbMedio = bbMedia[bbMedia.length - 1] || closes[closes.length - 1];
-    const bbSup = bbSuperior[bbSuperior.length - 1] || closes[closes.length - 1];
-    const bbInf = bbInferior[bbInferior.length - 1] || closes[closes.length - 1];
-    const anchoBB = bbSup - bbInf;
-    const posicionBB = anchoBB > 0 ? (closes[closes.length - 1] - bbInf) / anchoBB : 0.5;
-    const atrActual = atr[atr.length - 1] || 0;
-    const obvActual = obv[obv.length - 1] || 0;
-
-    const features = [
-      ...ultimos10Precios.map((p, idx) => idx === 0 ? 0 : (p - ultimos10Precios[idx - 1]) / ultimos10Precios[idx - 1]),
-      0, // volumen promedio (no usado en backtesting simple)
-      rsiActual / 100,
-      closes[closes.length - 1] > emaActual ? 1 : 0,
-      rsiActual > 70 ? 1 : 0,
-      rsiActual < 30 ? 1 : 0,
-      macdActual / 1000,
-      signalActual / 1000,
-      (macdActual - signalActual) / 1000,
-      posicionBB,
-      anchoBB / closes[closes.length - 1],
-      atrActual / closes[closes.length - 1],
-      obvActual / 1e9,
-      openInterest / 1e6
-    ];
-
-    // Simular predicción (en backtesting real, usarías el modelo entrenado)
-    // Por ahora, usamos una señal aleatoria con tendencia
-    // Simular una IA con tendencia (55% de aciertos)
-    const tendencia = klines[i].close > klines[i-1].close ? 'SUBIDA' : 'BAJADA';
-    const prediccionRaw = Math.random() > 0.45 ? (tendencia === 'SUBIDA' ? 0.6 : 0.4) : (tendencia === 'SUBIDA' ? 0.4 : 0.6);
-    const confianza = prediccionRaw > 0.5 ? prediccionRaw : 1 - prediccionRaw;
-    const direccion = prediccionRaw > 0.5 ? 'SUBIDA' : 'BAJADA';
-
-    // Lógica de trading
-    const precioActual = klines[i].close;
-    const leverage = 10;
-    const takeProfit = 0.05; // 5%
-    const stopLoss = 0.03;  // 3%
-
-    if (posicionAbierta) {
-      const roePct = ((precioActual - posicionAbierta.precioEntrada) / posicionAbierta.precioEntrada) * leverage * (posicionAbierta.esLong ? 1 : -1) * 100;
-      
-      // Cerrar por TP/SL
-      if (roePct >= takeProfit * 100 || roePct <= -stopLoss * 100) {
-        const ganancia = ((precioActual - posicionAbierta.precioEntrada) / posicionAbierta.precioEntrada) * posicionAbierta.montoInvertido * leverage;
-        operaciones.push({
-          ganancia: ganancia,
-          resultado: ganancia >= 0 ? 'GANANCIA' : 'PÉRDIDA'
-        });
-        capital += ganancia;
-        posicionAbierta = null;
-      }
-    } else {
-      // Abrir nueva posición
-      if (confianza > 0.55) {
-        const montoInvertido = capital * 0.1; // 10% del capital
-        const esLong = direccion === 'SUBIDA';
-        posicionAbierta = {
-          precioEntrada: precioActual,
-          montoInvertido,
-          esLong,
-          timestamp: klines[i].time
-        };
-      }
-    }
-
-    // Calcular drawdown
-    if (capital > maxEquity) {
-      maxEquity = capital;
-    }
-    const drawdown = ((maxEquity - capital) / maxEquity) * 100;
-    if (drawdown > drawdownMax) {
-      drawdownMax = drawdown;
-    }
-  }
-
-  // Cerrar posición abierta al final
-  if (posicionAbierta) {
-    const precioFinal = klines[klines.length - 1].close;
-    const ganancia = ((precioFinal - posicionAbierta.precioEntrada) / posicionAbierta.precioEntrada) * posicionAbierta.montoInvertido * 10;
-    operaciones.push({
-      ganancia: ganancia,
-      resultado: ganancia >= 0 ? 'GANANCIA' : 'PÉRDIDA'
-    });
-    capital += ganancia;
-  }
-
-  // Calcular métricas
-  const ganancias = operaciones.filter(o => o.ganancia > 0).length;
-  const winRate = operaciones.length > 0 ? (ganancias / operaciones.length) * 100 : 0;
-  const gananciasTotales = operaciones.filter(o => o.ganancia > 0).reduce((sum, o) => sum + o.ganancia, 0);
-  const perdidasTotales = Math.abs(operaciones.filter(o => o.ganancia < 0).reduce((sum, o) => sum + o.ganancia, 0));
-  const profitFactor = perdidasTotales > 0 ? gananciasTotales / perdidasTotales : gananciasTotales;
-  const roeTotal = ((capital - 1000) / 1000) * 100;
-
-  return {
-    operaciones: operaciones.length,
-    winRate,
-    profitFactor,
-    maxDrawdown: drawdownMax,
-    roeTotal
-  };
-}
+// === ENTRENAMIENTO ===
 async function crearModelo(inputShape = 23) {
   const model = tf.sequential();
   model.add(tf.layers.dense({ units: 64, activation: 'relu', inputShape: [inputShape] }));
   model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
   model.add(tf.layers.dense({ units: 16, activation: 'relu' }));
   model.add(tf.layers.dense({ units: 1, activation: 'sigmoid' }));
-
   model.compile({
     optimizer: tf.train.adam(0.001),
     loss: 'binaryCrossentropy',
     metrics: ['accuracy']
   });
-
   return model;
 }
 
@@ -481,19 +255,15 @@ async function entrenarRed() {
     const klines = await obtenerDatos(simboloActual, '1m', 1000);
     const fundingRate = await obtenerFundingRate(simboloActual);
     const openInterest = await obtenerOpenInterest(simboloActual);
-
     const { X, y } = prepararDatosParaIA(klines, fundingRate, openInterest);
-
     if (X.shape[0] === 0) {
       alert('No hay suficientes datos para entrenar');
       document.getElementById('estado').textContent = '⚠️ Datos insuficientes';
       return;
     }
-
     document.getElementById('estado').textContent = 'Entrenando red...';
     modelo = await crearModelo();
     await modelo.fit(X, y, { epochs: 30, batchSize: 32, verbose: 0 });
-
     X.dispose();
     y.dispose();
     document.getElementById('estado').textContent = '✅ Modelo entrenado';
@@ -505,15 +275,10 @@ async function entrenarRed() {
 
 async function predecir(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, macdActual, signalActual, posicionBB, anchoBB, atrActual, obvActual, precioActual, fundingRate = 0, openInterest = 0) {
   if (!modelo) return null;
-
-  if (ultimosPrecios.length < 10) {
-    console.warn('No hay suficientes precios para predecir');
-    return null;
-  }
+  if (ultimosPrecios.length < 10) return null;
   const ultimos10 = ultimosPrecios.slice(-10);
   const cambios = ultimos10.map((p, idx) => idx === 0 ? 0 : (p - ultimos10[idx - 1]) / ultimos10[idx - 1]);
   const volumenProm = ultimosVolumenes.slice(-10).reduce((a, b) => a + b, 0) / 10;
-
   const features = [
     ...cambios,
     volumenProm / 1e6,
@@ -530,10 +295,6 @@ async function predecir(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, 
     obvActual / 1e9,
     openInterest / 1e6
   ];
-console.log("🔍 [DEBUG] Número de features:", features.length);
-if (features.length !== 23) {
-  console.warn("⚠️ [DEBUG] ¡El modelo espera 24 features, pero se recibieron:", features.length, "!");
-}
   const input = tf.tensor2d([features]);
   const prediccion = modelo.predict(input);
   const valor = await prediccion.data();
@@ -543,20 +304,16 @@ if (features.length !== 23) {
 }
 
 // === LÓGICA DE TRADING ===
-
 function actualizarPanelFinanciero() {
   const gananciasTotales = operaciones
     .filter(o => o.ganancia > 0)
     .reduce((sum, o) => sum + o.ganancia, 0);
-
   const perdidasTotales = Math.abs(
     operaciones
       .filter(o => o.ganancia < 0)
       .reduce((sum, o) => sum + o.ganancia, 0)
   );
-
   const roi = ((capitalActual - capitalInicial) / capitalInicial) * 100;
-
   document.getElementById('ganancias').textContent = `$${gananciasTotales.toFixed(2)}`;
   document.getElementById('perdidas').textContent = `$${perdidasTotales.toFixed(2)}`;
   document.getElementById('roi').textContent = `${roi.toFixed(2)}%`;
@@ -566,21 +323,18 @@ function renderizarHistorial() {
   const tbody = document.querySelector('#historial tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
-
   operaciones.slice().reverse().forEach(op => {
     const row = document.createElement('tr');
-    const entrada = new Date(op.timestampEntrada).toLocaleTimeString();
-    const salida = new Date(op.timestampSalida).toLocaleTimeString();
+    const hora = new Date(op.timestampEntrada).toLocaleTimeString();
+    const tipo = op.ganancia >= 0 ? 'GANANCIA' : 'PÉRDIDA';
     const color = op.ganancia >= 0 ? 'green' : 'red';
     const simbolo = op.ganancia >= 0 ? '+' : '';
-
     row.innerHTML = `
-      <td>${entrada}</td>
-      <td>${salida}</td>
+      <td>${hora}</td>
+      <td>${op.simbolo}</td>
+      <td>${tipo}</td>
       <td>$${op.entrada.toFixed(2)}</td>
-      <td>$${op.salida.toFixed(2)}</td>
       <td style="color:${color}">${simbolo}$${op.ganancia.toFixed(2)}</td>
-      <td>${op.resultado}</td>
     `;
     tbody.appendChild(row);
   });
@@ -588,48 +342,39 @@ function renderizarHistorial() {
 
 function reiniciarCapital() {
   const capitalEl = document.getElementById('capital');
-  //const porcentajeEl = document.getElementById('porcentaje');
   const maxOpEl = document.getElementById('maxOperaciones');
   const tpEl = document.getElementById('takeProfit');
   const slEl = document.getElementById('stopLoss');
   const simboloEl = document.getElementById('simbolo');
   const apalancamientoEl = document.getElementById('apalancamiento');
-  
   capitalInicial = parseFloat(capitalEl.value) || 1000;
-  //porcentajeInvertir = parseFloat(porcentajeEl.value) || 10;
   maxOperaciones = parseInt(maxOpEl.value) || 3;
-  
-  
-  takeProfitPct = parseFloat(tpEl.value) || 1.0;
-  stopLossPct = parseFloat(slEl.value) || 1.0;
+  takeProfitPct = parseFloat(tpEl.value) || 5.0;
+  stopLossPct = parseFloat(slEl.value) || 3.0;
   simboloActual = simboloEl.value.toUpperCase() || 'BTCUSDT';
   capitalActual = capitalInicial;
   operaciones = [];
-
   actualizarPanelFinanciero();
   renderizarHistorial();
   console.log(`🔁 Capital reiniciado`);
 }
 
-function exportarACSV() {
+function exportarCSV() {
   if (operaciones.length === 0) {
     alert('No hay operaciones para exportar.');
     return;
   }
-
   const fechaExport = new Date().toISOString().split('T')[0];
   let csv = `# Símbolo: ${simboloActual}\n`;
   csv += `# Capital Inicial: $${capitalInicial}\n`;
   csv += `# Take-Profit: ${takeProfitPct}%, Stop-Loss: ${stopLossPct}%\n`;
   csv += `# Fecha Exportación: ${fechaExport}\n\n`;
-  csv += 'Entrada,Salida,Precio Entrada,Precio Salida,Ganancia,Monto Invertido,Resultado\n';
-
+  csv += 'Hora,Símbolo,Tipo,Precio,Ganancia\n';
   operaciones.forEach(op => {
-    const entrada = new Date(op.timestampEntrada).toISOString();
-    const salida = new Date(op.timestampSalida).toISOString();
-    csv += `"${entrada}","${salida}",${op.entrada.toFixed(2)},${op.salida.toFixed(2)},${op.ganancia.toFixed(2)},${op.montoInvertido.toFixed(2)},${op.resultado}\n`;
+    const hora = new Date(op.timestampEntrada).toISOString();
+    const tipo = op.ganancia >= 0 ? 'GANANCIA' : 'PÉRDIDA';
+    csv += `"${hora}",${op.simbolo},${tipo},${op.entrada.toFixed(2)},${op.ganancia.toFixed(2)}\n`;
   });
-
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -640,7 +385,6 @@ function exportarACSV() {
 }
 
 // === REGISTRO DE OPERACIONES REALES ===
-
 function registrarOperacionReal(symbol, side, precioEntrada, precioSalida, cantidad, pnl) {
   const montoInvertido = Math.abs(cantidad * precioEntrada);
   const gananciaAbs = parseFloat(pnl);
@@ -654,133 +398,93 @@ function registrarOperacionReal(symbol, side, precioEntrada, precioSalida, canti
     resultado: gananciaAbs >= 0 ? 'GANANCIA' : 'PÉRDIDA',
     simbolo: symbol
   };
-
-  // Cargar historial existente o crear nuevo
   let historial = JSON.parse(localStorage.getItem('historialOperaciones') || '[]');
-  
-  // Añadir nueva operación al inicio
   historial.unshift(operacion);
-  
-  // Mantener solo las últimas 10
-  if (historial.length > 10) {
-    historial = historial.slice(0, 10);
-  }
-  
-  // Guardar en localStorage
+  if (historial.length > 10) historial = historial.slice(0, 10);
   localStorage.setItem('historialOperaciones', JSON.stringify(historial));
-  
-  // Actualizar variables globales y UI
   operaciones = historial;
   actualizarPanelFinanciero();
   renderizarHistorial();
 }
-// === TRADING REAL EN TESTNET ===
 
+// === TRADING REAL EN TESTNET ===
 async function abrirPosicionReal(side) {
- // Obtener montos con valores por defecto si los elementos no existen
-const montoCompraEl = document.getElementById('montoCompra');
-const montoVentaEl = document.getElementById('montoVenta');
-const montoUSDT = montoCompraEl ? parseFloat(montoCompraEl.value) || 10 : 10;
-const montoBTC = montoVentaEl ? parseFloat(montoVentaEl.value) || 0.001 : 0.001;
-  
   try {
     const tickerRes = await fetch(`/api/binance/ticker?symbol=${simboloActual}`);
     if (!tickerRes.ok) throw new Error('No se pudo obtener el precio');
     const ticker = await tickerRes.json();
-    const precio = parseFloat(ticker.price);
-    if (isNaN(precio)) throw new Error('Precio inválido');
-    
+    const precioActual = parseFloat(ticker.price);
+    if (isNaN(precioActual)) throw new Error('Precio inválido');
     let cantidad;
-const precioActual = parseFloat(ticker.price);
-
-if (simboloActual === 'BTCUSDT') {
-  if (side === 'BUY') {
-    // Compra: invertir X USDT → convertir a BTC
-    const montoUSDT = parseFloat(document.getElementById('montoCompra').value) || 10;
-    cantidad = (montoUSDT / precioActual).toFixed(6);
-  } else {
-    // Venta: usar X BTC directamente
-    cantidad = (parseFloat(document.getElementById('montoVenta').value) || 0.001).toFixed(6);
-  }
-} else if (simboloActual === 'ETHUSDT') {
-  if (side === 'BUY') {
-    const montoUSDT = parseFloat(document.getElementById('montoCompra').value) || 10;
-    cantidad = (montoUSDT / precioActual).toFixed(5);
-  } else {
-    cantidad = (parseFloat(document.getElementById('montoVenta').value) || 0.01).toFixed(5);
-  }
-} else {
-  // Por defecto, tratar como par USDT
-  if (side === 'BUY') {
-    const montoUSDT = parseFloat(document.getElementById('montoCompra').value) || 10;
-    cantidad = (montoUSDT / precioActual).toFixed(6);
-  } else {
-    // Para pares no-BTC, asumir que "venta" también usa USDT equivalente (o ajustar según necesidad)
-    const montoUSDT = parseFloat(document.getElementById('montoVenta').value) || 10;
-    cantidad = (montoUSDT / precioActual).toFixed(6);
-  }
-}
-    // Obtener leverage del input del dashboard
-const apalancamientoEl = document.getElementById('apalancamiento');
-const leverage = apalancamientoEl ? parseInt(apalancamientoEl.value) || 10 : 10;
-
-const response = await fetch('/api/binance/futures/order', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    symbol: simboloActual,
-    side: side,
-    quantity: cantidad,
-    leverage: leverage,
-    positionSide: 'BOTH'
-  })
-});
-
+    if (simboloActual === 'BTCUSDT') {
+      if (side === 'BUY') {
+        const montoUSDT = parseFloat(document.getElementById('montoCompra').value) || 10;
+        cantidad = (montoUSDT / precioActual).toFixed(6);
+      } else {
+        cantidad = (parseFloat(document.getElementById('montoVenta').value) || 0.001).toFixed(6);
+      }
+    } else if (simboloActual === 'ETHUSDT') {
+      if (side === 'BUY') {
+        const montoUSDT = parseFloat(document.getElementById('montoCompra').value) || 10;
+        cantidad = (montoUSDT / precioActual).toFixed(5);
+      } else {
+        cantidad = (parseFloat(document.getElementById('montoVenta').value) || 0.01).toFixed(5);
+      }
+    } else {
+      const montoUSDT = parseFloat(document.getElementById('montoCompra').value) || 10;
+      cantidad = (montoUSDT / precioActual).toFixed(6);
+    }
+    const apalancamientoEl = document.getElementById('apalancamiento');
+    const leverage = apalancamientoEl ? parseInt(apalancamientoEl.value) || 10 : 10;
+    const response = await fetch('/api/binance/futures/order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        symbol: simboloActual,
+        side: side,
+        quantity: cantidad,
+        leverage: leverage,
+        positionSide: 'BOTH'
+      })
+    });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       throw new Error(error.error || `HTTP ${response.status}`);
     }
-
     const resultado = await response.json();
     console.log('✅ Orden ejecutada en Testnet:', resultado);
     document.getElementById('estado').textContent = `✅ Orden ${side} ejecutada en ${simboloActual}`;
     await actualizarPosicionesAbiertas();
+
+    // Enviar alerta por Telegram
+    const mensajeApertura = `🟢 Nueva posición\nSímbolo: ${simboloActual}\nLado: ${side}\nCantidad: ${cantidad}`;
+    enviarMensajeTelegram(mensajeApertura);
   } catch (err) {
     console.error('❌ Error al abrir posición:', err);
-    const msg = err.message || 'Error desconocido';
-    alert('Error: ' + msg);
-    document.getElementById('estado').textContent = `❌ Error: ${msg}`;
+    alert('Error: ' + err.message);
+    document.getElementById('estado').textContent = `❌ Error: ${err.message}`;
   }
 }
 
 async function actualizarPosicionesAbiertas() {
   try {
     const response = await fetch('/api/binance/futures/positions');
-    
     if (!response.ok) {
       const errorText = await response.text();
       console.error('❌ Error HTTP:', response.status, errorText);
-      document.getElementById('estado').textContent = `Error: ${response.status}`;
       return;
     }
-
     const data = await response.json();
-
     if (Array.isArray(data)) {
-      const posiciones = data;
       const tbody = document.querySelector('#operaciones-abiertas tbody');
       tbody.innerHTML = '';
-      
-      posiciones.forEach(pos => {
+      data.forEach(pos => {
         const size = parseFloat(pos.positionAmt);
         if (Math.abs(size) < 0.0001) return;
-
         const entryPrice = parseFloat(pos.entryPrice);
         const markPrice = parseFloat(pos.markPrice);
         const pnl = parseFloat(pos.unRealizedProfit);
         const roe = ((markPrice - entryPrice) / entryPrice) * (size > 0 ? 1 : -1) * 100;
-        const positionSide = pos.positionSide;
-        
         const row = document.createElement('tr');
         row.innerHTML = `
           <td>${pos.symbol}</td>
@@ -788,13 +492,10 @@ async function actualizarPosicionesAbiertas() {
           <td>$${entryPrice.toFixed(2)}</td>
           <td>${roe.toFixed(2)}%</td>
           <td>$${pnl.toFixed(2)}</td>
-          <td><button onclick="cerrarPosicion('${pos.symbol}', '${positionSide}')">CloseOperation</button></td>
+          <td><button onclick="cerrarPosicion('${pos.symbol}', '${pos.positionSide}')">CloseOperation</button></td>
         `;
         tbody.appendChild(row);
       });
-    } else {
-      console.error('❌ Respuesta de error:', data);
-      document.getElementById('estado').textContent = `Error: ${data.error?.msg || 'Desconocido'}`;
     }
   } catch (err) {
     console.error('💥 Error en actualizarPosicionesAbiertas:', err);
@@ -805,45 +506,49 @@ async function actualizarPosicionesAbiertas() {
 async function cerrarPosicion(symbol, positionSide = 'BOTH') {
   try {
     const posResponse = await fetch('/api/binance/futures/positions');
-    if (!posResponse.ok) throw new Error('No se pudo obtener la posición');
     const posiciones = await posResponse.json();
     const posicion = Array.isArray(posiciones) 
       ? posiciones.find(p => p.symbol === symbol && p.positionSide === positionSide)
       : null;
-
     if (!posicion || Math.abs(parseFloat(posicion.positionAmt)) < 0.0001) {
       throw new Error('No hay posición abierta para cerrar');
     }
-
     const precioEntrada = parseFloat(posicion.entryPrice);
     const cantidad = Math.abs(parseFloat(posicion.positionAmt));
     const sideActual = cantidad > 0 ? 'LONG' : 'SHORT';
-
     const response = await fetch('/api/binance/futures/close-position', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ symbol, positionSide })
     });
-
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       throw new Error(error.error || `HTTP ${response.status}`);
     }
-
     const tickerRes = await fetch(`/api/binance/ticker?symbol=${symbol}`);
     const ticker = await tickerRes.json();
     const precioSalida = parseFloat(ticker.price);
     const pnl = parseFloat(posicion.unRealizedProfit);
-
     registrarOperacionReal(symbol, sideActual, precioEntrada, precioSalida, cantidad, pnl);
-
     document.getElementById('estado').textContent = `CloseOperation ${symbol} exitosa`;
+
+    // Enviar alerta por Telegram
+    const emoji = pnl >= 0 ? '✅' : '❌';
+    const ganancia = Math.abs(pnl).toFixed(2);
+    const tipo = pnl >= 0 ? 'Ganancia' : 'Pérdida';
+    const mensajeCierre = `${emoji} Posición cerrada\nSímbolo: ${symbol}\nPnL: ${pnl >= 0 ? '+' : ''}${ganancia} USDT\n(${tipo})`;
+    enviarMensajeTelegram(mensajeCierre);
+
     await actualizarPosicionesAbiertas();
   } catch (err) {
     console.error('Error al cerrar posición:', err);
     alert('Error al cerrar: ' + err.message);
     document.getElementById('estado').textContent = `❌ Error: ${err.message}`;
   }
+}
+
+function cerrarTodas() {
+  alert('Función "Cerrar todas" aún no implementada.');
 }
 
 function operacionPrueba() {
@@ -866,62 +571,37 @@ async function iniciarStreaming() {
     console.warn('⚠️ Streaming ya está activo');
     return;
   }
-
   if (!modelo) {
     alert('Primero entrena la red neuronal');
     document.getElementById('estado').textContent = '❌ Modelo no entrenado';
     return;
   }
-
   simboloActual = document.getElementById('simbolo').value.toUpperCase();
-  
   let fundingRate = 0;
-  try {
-    fundingRate = await obtenerFundingRate(simboloActual);
-    console.log("💸 Funding Rate actual:", fundingRate);
-  } catch (err) {
-    console.warn("⚠️ No se pudo obtener funding rate, usando 0");
-  }
-
+  try { fundingRate = await obtenerFundingRate(simboloActual); } catch (err) { console.warn("⚠️ Funding Rate no disponible"); }
   let openInterest = 0;
-try {
-  console.log("🔍 Intentando obtener Open Interest para:", simboloActual);
-  openInterest = await obtenerOpenInterest(simboloActual);
-  console.log("✅ Open Interest recibido:", openInterest);
-} catch (err) {
-  console.error("❌ ERROR al obtener Open Interest:", err);
-  openInterest = 0;
-}
-
+  try { openInterest = await obtenerOpenInterest(simboloActual); } catch (err) { console.warn("⚠️ Open Interest no disponible"); }
   try {
     let klines = await obtenerDatos(simboloActual, '1m', 50);
     precios = klines.map(k => k.close);
     ultimoPrecio = klines[klines.length - 1].close;
-
     if (!dataSeries) {
-      console.error('⚠️ dataSeries no está inicializado');
+      console.error('⚠️ dataSeries no inicializado');
       return;
     }
-
     dataSeries.setData(klines);
     actualizarPanelFinanciero();
-
     streamingInterval = setInterval(async () => {
       try {
         const tickerRes = await fetch(`/api/binance/ticker?symbol=${simboloActual}`);
         if (!tickerRes.ok) throw new Error('Binance API error');
         const ticker = await tickerRes.json();
         const precioActual = parseFloat(ticker.price);
-        if (isNaN(precioActual) || precioActual <= 0) {
-          console.warn('⚠️ Precio inválido de Binance:', ticker.price);
-          return;
-        }
+        if (isNaN(precioActual) || precioActual <= 0) return;
         ultimoPrecio = precioActual;
-
         const ahora = Math.floor(Date.now() / 1000);
         const ultimaVela = klines[klines.length - 1];
         let timeVela = typeof ultimaVela.time === 'number' ? ultimaVela.time : ahora - 30;
-
         if (ahora - timeVela >= 60) {
           const nuevaVela = {
             time: ahora,
@@ -946,13 +626,10 @@ try {
           klines[klines.length - 1] = velaActualizada;
           dataSeries.update(velaActualizada);
         }
-
-        console.log("📊 Datos disponibles:", precios.length, "velas");
-
+        // Predicción
         let prediccionRaw = null;
         let confianza = 0;
         let direccion = '';
-
         if (precios.length >= 30) {
           const closes = precios;
           const ultimos10Precios = closes.slice(-10);
@@ -963,7 +640,6 @@ try {
           const { media: bbMedia, superior: bbSuperior, inferior: bbInferior } = calcularBandasBollinger(closes, 20, 2);
           const atr = calcularATR(klines, 14);
           const obv = calcularOBV(klines);
-
           const rsiActual = rsi[rsi.length - 1] || 50;
           const emaActual = ema[ema.length - 1] || ultimoPrecio;
           const macdActual = macdLine[macdLine.length - 1] || 0;
@@ -975,172 +651,114 @@ try {
           const posicionBB = anchoBB > 0 ? (ultimoPrecio - bbInf) / anchoBB : 0.5;
           const atrActual = atr[atr.length - 1] || 0;
           const obvActual = obv[obv.length - 1] || 0;
-
-          try {
-            console.log("🔍 [DEBUG] Llamando a predecir() con fundingRate:", fundingRate, "y openInterest:", openInterest);
-            prediccionRaw = await predecir(
-              ultimos10Precios,
-              ultimos10Volumenes,
-              rsiActual,
-              emaActual,
-              macdActual,
-              signalActual,
-              posicionBB,
-              anchoBB,
-              atrActual,
-              obvActual,
-              ultimoPrecio,
-              openInterest
-            );
-          } catch (err) {
-            console.warn('⚠️ Error en predicción:', err.message);
-          }
-
+          prediccionRaw = await predecir(
+            ultimos10Precios,
+            ultimos10Volumenes,
+            rsiActual,
+            emaActual,
+            macdActual,
+            signalActual,
+            posicionBB,
+            anchoBB,
+            atrActual,
+            obvActual,
+            ultimoPrecio,
+            fundingRate,
+            openInterest
+          );
           if (prediccionRaw == null || isNaN(prediccionRaw)) {
             document.getElementById('prediccion-direccion').textContent = '—';
             document.getElementById('prediccion-porcentaje').textContent = '—';
             document.getElementById('prediccion-progreso').style.width = '0%';
-            document.getElementById('prediccion-progreso').style.backgroundColor = '#666';
           } else {
             confianza = prediccionRaw > 0.5 ? prediccionRaw : 1 - prediccionRaw;
             direccion = prediccionRaw > 0.5 ? 'SUBIDA' : 'BAJADA';
             const porcentaje = Math.round(confianza * 100);
             const emoji = direccion === 'SUBIDA' ? '🟢' : '🔴';
             const color = porcentaje > 55 ? (direccion === 'SUBIDA' ? '#26a69a' : '#ef5350') : '#666';
-
             document.getElementById('prediccion-direccion').innerHTML = `${emoji} ${direccion}`;
             document.getElementById('prediccion-porcentaje').textContent = `${porcentaje}%`;
             document.getElementById('prediccion-progreso').style.width = `${porcentaje}%`;
             document.getElementById('prediccion-progreso').style.backgroundColor = color;
           }
         }
-
-        // === GESTIÓN DE TRADING AUTOMÁTICO ===
+        // === AUTO-TRADING ===
         const autoTrading = document.getElementById('auto-trading')?.checked || false;
         if (!autoTrading) return;
-
         const posResponse = await fetch('/api/binance/futures/positions');
         if (!posResponse.ok) return;
         const posiciones = await posResponse.json();
         const posicionActual = Array.isArray(posiciones) 
           ? posiciones.find(p => p.symbol === simboloActual && Math.abs(parseFloat(p.positionAmt)) > 0.0001)
           : null;
-
         if (posicionActual) {
           const size = parseFloat(posicionActual.positionAmt);
           const entryPrice = parseFloat(posicionActual.entryPrice);
           const markPrice = parseFloat(posicionActual.markPrice);
           const leverage = parseFloat(posicionActual.leverage);
           const esLong = size > 0;
-          const esShort = size < 0;
-
           // Calcular ATR en tiempo real
-// Obtener klines de 5m solo para calcular ATR (más estable)
-// Calcular ATR usando velas de 5m (más estable)
-let atrActual = 0;
-try {
-  const klines5m = await obtenerDatos(simboloActual, '5m', 50);
-  if (klines5m.length >= 15) {
-    const atrArray = calcularATR(klines5m, 14);
-    atrActual = atrArray[atrArray.length - 1] || 0;
-  }
-} catch (e) {
-  // Calcular ATR usando velas de 5m (más estable que 1m)
-let atrActual = 0;
-try {
-  // Obtener las últimas 50 velas de 5m
-  const klines5m = await obtenerDatos(simboloActual, '5m', 50);
-  if (klines5m.length >= 20) {
-    const atrArray = calcularATR(klines5m, 14);
-    atrActual = atrArray[atrArray.length - 1] || 0;
-  } else {
-    throw new Error("Insuficientes velas 5m");
-  }
-} catch (e) {
-  console.warn("⚠️ Usando ATR de 1m como respaldo");
-  // Fallback: usar ATR de 1m si falla 5m
-  const klinesATR = klines.slice(-50);
-  const atrArray = calcularATR(klinesATR, 14);
-  atrActual = atrArray[atrArray.length - 1] || 0;
-}
-}
-
-// TP/SL dinámico (en USDT)
-const slDinamico = atrActual*2;           // 1x ATR
-const tpDinamico = atrActual*4;       // 2x ATR
-
-// Convertir a porcentaje del precio de entrada
-const stopLossPct = (slDinamico / entryPrice) * 100;
-const takeProfitPct = (tpDinamico / entryPrice) * 100;
-// Mostrar en consola (para debug)
-console.log(`📊 TP/SL dinámico: TP=${takeProfitPct.toFixed(2)}%, SL=${stopLossPct.toFixed(2)}% (ATR=${atrActual.toFixed(2)})`);
-// Mostrar en el dashboard
-// Mostrar en el dashboard (solo si los elementos existen)
-const tpEl = document.getElementById('tp-dinamico');
-const slEl = document.getElementById('sl-dinamico');
-const atrEl = document.getElementById('atr-valor');
-
-if (tpEl) tpEl.textContent = `TP: ${takeProfitPct.toFixed(2)}%`;
-if (slEl) slEl.textContent = `SL: ${stopLossPct.toFixed(2)}%`;
-if (atrEl) atrEl.textContent = `ATR: ${atrActual.toFixed(2)}`;
-
-const roePct = ((markPrice - entryPrice) / entryPrice) * leverage * (esLong ? 1 : -1) * 100;
-
+          let atrActual = 0;
+          try {
+            const klines5m = await obtenerDatos(simboloActual, '5m', 50);
+            if (klines5m.length >= 20) {
+              const atrArray = calcularATR(klines5m, 14);
+              atrActual = atrArray[atrArray.length - 1] || 0;
+            }
+          } catch (e) {
+            console.warn("⚠️ Usando ATR de 1m como respaldo");
+            const klinesATR = klines.slice(-50);
+            const atrArray = calcularATR(klinesATR, 14);
+            atrActual = atrArray[atrArray.length - 1] || 0;
+          }
+          // Leer múltiplos desde el dashboard
+          const multiploTPEl = document.getElementById('multiploTP');
+          const multiploSLEl = document.getElementById('multiploSL');
+          const multiploTP = multiploTPEl ? parseFloat(multiploTPEl.value) || 4 : 4;
+          const multiploSL = multiploSLEl ? parseFloat(multiploSLEl.value) || 2 : 2;
+          // TP/SL dinámico con múltiplos ajustables
+          const slDinamico = atrActual * multiploSL;
+          const tpDinamico = atrActual * multiploTP;
+          const stopLossPct = (slDinamico / entryPrice) * 100;
+          const takeProfitPct = (tpDinamico / entryPrice) * 100;
+          // Mostrar en dashboard
+          const tpEl = document.getElementById('tp-dinamico');
+          const slEl = document.getElementById('sl-dinamico');
+          const atrEl = document.getElementById('atr-valor');
+          if (tpEl) tpEl.textContent = `TP: ${takeProfitPct.toFixed(2)}%`;
+          if (slEl) slEl.textContent = `SL: ${stopLossPct.toFixed(2)}%`;
+          if (atrEl) atrEl.textContent = `ATR: ${atrActual.toFixed(2)}`;
+          const roePct = ((markPrice - entryPrice) / entryPrice) * leverage * (esLong ? 1 : -1) * 100;
           let debeCerrarPorTPSL = false;
-          let motivoCierre = '';
-
           if (roePct >= takeProfitPct) {
-          debeCerrarPorTPSL = true;
-          motivoCierre = `Take-Profit (${roePct.toFixed(2)}% ≥ ${takeProfitPct.toFixed(2)}%)`;
+            debeCerrarPorTPSL = true;
+            console.log(`🎯 Take-Profit (${roePct.toFixed(2)}% ≥ ${takeProfitPct.toFixed(2)}%) → Cerrando`);
           } else if (roePct <= -stopLossPct) {
-          debeCerrarPorTPSL = true;
-           motivoCierre = `Stop-Loss (${roePct.toFixed(2)}% ≤ -${stopLossPct.toFixed(2)}%)`;
-           }
-
+            debeCerrarPorTPSL = true;
+            console.log(`🎯 Stop-Loss (${roePct.toFixed(2)}% ≤ -${stopLossPct.toFixed(2)}%) → Cerrando`);
+          }
           if (debeCerrarPorTPSL) {
-            console.log(`🎯 ${motivoCierre} → Cerrando posición en ${simboloActual}`);
             cerrarPosicion(simboloActual, posicionActual.positionSide);
-          } 
-          else if (prediccionRaw != null && !isNaN(prediccionRaw)) {
-            const debeCerrarPorCambio = 
-              (esLong && direccion === 'BAJADA' && confianza >= 0.60) ||
-              (esShort && direccion === 'SUBIDA' && confianza >= 0.60);
-
-            if (debeCerrarPorCambio) {
-              console.log(`🤖 IA cambió de dirección → Cerrando posición ${esLong ? 'LONG' : 'SHORT'} en ${simboloActual}`);
-              cerrarPosicion(simboloActual, posicionActual.positionSide);
+          }
+        } else {
+          if (prediccionRaw != null && !isNaN(prediccionRaw) && confianza >= 0.60) {
+            const closesEMA = precios;
+            const ema20 = calcularEMA(closesEMA, 20);
+            const ema50 = calcularEMA(closesEMA, 50);
+            const ema20Actual = ema20[ema20.length - 1];
+            const ema50Actual = ema50[ema50.length - 1];
+            const esTendenciaAlcista = ema20Actual > ema50Actual;
+            const esTendenciaBajista = ema20Actual < ema50Actual;
+            const side = prediccionRaw > 0.5 ? 'BUY' : 'SELL';
+            let debeOperar = false;
+            if (side === 'BUY' && esTendenciaAlcista) debeOperar = true;
+            else if (side === 'SELL' && esTendenciaBajista) debeOperar = true;
+            if (debeOperar) {
+              console.log(`🤖 Auto-trading: abriendo ${side} en ${simboloActual} (confianza: ${(confianza * 100).toFixed(1)}%)`);
+              abrirPosicionReal(side);
             }
           }
-
-        }  else {
-  if (prediccionRaw != null && !isNaN(prediccionRaw) && confianza >= 0.60) {
-    // === Filtro de tendencia EMA20/50 ===
-    const closesEMA = precios;
-    const ema20 = calcularEMA(closesEMA, 20);
-    const ema50 = calcularEMA(closesEMA, 50);
-    const ema20Actual = ema20[ema20.length - 1];
-    const ema50Actual = ema50[ema50.length - 1];
-
-    const esTendenciaAlcista = ema20Actual > ema50Actual;
-    const esTendenciaBajista = ema20Actual < ema50Actual;
-    const side = prediccionRaw > 0.5 ? 'BUY' : 'SELL';
-    let debeOperar = false;
-
-    if (side === 'BUY' && esTendenciaAlcista) {
-      debeOperar = true;
-    } else if (side === 'SELL' && esTendenciaBajista) {
-      debeOperar = true;
-    }
-
-    if (debeOperar) {
-      console.log(`🤖 Auto-trading: abriendo ${side} en ${simboloActual} (confianza: ${(confianza * 100).toFixed(1)}%)`);
-      abrirPosicionReal(side);
-    } else {
-      console.log(`⚠️ Señal ignorada: ${side} sin tendencia clara`);
-    }
-  }
-}
-
+        }
       } catch (err) {
         console.error('Error en streaming:', err);
       }
@@ -1159,100 +777,222 @@ async function detenerStreaming() {
   document.getElementById('estado').textContent = '⏹️ Streaming detenido';
 }
 
-// === INICIALIZACIÓN ===
-
-window.onload = () => {
-  initChart();
-  
-  const capitalEl = document.getElementById('capital');
-  // const porcentajeEl = document.getElementById('porcentaje');
-  const maxOpEl = document.getElementById('maxOperaciones');
-  
-  const tpEl = document.getElementById('takeProfit');
-  const slEl = document.getElementById('stopLoss');
-  const simboloEl = document.getElementById('simbolo');
-  
-  capitalInicial = parseFloat(capitalEl.value) || 1000;
-  //porcentajeInvertir = parseFloat(porcentajeEl.value) || 10;
-  maxOperaciones = parseInt(maxOpEl.value) || 3;
-  takeProfitPct = parseFloat(tpEl.value) || 1.0;
-  stopLossPct = parseFloat(slEl.value) || 1.0;
-  simboloActual = simboloEl.value.toUpperCase() || 'BTCUSDT';
-  capitalActual = capitalInicial;
-
-  document.getElementById('btn-reiniciar').onclick = reiniciarCapital;
-  document.getElementById('btn-exportar').onclick = exportarACSV;
-  document.getElementById('simbolo').addEventListener('change', (e) => {
-    simboloActual = e.target.value.toUpperCase();
-  });
-
-  window.entrenarRed = entrenarRed;
-  window.iniciarStreaming = iniciarStreaming;
-  window.detenerStreaming = detenerStreaming;
-  window.operacionPrueba = operacionPrueba;
-  window.cerrarPosicion = cerrarPosicion;
-
-  setInterval(actualizarPosicionesAbiertas, 10000);
-
-// Cargar historial desde localStorage al iniciar
-const historialGuardado = JSON.parse(localStorage.getItem('historialOperaciones') || '[]');
-if (historialGuardado.length > 0) {
-  operaciones = historialGuardado;
-  actualizarPanelFinanciero();
-  renderizarHistorial();
+// === BACKTESTING ===
+async function obtenerDatosBacktesting(symbol = 'BTCUSDT', interval = '15m', days = 30) {
+  const minutosPorDia = 1440;
+  let velasPorDia;
+  if (interval === '1m') velasPorDia = 1440;
+  else if (interval === '5m') velasPorDia = 288;
+  else if (interval === '15m') velasPorDia = 96;
+  else if (interval === '1h') velasPorDia = 24;
+  else if (interval === '4h') velasPorDia = 6;
+  else velasPorDia = 24;
+  const limit = Math.min(1500, days * velasPorDia);
+  const res = await fetch(`/api/binance/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+  if (!res.ok) throw new Error(`Error al obtener datos: ${res.status}`);
+  const klinesRaw = await res.json();
+  return klinesRaw.map(k => ({
+    time: Math.floor(k[0] / 1000),
+    open: parseFloat(k[1]),
+    high: parseFloat(k[2]),
+    low: parseFloat(k[3]),
+    close: parseFloat(k[4]),
+    volume: parseFloat(k[5])
+  }));
 }
 
-};
+async function ejecutarBacktesting() {
+  const simbolo = document.getElementById('bt-simbolo').value.toUpperCase();
+  const intervalo = document.getElementById('bt-intervalo').value;
+  const dias = parseInt(document.getElementById('bt-dias').value);
+  document.getElementById('bt-estado').textContent = 'Descargando datos...';
+  try {
+    const klines = await obtenerDatosBacktesting(simbolo, intervalo, dias);
+    document.getElementById('bt-estado').textContent = `Simulando ${klines.length} velas...`;
+    const resultados = simularTrading(klines);
+    document.getElementById('bt-operaciones').textContent = resultados.operaciones;
+    document.getElementById('bt-winrate').textContent = `${resultados.winRate.toFixed(2)}%`;
+    document.getElementById('bt-roetotal').textContent = `${resultados.roeTotal.toFixed(2)}%`;
+    document.getElementById('bt-resultados').style.display = 'block';
+    document.getElementById('bt-estado').textContent = '✅ Simulación completada';
+  } catch (err) {
+    console.error('Error en backtesting:', err);
+    document.getElementById('bt-estado').textContent = `❌ Error: ${err.message}`;
+  }
+}
 
-// === ACTUALIZAR CAPITAL DE BINANCE TESTNET ===
+function simularTrading(klines) {
+  if (klines.length < 30) {
+    throw new Error("No hay suficientes datos para simular");
+  }
+  let operaciones = [];
+  let capital = 1000;
+  let posicionAbierta = null;
+  let maxEquity = capital;
+  let drawdownMax = 0;
+  for (let i = 30; i < klines.length; i++) {
+    const closes = klines.slice(0, i).map(k => k.close);
+    const ultimos10Precios = closes.slice(-10);
+    const rsi = calcularRSI(closes, 14);
+    const ema = calcularEMA(closes, 20);
+    const { macdLine, signalLine } = calcularMACD(closes, 12, 26, 9);
+    const { media: bbMedia, superior: bbSuperior, inferior: bbInferior } = calcularBandasBollinger(closes, 20, 2);
+    const atr = calcularATR(klines.slice(0, i), 14);
+    const obv = calcularOBV(klines.slice(0, i));
+    const rsiActual = rsi[rsi.length - 1] || 50;
+    const emaActual = ema[ema.length - 1] || closes[closes.length - 1];
+    const macdActual = macdLine[macdLine.length - 1] || 0;
+    const signalActual = signalLine[signalLine.length - 1] || 0;
+    const bbMedio = bbMedia[bbMedia.length - 1] || closes[closes.length - 1];
+    const bbSup = bbSuperior[bbSuperior.length - 1] || closes[closes.length - 1];
+    const bbInf = bbInferior[bbInferior.length - 1] || closes[closes.length - 1];
+    const anchoBB = bbSup - bbInf;
+    const posicionBB = anchoBB > 0 ? (closes[closes.length - 1] - bbInf) / anchoBB : 0.5;
+    const atrActual = atr[atr.length - 1] || 0;
+    const obvActual = obv[obv.length - 1] || 0;
+    const features = [
+      ...ultimos10Precios.map((p, idx) => idx === 0 ? 0 : (p - ultimos10Precios[idx - 1]) / ultimos10Precios[idx - 1]),
+      0,
+      rsiActual / 100,
+      closes[closes.length - 1] > emaActual ? 1 : 0,
+      rsiActual > 70 ? 1 : 0,
+      rsiActual < 30 ? 1 : 0,
+      macdActual / 1000,
+      signalActual / 1000,
+      (macdActual - signalActual) / 1000,
+      posicionBB,
+      anchoBB / closes[closes.length - 1],
+      atrActual / closes[closes.length - 1],
+      obvActual / 1e9,
+      0
+    ];
+    const prediccionRaw = Math.random() > 0.45 ? 0.6 : 0.4; // Simulación simple
+    const confianza = prediccionRaw > 0.5 ? prediccionRaw : 1 - prediccionRaw;
+    const direccion = prediccionRaw > 0.5 ? 'SUBIDA' : 'BAJADA';
+    const precioActual = klines[i].close;
+    const leverage = 10;
+    const takeProfit = 0.05;
+    const stopLoss = 0.03;
+    if (posicionAbierta) {
+      const roePct = ((precioActual - posicionAbierta.precioEntrada) / posicionAbierta.precioEntrada) * leverage * (posicionAbierta.esLong ? 1 : -1) * 100;
+      if (roePct >= takeProfit * 100 || roePct <= -stopLoss * 100) {
+        const ganancia = ((precioActual - posicionAbierta.precioEntrada) / posicionAbierta.precioEntrada) * posicionAbierta.montoInvertido * leverage;
+        operaciones.push({ ganancia, resultado: ganancia >= 0 ? 'GANANCIA' : 'PÉRDIDA' });
+        capital += ganancia;
+        posicionAbierta = null;
+      }
+    } else if (confianza > 0.55) {
+      const montoInvertido = capital * 0.1;
+      const esLong = direccion === 'SUBIDA';
+      posicionAbierta = { precioEntrada: precioActual, montoInvertido, esLong };
+    }
+    if (capital > maxEquity) maxEquity = capital;
+    const drawdown = ((maxEquity - capital) / maxEquity) * 100;
+    if (drawdown > drawdownMax) drawdownMax = drawdown;
+  }
+  if (posicionAbierta) {
+    const precioFinal = klines[klines.length - 1].close;
+    const ganancia = ((precioFinal - posicionAbierta.precioEntrada) / posicionAbierta.precioEntrada) * posicionAbierta.montoInvertido * 10;
+    operaciones.push({ ganancia, resultado: ganancia >= 0 ? 'GANANCIA' : 'PÉRDIDA' });
+    capital += ganancia;
+  }
+  const ganancias = operaciones.filter(o => o.ganancia > 0).length;
+  const winRate = operaciones.length > 0 ? (ganancias / operaciones.length) * 100 : 0;
+  const roeTotal = ((capital - 1000) / 1000) * 100;
+  return {
+    operaciones: operaciones.length,
+    winRate,
+    roeTotal
+  };
+}
+
+// === ALERTAS POR TELEGRAM ===
+async function enviarMensajeTelegram(mensaje) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) {
+    console.warn("⚠️ Telegram no configurado");
+    return;
+  }
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  const data = {
+    chat_id: chatId,
+    text: mensaje,
+    parse_mode: "HTML"
+  };
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    console.log("✅ Alerta enviada a Telegram");
+  } catch (err) {
+    console.error("❌ Error al enviar alerta:", err.message);
+  }
+}
+
+// === ACTUALIZAR CAPITAL DE TESTNET ===
 async function actualizarCapitalTestnet() {
   try {
     const response = await fetch('/api/binance/futures/account');
-    if (!response.ok) {
-      console.warn("⚠️ No se pudo obtener la cuenta de Testnet");
-      return;
-    }
-    
+    if (!response.ok) return;
     const data = await response.json();
     let saldoUSDT = 0;
-
-    // Testnet suele devolver availableBalance en la raíz
     if (data.availableBalance !== undefined) {
       saldoUSDT = parseFloat(data.availableBalance) || 0;
-    }
-    // Fallback: buscar en assets (por si cambia la API)
-    else if (data.assets && Array.isArray(data.assets)) {
+    } else if (data.assets && Array.isArray(data.assets)) {
       const usdtAsset = data.assets.find(a => a.asset === 'USDT');
       saldoUSDT = usdtAsset ? parseFloat(usdtAsset.walletBalance) || 0 : 0;
     }
-
-    // Obtener precio actual de BTC
     const tickerRes = await fetch('/api/binance/ticker?symbol=BTCUSDT');
     const ticker = await tickerRes.json();
     const precioBTC = parseFloat(ticker.price) || 1;
-
     const saldoBTC = saldoUSDT / precioBTC;
-
-    // Obtener monto de compra para mostrar
     const montoCompraEl = document.getElementById('montoCompra');
     const montoInvertir = montoCompraEl ? parseFloat(montoCompraEl.value) || 10 : 10;
-
-    // Actualizar el dashboard
     const saldoUsdtEl = document.getElementById('saldo-usdt');
     const saldoBtcEl = document.getElementById('saldo-btc');
     const montoInvertirEl = document.getElementById('monto-invertir');
-
-    if (saldoUsdtEl) saldoUsdtEl.textContent = `USDT: $${saldoUSDT.toFixed(2)}`;
-    if (saldoBtcEl) saldoBtcEl.textContent = `BTC: ${saldoBTC.toFixed(6)}`;
-    if (montoInvertirEl) montoInvertirEl.textContent = `Invertir: $${montoInvertir.toFixed(2)}`;
-
+    if (saldoUsdtEl) saldoUsdtEl.textContent = `$${saldoUSDT.toFixed(2)}`;
+    if (saldoBtcEl) saldoBtcEl.textContent = `${saldoBTC.toFixed(6)}`;
+    if (montoInvertirEl) montoInvertirEl.textContent = `$${montoInvertir.toFixed(2)}`;
   } catch (err) {
     console.error("❌ Error en actualizarCapitalTestnet:", err);
   }
 }
 
-// Llamar al cargar la página y luego cada minuto
-window.addEventListener('load', () => {
+// === INICIALIZACIÓN ===
+window.onload = () => {
+  initChart();
+  const capitalEl = document.getElementById('capital');
+  const maxOpEl = document.getElementById('maxOperaciones');
+  const tpEl = document.getElementById('takeProfit');
+  const slEl = document.getElementById('stopLoss');
+  const simboloEl = document.getElementById('simbolo');
+  capitalInicial = parseFloat(capitalEl.value) || 1000;
+  maxOperaciones = parseInt(maxOpEl.value) || 3;
+  takeProfitPct = parseFloat(tpEl.value) || 5.0;
+  stopLossPct = parseFloat(slEl.value) || 3.0;
+  simboloActual = simboloEl.value.toUpperCase() || 'BTCUSDT';
+  capitalActual = capitalInicial;
+  document.getElementById('btn-reiniciar')?.addEventListener('click', reiniciarCapital);
+  document.getElementById('btn-exportar')?.addEventListener('click', exportarCSV);
+  window.entrenarRed = entrenarRed;
+  window.iniciarStreaming = iniciarStreaming;
+  window.detenerStreaming = detenerStreaming;
+  window.operacionPrueba = operacionPrueba;
+  window.cerrarPosicion = cerrarPosicion;
+  window.cerrarTodas = cerrarTodas;
+  window.abrirLong = () => abrirPosicionReal('BUY');
+  window.abrirShort = () => abrirPosicionReal('SELL');
+  setInterval(actualizarPosicionesAbiertas, 10000);
   actualizarCapitalTestnet();
   setInterval(actualizarCapitalTestnet, 60000);
-});
+  const historialGuardado = JSON.parse(localStorage.getItem('historialOperaciones') || '[]');
+  if (historialGuardado.length > 0) {
+    operaciones = historialGuardado;
+    actualizarPanelFinanciero();
+    renderizarHistorial();
+  }
+};
