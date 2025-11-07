@@ -11,8 +11,6 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-
-//otra modificacio para la nube
 //---- Modificacion en la nube
 //---- Modificacion en la nube
 // 🔑 URL CORREGIDA: solo Futures Testnet (sin espacios)
@@ -314,16 +312,19 @@ app.post("/api/binance/futures/close-position", async (req, res) => {
     const closeRes = await fetch(closeUrl, { method: "POST", headers: { "X-MBX-APIKEY": API_KEY } });
     const result = await closeRes.json();
     if (result.code) throw new Error(JSON.stringify(result));
-    
-    // Enviar alerta por Telegram al cerrar
-const pnl = parseFloat(pos.unRealizedProfit) || 0;
-const emoji = pnl >= 0 ? '✅' : '❌';
-const ganancia = Math.abs(pnl).toFixed(2);
-const tipo = pnl >= 0 ? 'Ganancia' : 'Pérdida';
-const mensajeCierre = `${emoji} Posición cerrada\nSímbolo: ${symbol}\nPnL: ${pnl >= 0 ? '+' : ''}${ganancia} USDT\n(${tipo})`;
-enviarMensajeTelegram(mensajeCierre);
-    
-    
+
+    // ✅ Añadir datos reales de ejecución a la respuesta
+    result.avgPriceReal = parseFloat(result.avgPrice) || parseFloat(pos.markPrice);
+    result.pnlReal = parseFloat(result.cumQuote) || 0;
+
+    // ✅ Enviar alerta por Telegram con datos reales
+    const pnlReal = result.pnlReal;
+    const emoji = pnlReal >= 0 ? '✅' : '❌';
+    const ganancia = Math.abs(pnlReal).toFixed(2);
+    const tipo = pnlReal >= 0 ? 'Ganancia' : 'Pérdida';
+    const mensajeCierre = `${emoji} Posición cerrada\nSímbolo: ${symbol}\nPnL: ${pnlReal >= 0 ? '+' : ''}${ganancia} USDT\n(${tipo})`;
+    enviarMensajeTelegram(mensajeCierre);
+
     res.json(result);
   } catch (error) {
     console.error("Error en /close-position:", error.message);

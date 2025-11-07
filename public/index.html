@@ -3,282 +3,664 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Trading Predictivo IA Futuro</title>
+  <title>Trading Predictivo IA- Futuro (Binance Testnet)</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.16.0/dist/tf.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <style>
-    body {
-      font-family: 'Segoe UI', Arial, sans-serif;
+    :root {
+      --bg-primary: #121212;
+      --bg-secondary: #1e1e1e;
+      --bg-card: #1a1a1a;
+      --text: #ffffff;
+      --text-muted: #aaaaaa;
+      --accent-green: #26a69a;
+      --accent-red: #ef5350;
+      --border: #333333;
+      --hover: #2d2d2d;
+      --shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      --transition: all 0.3s ease;
+    }
+    * {
       margin: 0;
-      padding: 16px;
-      background: #121212;
-      color: white;
-      line-height: 1.5;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
     }
     .container {
-      max-width: 1400px;
-      margin: 0 auto;
       display: grid;
-      grid-template-columns: 320px 1fr;
+      grid-template-columns: 280px 1fr;
+      gap: 20px;
+      max-width: 1400px;
+      margin: 20px auto;
+      padding: 15px;
+      min-height: 100vh;
+    }
+    /* Header */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+    .logo {
+      font-size: 1.8em;
+      font-weight: bold;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo i {
+      color: var(--accent-green);
+    }
+    .status-bar {
+      background: var(--bg-secondary);
+      padding: 10px 20px;
+      border-radius: 8px;
+      text-align: right;
+      font-size: 0.9em;
+      color: var(--text-muted);
+      margin-bottom: 15px;
+      box-shadow: var(--shadow);
+    }
+    /* Sidebar - Panel de Control */
+    .sidebar {
+      background: var(--bg-card);
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
       gap: 16px;
+      position: sticky;
+      top: 20px;
+      height: fit-content;
+      width: 100%;
+      max-width: 280px;
     }
-    .panel {
-      background: #1e1e1e;
-      padding: 16px;
+    .section-title {
+      font-size: 1.05em;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-title i {
+      color: var(--accent-green);
+    }
+    .control-group {
+      margin-bottom: 8px;
+    }
+    .control-group label {
+      display: block;
+      font-size: 0.85em;
+      margin-bottom: 3px;
+      color: var(--text-muted);
+    }
+    input[type="number"],
+    select,
+    input[type="text"] {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+      color: var(--text);
+      border-radius: 8px;
+      font-size: 0.85em;
+      transition: var(--transition);
+    }
+    input[type="number"]:focus,
+    select:focus,
+    input[type="text"]:focus {
+      outline: none;
+      border-color: var(--accent-green);
+    }
+    .toggle-switch {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .toggle-switch input[type="checkbox"] {
+      width: 40px;
+      height: 20px;
+      cursor: pointer;
+      appearance: none;
+      background: var(--border);
       border-radius: 10px;
+      position: relative;
+      transition: var(--transition);
     }
+    .toggle-switch input[type="checkbox"]:before {
+      content: '';
+      position: absolute;
+      left: 2px;
+      top: 2px;
+      width: 16px;
+      height: 16px;
+      background: white;
+      border-radius: 50%;
+      transition: var(--transition);
+    }
+    .toggle-switch input[type="checkbox"]:checked {
+      background: var(--accent-green);
+    }
+    .toggle-switch input[type="checkbox"]:checked:before {
+      left: 22px;
+    }
+    .btn {
+      padding: 8px 12px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85em;
+      transition: var(--transition);
+      margin-top: 4px;
+      display: inline-block;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .btn-primary {
+      background: var(--accent-green);
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #1e8c7c;
+    }
+    .btn-danger {
+      background: var(--accent-red);
+      color: white;
+    }
+    .btn-danger:hover {
+      background: #d33b3b;
+    }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      margin-right: 4px;
+    }
+    .btn-outline:hover {
+      background: var(--bg-secondary);
+    }
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    /* Main Content Area */
     .main-content {
       display: flex;
       flex-direction: column;
       gap: 16px;
     }
+    .chart-container {
+      background: var(--bg-card);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      height: 500px;
+      position: relative;
+    }
     #chart {
-      height: 420px;
-      background: #1e1e1e;
+      width: 100%;
+      height: 100%;
+    }
+    .controls-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding: 0 15px;
+      gap: 8px;
+    }
+    .controls-row button {
+      flex: 1;
+      min-width: 110px;
+      font-size: 0.85em;
+    }
+    /* Prediction Section */
+    .prediction-section {
+      background: var(--bg-card);
+      border-radius: 12px;
+      padding: 14px 20px;
+      box-shadow: var(--shadow);
+      margin-top: 16px;
+    }
+    .prediction-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 1.05em;
+      color: var(--text);
+    }
+    .prediction-header i {
+      color: #f0c14b;
+    }
+    .pred-direccion {
+      font-size: 1.6em;
+      font-weight: bold;
+      text-align: center;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+    .pred-porcentaje {
+      font-size: 1.25em;
+      font-weight: bold;
+      text-align: center;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+    .pred-bar-container {
+      width: 100%;
+      height: 10px;
+      background: var(--border);
+      border-radius: 5px;
+      overflow: hidden;
+      margin: 0 auto;
+      margin-bottom: 6px;
+    }
+    .pred-progress {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(to right, var(--accent-green), var(--accent-red));
+      transition: width 0.5s ease;
+    }
+    /* Capital & Stats */
+    .capital-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat-card {
+      background: var(--bg-secondary);
       border-radius: 10px;
-      padding: 8px;
+      padding: 12px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      transition: var(--transition);
+    }
+    .stat-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    }
+    .stat-title {
+      font-size: 0.85em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    .stat-value {
+      font-size: 1.2em;
+      font-weight: bold;
+      color: var(--text);
+    }
+    /* Tables */
+    .table-container {
+      background: var(--bg-card);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      margin-top: 16px;
     }
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 8px;
-    }
-    th, td {
-      padding: 10px 8px;
-      text-align: left;
-      border-bottom: 1px solid #333;
-      font-size: 0.9em;
-    }
-    th { background: #252525; }
-    tr:hover { background: #2a2a2a; }
-    button {
-      padding: 6px 12px;
-      margin: 4px 2px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: bold;
-    }
-    .btn-success { background: #4caf50; color: white; }
-    .btn-danger { background: #f44336; color: white; }
-    .btn-primary { background: #007bff; color: white; }
-    input, select {
-      width: 100%;
-      padding: 6px;
-      margin: 4px 0;
-      border-radius: 4px;
-      background: #2a2a2a;
-      border: 1px solid #444;
-      color: white;
-    }
-    label {
-      display: block;
-      margin: 8px 0 4px;
       font-size: 0.85em;
-      color: #aaa;
     }
-    h2, h3 {
-      margin-top: 0;
-      font-size: 1.1em;
-      border-bottom: 1px solid #333;
-      padding-bottom: 6px;
+    th {
+      background: var(--bg-secondary);
+      text-align: left;
+      padding: 8px 12px;
+      color: var(--text);
+      border-bottom: 1px solid var(--border);
     }
-    .ai-box {
-      text-align: center;
-      padding: 12px 0;
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
     }
-    .ai-value {
-      font-size: 1.3em;
+    tr:hover {
+      background: var(--bg-secondary);
+    }
+    .result-positive {
+      color: var(--accent-green);
       font-weight: bold;
-      margin: 8px 0;
     }
-    .ai-actions {
-      display: flex;
-      justify-content: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 10px;
+    .result-negative {
+      color: var(--accent-red);
+      font-weight: bold;
     }
-    .toggle-link {
-      color: #007bff;
-      cursor: pointer;
-      font-size: 0.9em;
-      float: right;
+    /* Responsive Design */
+    @media (max-width: 1024px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+      .sidebar {
+        margin-bottom: 16px;
+      }
     }
-    .hidden { display: none; }
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 8px;
-      margin-top: 10px;
+    @media (max-width: 768px) {
+      .container {
+        padding: 10px;
+      }
+      .controls-row {
+        flex-direction: column;
+        gap: 8px;
+      }
+      .controls-row button {
+        width: 100%;
+      }
+      .capital-stats {
+        grid-template-columns: 1fr;
+      }
     }
-    .stat-item {
-      background: #252525;
-      padding: 6px;
-      border-radius: 6px;
-      text-align: center;
-      font-size: 0.9em;
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
-    h1 {
-      text-align: center;
-      margin: 0 0 20px;
-      font-size: 1.8em;
-      color: white;
+    .fade-in {
+      animation: fadeIn 0.5s ease-in;
     }
   </style>
 </head>
 <body>
-  <h1>🤖 Trading Predictivo IA-Tiapa Futuro (Binance Testnet)</h1>
   <div class="container">
-    <!-- Panel de Control -->
-    <div class="panel">
-      <h2>🎛️ Panel de Control 
-        <span class="toggle-link" onclick="toggleAvanzado()">⚙️ Avanzado</span>
-      </h2>
-      <!-- Configuración Esencial -->
-      <div id="config-esencial">
-        <label>Monto Compra (USDT)</label>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="status-bar">Esperando...</div>
+      <div class="section-title">
+        <i class="fas fa-sliders-h"></i> Panel de Control
+        <span style="font-size: 0.75em; color: #aaa; margin-left: 8px;">Avanzado</span>
+      </div>
+      <!-- Configuración -->
+      <div class="control-group">
+        <label for="montoCompra">Monto Compra (USDT)</label>
         <input type="number" id="montoCompra" value="10" step="1" min="1">
-        <label>Monto Venta (BTC)</label>
-        <input type="number" id="montoVenta" value="0.001" step="0.0001" min="0.0001">
-        <label>Take-Profit (%)</label>
+      </div>
+      <div class="control-group">
+        <label for="takeProfit">Take-Profit (%)</label>
         <input type="number" id="takeProfit" value="5" step="0.1" min="0.1">
-        <label>Stop-Loss (%)</label>
+      </div>
+      <div class="control-group">
+        <label for="stopLoss">Stop-Loss (%)</label>
         <input type="number" id="stopLoss" value="3" step="0.1" min="0.1">
-        <label>Apalancamiento (x)</label>
+      </div>
+      <div class="control-group">
+        <label for="apalancamiento">Apalancamiento (x)</label>
         <input type="number" id="apalancamiento" value="4" min="1" max="125">
-        <label>Símbolo</label>
-        <input type="text" id="simbolo" value="BTCUSDT" style="text-align: center;">
-        <label>
-          <input type="checkbox" id="auto-trading"> Auto-Trading (IA)
-        </label>
-        <div class="ai-actions">
-          <button class="btn-success" onclick="abrirLong()">🟢 LONG</button>
-          <button class="btn-danger" onclick="abrirShort()">🔴 SHORT</button>
-          <button class="btn-primary" onclick="cerrarTodas()">CloseOperation</button>
-          <button class="btn-primary" onclick="entrenarRed()">🧠 Entrenar Red</button>
-        </div>
       </div>
-      <!-- Configuración Avanzada -->
-      <div id="config-avanzado" class="hidden">
-        <hr>
-        <label>Capital Inicial ($)</label>
-        <input type="number" id="capital" value="1000" step="100">
-        <label>Máx. operaciones</label>
+      <div class="control-group">
+        <label for="maxOperaciones">Máx. Operaciones</label>
         <input type="number" id="maxOperaciones" value="3" min="1" max="10">
-        <label>TP = ATR ×</label>
-        <input type="number" id="multiploTP" value="4" step="0.5" min="1">
-        <label>SL = ATR ×</label>
-        <input type="number" id="multiploSL" value="2" step="0.5" min="0.5">
-        <button class="btn-primary" onclick="reiniciarCapital()">🔁 Reiniciar Capital</button>
-        <button class="btn-primary" onclick="exportarCSV()">📤 Exportar CSV</button>
-        <button class="btn-primary" onclick="abrirModalBacktesting()">🧪 Backtesting</button>
-        <button class="toggle-link" onclick="toggleAvanzado()" style="float:none; margin-top:10px;">← Volver</button>
       </div>
-      <!-- Capital Testnet + TP/SL Dinámico -->
-      <hr>
-      <h3>💰 Capital Testnet</h3>
-      <div class="stats-grid">
-        <div class="stat-item">USDT: <span id="saldo-usdt">—</span></div>
-        <div class="stat-item">BTC: <span id="saldo-btc">—</span></div>
-        <div class="stat-item">Invertir: <span id="monto-invertir">—</span></div>
-        <div class="stat-item">ATR: <span id="atr-valor">—</span></div>
+      <div class="control-group">
+        <label for="modo-mercado">Modo de Mercado</label>
+        <select id="modo-mercado">
+          <option value="volatil">Volátil (automático)</option>
+          <option value="alcista">Solo Tendencia Alcista</option>
+          <option value="bajista">Solo Tendencia Bajista</option>
+        </select>
       </div>
-      <div style="margin-top:10px; font-size:0.9em; color:#aaa;">
-        <span id="tp-dinamico">TP: —</span> | 
-        <span id="sl-dinamico">SL: —</span>
+      <div class="control-group">
+        <label for="simbolo">Símbolo</label>
+        <input type="text" id="simbolo" value="BTCUSDT" style="width: 100%; text-align: center;">
       </div>
-      <!-- Métricas rápidas -->
-      <div class="stats-grid" style="margin-top:12px;">
-        <div class="stat-item">Ganancias: <span id="ganancias">$0.00</span></div>
-        <div class="stat-item">Pérdidas: <span id="perdidas">$0.00</span></div>
-        <div class="stat-item">ROI: <span id="roi">0.00%</span></div>
-      </div>
-    </div>
-    <!-- Contenido Principal -->
-    <div class="main-content">
-      <!-- Controles de Streaming -->
-      <div class="panel" style="text-align: center; padding: 12px;">
-        <button class="btn-primary" onclick="iniciarStreaming()">▶️ Iniciar Streaming</button>
-        <button class="btn-primary" onclick="detenerStreaming()">⏹️ Parar Streaming</button>
-        <button class="btn-primary" onclick="operacionPrueba()">🧪 Prueba Manual</button>
-        <span id="estado" style="margin-left: 15px; color: #aaa;">Esperando...</span>
-      </div>
-      <!-- Gráfico de Velas -->
-      <div id="chart"></div>
-      <!-- Predicción IA -->
-      <div class="panel ai-box">
-        <h2>🧠 Predicción IA</h2>
-        <div id="prediccion-direccion">-</div>
-        <div class="ai-value" id="prediccion-porcentaje">0%</div>
-        <div id="prediccion-barra" style="width:100%; height:8px; background:#333; border-radius:4px; overflow:hidden;">
-          <div id="prediccion-progreso" style="height:100%; width:0%; background:linear-gradient(to right, #ff5252, #4caf50); transition:width 0.5s;"></div>
+      <!-- Auto-Trading -->
+      <div class="control-group">
+        <label for="autoTrading">Auto-Trading (IA)</label>
+        <div class="toggle-switch">
+          <input type="checkbox" id="autoTrading" checked>
         </div>
       </div>
-      <!-- Posiciones Abiertas -->
-      <div class="panel">
-        <h2>🔓 Posiciones Abiertas (Testnet)</h2>
+      <!-- Trading Buttons -->
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="iniciarStreaming()">
+          <i class="fas fa-play"></i> Iniciar
+        </button>
+        <button class="btn btn-danger" onclick="detenerStreaming()">
+          <i class="fas fa-stop"></i> Parar
+        </button>
+        <button class="btn btn-outline" onclick="operacionPrueba()">
+          <i class="fas fa-magic"></i> Prueba
+        </button>
+      </div>
+      <!-- Nuevos botones -->
+      <div class="btn-group">
+        <button class="btn btn-outline" id="btn-reiniciar">
+          <i class="fas fa-sync"></i> Reiniciar
+        </button>
+        <button class="btn btn-outline" id="btn-exportar">
+          <i class="fas fa-file-csv"></i> Exportar
+        </button>
+      </div>
+      <!-- Capital & Stats -->
+      <div class="section-title">
+        <i class="fas fa-coins"></i> Capital Testnet
+      </div>
+      <div class="capital-stats">
+        <div class="stat-card">
+          <div class="stat-title">USDT</div>
+          <div class="stat-value" id="saldo-usdt">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-title">BTC</div>
+          <div class="stat-value" id="saldo-btc">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-title">Invertir</div>
+          <div class="stat-value" id="monto-invertir">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-title">ROI</div>
+          <div class="stat-value" id="roi">0.00%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-title">Ganancias</div>
+          <div class="stat-value" id="ganancias">$0.00</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-title">Pérdidas</div>
+          <div class="stat-value" id="perdidas">$0.00</div>
+        </div>
+      </div>
+      <!-- TP/SL Dinámico -->
+      <div class="section-title">
+        <i class="fas fa-chart-line"></i> TP/SL Dinámico
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">TP</div>
+        <div class="stat-value" id="tp-dinamico">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">SL</div>
+        <div class="stat-value" id="sl-dinamico">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">ATR</div>
+        <div class="stat-value" id="atr-valor">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">ADX</div>
+        <div class="stat-value" id="adx-valor">—</div>
+      </div>
+    </aside>
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Header -->
+      <header>
+        <div class="logo">
+          <i class="fas fa-robot"></i>
+          Trading Predictivo IA-Tiapa- (Binance Testnet)
+        </div>
+      </header>
+      <!-- Controls Row -->
+      <div class="controls-row">
+        <button class="btn btn-primary" onclick="entrenarRed()">
+          <i class="fas fa-brain"></i> Entrenar Red
+        </button>
+        <div class="status" id="estado">Esperando...</div>
+      </div>
+      <!-- Chart Container -->
+      <div class="chart-container">
+        <div id="chart"></div>
+      </div>
+      <!-- ✅ SEMÁFORO DE CONDICIONES -->
+      <div class="table-container" style="margin-top: 8px; padding: 8px 15px;">
+  <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 0.85em; color: var(--text-muted);">
+    <div style="display: flex; align-items: center; gap: 5px;">
+      <span>ADX > 20</span>
+      <div id="adx-status" class="status-circle" style="background: #ef5350;"></div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 5px;">
+      <span>Modo Mercado</span>
+      <div id="modo-status" class="status-circle" style="background: #ef5350;"></div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 5px;">
+      <span>Predicción > 60%</span>
+      <div id="pred-status" class="status-circle" style="background: #ef5350;"></div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 5px;">
+      <span>Datos Suficientes</span>
+      <div id="datos-status" class="status-circle" style="background: #ef5350;"></div>
+    </div>
+  </div>
+  <div id="semaforo-mensaje" style="margin-top: 5px; text-align: center; font-weight: bold; color: #ef5350; font-size: 0.9em;">
+    ❌ Condiciones no cumplidas
+  </div>
+      </div>   
+
+        <style>
+       .status-circle {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        }
+        </style>
+      <!-- ✅ BACKTESTING SECTION -->
+      <div class="table-container" id="backtesting-section">
+        <div style="padding: 12px; background: var(--bg-secondary); display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0; color: var(--text); font-size: 1.1em;">📊 Backtesting</h3>
+          <button class="btn btn-outline" onclick="ejecutarBacktesting()" style="padding: 6px 10px; font-size: 0.8em;">
+            <i class="fas fa-chart-line"></i> Ejecutar
+          </button>
+        </div>
+        <div style="padding: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+          <div class="control-group" style="margin: 0;">
+            <label for="bt-simbolo">Símbolo</label>
+            <input type="text" id="bt-simbolo" value="BTCUSDT" style="width: 100%; text-align: center;">
+          </div>
+          <div class="control-group" style="margin: 0;">
+            <label for="bt-intervalo">Intervalo</label>
+            <select id="bt-intervalo" style="width: 100%;">
+              <option value="15m">15m</option>
+              <option value="1h">1h</option>
+              <option value="4h">4h</option>
+              <option value="1d">1d</option>
+            </select>
+          </div>
+          <div class="control-group" style="margin: 0;">
+            <label for="bt-dias">Días</label>
+            <input type="number" id="bt-dias" value="30" min="1" max="90" style="width: 100%;">
+          </div>
+        </div>
+        <div style="padding: 0 12px 12px; color: var(--text-muted); font-size: 0.85em;" id="bt-estado">Listo para simular</div>
+        <div id="bt-resultados" style="display: none; padding: 12px; border-top: 1px solid var(--border);">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px;">
+            <div class="stat-card">
+              <div class="stat-title">Operaciones</div>
+              <div class="stat-value" id="bt-operaciones">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">Win Rate</div>
+              <div class="stat-value" id="bt-winrate">0%</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">Profit Factor</div>
+              <div class="stat-value" id="bt-profitfactor">0.00</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">Max Drawdown</div>
+              <div class="stat-value" id="bt-drawdown">0%</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">ROI Total</div>
+              <div class="stat-value" id="bt-roetotal">0%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Prediction Section -->
+      <div class="prediction-section fade-in">
+        <div class="prediction-header">
+          <i class="fas fa-microchip"></i>
+          Predicción IA
+        </div>
+        <div class="pred-direccion" id="prediccion-direccion">—</div>
+        <div class="pred-porcentaje" id="prediccion-porcentaje">0%</div>
+        <div class="pred-bar-container">
+          <div id="prediccion-progreso" class="pred-progress"></div>
+        </div>
+      </div>
+
+      <!-- Open Positions -->
+      <div class="table-container">
+        <h3 style="padding: 12px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border); font-size: 1.1em;">Posiciones Abiertas</h3>
         <table id="operaciones-abiertas">
           <thead>
-            <tr><th>Símbolo</th><th>Tipo</th><th>Precio</th><th>ROE</th><th>PnL</th><th>Acción</th></tr>
+            <tr>
+              <th>Símbolo</th>
+              <th>Tipo</th>
+              <th>Precio</th>
+              <th>ROE</th>
+              <th>PnL</th>
+              <th>Acción</th>
+            </tr>
           </thead>
-          <tbody></tbody>
+          <tbody>
+            <!-- Dynamically filled by script -->
+          </tbody>
         </table>
       </div>
-      <!-- Historial -->
-      <div class="panel">
-        <h2>📜 Últimas 10 Órdenes</h2>
+
+      <!-- Order History -->
+      <div class="table-container">
+        <h3 style="padding: 12px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border); font-size: 1.1em;">Últimas 10 Órdenes</h3>
         <table id="historial">
           <thead>
-            <tr><th>Hora</th><th>Símbolo</th><th>Tipo</th><th>Precio</th><th>Resultado</th></tr>
+            <tr>
+              <th>Entrada</th>
+              <th>Salida</th>
+              <th>Precio Entrada</th>
+              <th>Precio Salida</th>
+              <th>Ganancia</th>
+              <th>Resultado</th>
+            </tr>
           </thead>
-          <tbody></tbody>
+          <tbody>
+            <!-- Dynamically filled by script -->
+          </tbody>
         </table>
       </div>
-    </div>
+    </main>
   </div>
-  <!-- Modal Backtesting -->
-  <div id="modal-backtesting" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; display:none; align-items:center; justify-content:center;">
-    <div class="panel" style="width:90%; max-width:600px;">
-      <h2>🧪 Backtesting</h2>
-      <label>Símbolo</label>
-      <input type="text" id="bt-simbolo" value="BTCUSDT">
-      <label>Intervalo</label>
-      <select id="bt-intervalo">
-        <option value="15m">15m</option>
-        <option value="1h">1h</option>
-        <option value="4h">4h</option>
-      </select>
-      <label>Días</label>
-      <input type="number" id="bt-dias" value="30" min="1" max="60" style="width:80px;">
-      <br><br>
-      <button class="btn-primary" onclick="ejecutarBacktesting()">▶️ Ejecutar Simulación</button>
-      <button onclick="cerrarModalBacktesting()">✖️ Cerrar</button>
-      <div id="bt-resultados" style="margin-top:15px; display:none;">
-        <p><strong>Operaciones:</strong> <span id="bt-operaciones">0</span></p>
-        <p><strong>Win Rate:</strong> <span id="bt-winrate">0%</span></p>
-        <p><strong>ROE Total:</strong> <span id="bt-roetotal">0.00%</span></p>
-      </div>
-    </div>
-  </div>
-  <script>
-    function toggleAvanzado() {
-      const esencial = document.getElementById('config-esencial');
-      const avanzado = document.getElementById('config-avanzado');
-      esencial.classList.toggle('hidden');
-      avanzado.classList.toggle('hidden');
-    }
-    function abrirModalBacktesting() {
-      document.getElementById('modal-backtesting').style.display = 'flex';
-    }
-    function cerrarModalBacktesting() {
-      document.getElementById('modal-backtesting').style.display = 'none';
-    }
-    // Acciones de trading (delegadas a script.js)
-    function abrirLong() { abrirPosicionReal('BUY'); }
-    function abrirShort() { abrirPosicionReal('SELL'); }
-    function cerrarTodas() { alert('Cerrar todas las posiciones (implementar en script.js)'); }
-  </script>
   <script src="script.js"></script>
 </body>
 </html>
