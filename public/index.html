@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Trading Predictivo IA- Futuro (Binance Testnet)</title>
+  <title>Trading Predictivo IA- TIAPA )</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.16.0/dist/tf.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
@@ -77,11 +77,11 @@
     .sidebar {
       background: var(--bg-card);
       border-radius: 12px;
-      padding: 12px;
+      padding: 20px;
       box-shadow: var(--shadow);
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 20px;
       position: sticky;
       top: 20px;
       height: fit-content;
@@ -89,10 +89,10 @@
       max-width: 280px;
     }
     .section-title {
-      font-size: 1.05em;
+      font-size: 1.1em;
       font-weight: 600;
       color: var(--text);
-      margin-bottom: 8px;
+      margin-bottom: 15px;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -101,24 +101,24 @@
       color: var(--accent-green);
     }
     .control-group {
-      margin-bottom: 8px;
+      margin-bottom: 15px;
     }
     .control-group label {
       display: block;
-      font-size: 0.85em;
-      margin-bottom: 3px;
+      font-size: 0.9em;
+      margin-bottom: 5px;
       color: var(--text-muted);
     }
     input[type="number"],
     select,
     input[type="text"] {
       width: 100%;
-      padding: 8px 10px;
+      padding: 10px;
       border: 1px solid var(--border);
       background: var(--bg-secondary);
       color: var(--text);
       border-radius: 8px;
-      font-size: 0.85em;
+      font-size: 0.9em;
       transition: var(--transition);
     }
     input[type="number"]:focus,
@@ -131,7 +131,7 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-bottom: 8px;
+      margin-bottom: 15px;
     }
     .toggle-switch input[type="checkbox"] {
       width: 40px;
@@ -161,14 +161,14 @@
       left: 22px;
     }
     .btn {
-      padding: 8px 12px;
+      padding: 10px 15px;
       border: none;
       border-radius: 8px;
       cursor: pointer;
       font-weight: 600;
-      font-size: 0.85em;
+      font-size: 0.9em;
       transition: var(--transition);
-      margin-top: 4px;
+      margin-top: 5px;
       display: inline-block;
       text-align: center;
       white-space: nowrap;
@@ -191,21 +191,21 @@
       background: transparent;
       border: 1px solid var(--border);
       color: var(--text);
-      margin-right: 4px;
+      margin-right: 5px;
     }
     .btn-outline:hover {
       background: var(--bg-secondary);
     }
     .btn-group {
       display: flex;
-      gap: 8px;
+      gap: 10px;
       flex-wrap: wrap;
     }
     /* Main Content Area */
     .main-content {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 20px;
     }
     .chart-container {
       background: var(--bg-card);
@@ -223,57 +223,57 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
-      padding: 0 15px;
-      gap: 8px;
+      margin-bottom: 15px;
+      padding: 0 20px;
+      gap: 10px;
     }
     .controls-row button {
       flex: 1;
-      min-width: 110px;
-      font-size: 0.85em;
+      min-width: 120px;
+      font-size: 0.9em;
     }
     /* Prediction Section */
     .prediction-section {
       background: var(--bg-card);
       border-radius: 12px;
-      padding: 14px 20px;
+      padding: 20px;
       box-shadow: var(--shadow);
-      margin-top: 16px;
+      margin-top: 20px;
     }
     .prediction-header {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      margin-bottom: 8px;
-      font-size: 1.05em;
+      gap: 10px;
+      margin-bottom: 15px;
+      font-size: 1.2em;
       color: var(--text);
     }
     .prediction-header i {
       color: #f0c14b;
     }
     .pred-direccion {
-      font-size: 1.6em;
+      font-size: 1.8em;
       font-weight: bold;
       text-align: center;
-      margin-bottom: 6px;
+      margin-bottom: 10px;
       color: var(--text);
     }
     .pred-porcentaje {
-      font-size: 1.25em;
+      font-size: 1.4em;
       font-weight: bold;
       text-align: center;
       color: var(--text);
-      margin-bottom: 10px;
+      margin-bottom: 15px;
     }
     .pred-bar-container {
       width: 100%;
-      height: 10px;
+      height: 12px;
       background: var(--border);
-      border-radius: 5px;
+      border-radius: 6px;
       overflow: hidden;
       margin: 0 auto;
-      margin-bottom: 6px;
+      margin-bottom: 10px;
     }
     .pred-progress {
       height: 100%;
@@ -285,30 +285,36 @@
     .capital-stats {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-      margin-bottom: 16px;
+      gap: 15px;
+      margin-bottom: 20px;
     }
     .stat-card {
       background: var(--bg-secondary);
       border-radius: 10px;
-      padding: 12px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      padding: 15px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
       transition: var(--transition);
     }
     .stat-card:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      transform: translateY(-5px);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
     }
     .stat-title {
-      font-size: 0.85em;
+      font-size: 0.9em;
       color: var(--text-muted);
-      margin-bottom: 8px;
+      margin-bottom: 10px;
       text-transform: uppercase;
     }
     .stat-value {
-      font-size: 1.2em;
+      font-size: 1.3em;
       font-weight: bold;
       color: var(--text);
+    }
+    .stat-value.positive {
+      color: var(--accent-green);
+    }
+    .stat-value.negative {
+      color: var(--accent-red);
     }
     /* Tables */
     .table-container {
@@ -316,22 +322,22 @@
       border-radius: 12px;
       overflow: hidden;
       box-shadow: var(--shadow);
-      margin-top: 16px;
+      margin-top: 20px;
     }
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.85em;
+      font-size: 0.9em;
     }
     th {
       background: var(--bg-secondary);
       text-align: left;
-      padding: 8px 12px;
+      padding: 12px 15px;
       color: var(--text);
       border-bottom: 1px solid var(--border);
     }
     td {
-      padding: 8px 12px;
+      padding: 12px 15px;
       border-bottom: 1px solid var(--border);
       color: var(--text);
     }
@@ -346,13 +352,36 @@
       color: var(--accent-red);
       font-weight: bold;
     }
+    /* ✅ SEMÁFORO */
+    .semaforo-container {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 10px 15px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.85em;
+      margin-top: 8px;
+    }
+    .semaforo-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      background: #ef5350;
+    }
+    .semaforo-msg {
+      margin-left: auto;
+      font-weight: bold;
+      color: #ef5350;
+    }
     /* Responsive Design */
     @media (max-width: 1024px) {
       .container {
         grid-template-columns: 1fr;
       }
       .sidebar {
-        margin-bottom: 16px;
+        margin-bottom: 20px;
       }
     }
     @media (max-width: 768px) {
@@ -361,7 +390,7 @@
       }
       .controls-row {
         flex-direction: column;
-        gap: 8px;
+        gap: 10px;
       }
       .controls-row button {
         width: 100%;
@@ -370,6 +399,7 @@
         grid-template-columns: 1fr;
       }
     }
+    /* Animation */
     @keyframes fadeIn {
       from { opacity: 0; }
       to { opacity: 1; }
@@ -377,6 +407,13 @@
     .fade-in {
       animation: fadeIn 0.5s ease-in;
     }
+  
+    .semaforo-msg {
+    font-size: 0.9em !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+   }
   </style>
 </head>
 <body>
@@ -386,7 +423,7 @@
       <div class="status-bar">Esperando...</div>
       <div class="section-title">
         <i class="fas fa-sliders-h"></i> Panel de Control
-        <span style="font-size: 0.75em; color: #aaa; margin-left: 8px;">Avanzado</span>
+        <span style="font-size: 0.8em; color: #aaa; margin-left: 10px;">Avanzado</span>
       </div>
       <!-- Configuración -->
       <div class="control-group">
@@ -405,16 +442,13 @@
         <label for="apalancamiento">Apalancamiento (x)</label>
         <input type="number" id="apalancamiento" value="4" min="1" max="125">
       </div>
-      <div class="control-group">
-        <label for="maxOperaciones">Máx. Operaciones</label>
-        <input type="number" id="maxOperaciones" value="3" min="1" max="10">
-      </div>
+      <!-- ✅ Añadido: Modo de Mercado -->
       <div class="control-group">
         <label for="modo-mercado">Modo de Mercado</label>
         <select id="modo-mercado">
           <option value="volatil">Volátil (automático)</option>
-          <option value="alcista">Solo Tendencia Alcista</option>
-          <option value="bajista">Solo Tendencia Bajista</option>
+          <option value="alcista">Tendencia Alcista</option>
+          <option value="bajista">Tendencia Bajista</option>
         </select>
       </div>
       <div class="control-group">
@@ -431,22 +465,22 @@
       <!-- Trading Buttons -->
       <div class="btn-group">
         <button class="btn btn-primary" onclick="iniciarStreaming()">
-          <i class="fas fa-play"></i> Iniciar
+          <i class="fas fa-play"></i> Iniciar Streaming
         </button>
         <button class="btn btn-danger" onclick="detenerStreaming()">
-          <i class="fas fa-stop"></i> Parar
+          <i class="fas fa-stop"></i> Parar Streaming
         </button>
         <button class="btn btn-outline" onclick="operacionPrueba()">
-          <i class="fas fa-magic"></i> Prueba
+          <i class="fas fa-magic"></i> Prueba Manual
         </button>
       </div>
-      <!-- Nuevos botones -->
+      <!-- ✅ Añadidos: Reiniciar y Exportar -->
       <div class="btn-group">
         <button class="btn btn-outline" id="btn-reiniciar">
-          <i class="fas fa-sync"></i> Reiniciar
+          <i class="fas fa-sync"></i> Reiniciar Capital
         </button>
         <button class="btn btn-outline" id="btn-exportar">
-          <i class="fas fa-file-csv"></i> Exportar
+          <i class="fas fa-file-csv"></i> Exportar CSV
         </button>
       </div>
       <!-- Capital & Stats -->
@@ -470,6 +504,7 @@
           <div class="stat-title">ROI</div>
           <div class="stat-value" id="roi">0.00%</div>
         </div>
+        <!-- ✅ Añadidos: Ganancias y Pérdidas -->
         <div class="stat-card">
           <div class="stat-title">Ganancias</div>
           <div class="stat-value" id="ganancias">$0.00</div>
@@ -495,6 +530,7 @@
         <div class="stat-title">ATR</div>
         <div class="stat-value" id="atr-valor">—</div>
       </div>
+      <!-- ✅ Añadido: ADX -->
       <div class="stat-card">
         <div class="stat-title">ADX</div>
         <div class="stat-value" id="adx-valor">—</div>
@@ -506,7 +542,7 @@
       <header>
         <div class="logo">
           <i class="fas fa-robot"></i>
-          Trading Predictivo IA-Tiapa- (Binance Testnet)
+          Trading Predictivo IA (Binance Testnet)
         </div>
       </header>
       <!-- Controls Row -->
@@ -520,91 +556,22 @@
       <div class="chart-container">
         <div id="chart"></div>
       </div>
-      <!-- ✅ SEMÁFORO DE CONDICIONES -->
-      <div class="table-container" style="margin-top: 8px; padding: 8px 15px;">
-  <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 0.85em; color: var(--text-muted);">
-    <div style="display: flex; align-items: center; gap: 5px;">
-      <span>ADX > 20</span>
-      <div id="adx-status" class="status-circle" style="background: #ef5350;"></div>
-    </div>
-    <div style="display: flex; align-items: center; gap: 5px;">
-      <span>Modo Mercado</span>
-      <div id="modo-status" class="status-circle" style="background: #ef5350;"></div>
-    </div>
-    <div style="display: flex; align-items: center; gap: 5px;">
-      <span>Predicción > 60%</span>
-      <div id="pred-status" class="status-circle" style="background: #ef5350;"></div>
-    </div>
-    <div style="display: flex; align-items: center; gap: 5px;">
-      <span>Datos Suficientes</span>
-      <div id="datos-status" class="status-circle" style="background: #ef5350;"></div>
-    </div>
-  </div>
-  <div id="semaforo-mensaje" style="margin-top: 5px; text-align: center; font-weight: bold; color: #ef5350; font-size: 0.9em;">
-    ❌ Condiciones no cumplidas
-  </div>
-      </div>   
 
-        <style>
-       .status-circle {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        display: inline-block;
-        }
-        </style>
-      <!-- ✅ BACKTESTING SECTION -->
-      <div class="table-container" id="backtesting-section">
-        <div style="padding: 12px; background: var(--bg-secondary); display: flex; justify-content: space-between; align-items: center;">
-          <h3 style="margin: 0; color: var(--text); font-size: 1.1em;">📊 Backtesting</h3>
-          <button class="btn btn-outline" onclick="ejecutarBacktesting()" style="padding: 6px 10px; font-size: 0.8em;">
-            <i class="fas fa-chart-line"></i> Ejecutar
-          </button>
-        </div>
-        <div style="padding: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
-          <div class="control-group" style="margin: 0;">
-            <label for="bt-simbolo">Símbolo</label>
-            <input type="text" id="bt-simbolo" value="BTCUSDT" style="width: 100%; text-align: center;">
-          </div>
-          <div class="control-group" style="margin: 0;">
-            <label for="bt-intervalo">Intervalo</label>
-            <select id="bt-intervalo" style="width: 100%;">
-              <option value="15m">15m</option>
-              <option value="1h">1h</option>
-              <option value="4h">4h</option>
-              <option value="1d">1d</option>
-            </select>
-          </div>
-          <div class="control-group" style="margin: 0;">
-            <label for="bt-dias">Días</label>
-            <input type="number" id="bt-dias" value="30" min="1" max="90" style="width: 100%;">
-          </div>
-        </div>
-        <div style="padding: 0 12px 12px; color: var(--text-muted); font-size: 0.85em;" id="bt-estado">Listo para simular</div>
-        <div id="bt-resultados" style="display: none; padding: 12px; border-top: 1px solid var(--border);">
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px;">
-            <div class="stat-card">
-              <div class="stat-title">Operaciones</div>
-              <div class="stat-value" id="bt-operaciones">0</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-title">Win Rate</div>
-              <div class="stat-value" id="bt-winrate">0%</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-title">Profit Factor</div>
-              <div class="stat-value" id="bt-profitfactor">0.00</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-title">Max Drawdown</div>
-              <div class="stat-value" id="bt-drawdown">0%</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-title">ROI Total</div>
-              <div class="stat-value" id="bt-roetotal">0%</div>
-            </div>
-          </div>
-        </div>
+      <!-- ✅ SEMÁFORO DE CONDICIONES -->
+      <div class="semaforo-container">
+        <span>ADX > 20</span>
+        <div class="semaforo-indicator" id="cond-adx"></div>
+        
+        <span>Modo</span>
+        <div class="semaforo-indicator" id="cond-modo"></div>
+        
+        <span>Pred > 60%</span>
+        <div class="semaforo-indicator" id="cond-pred"></div>
+        
+        <span>Datos ≥ 55</span>
+        <div class="semaforo-indicator" id="cond-datos"></div>
+        
+        <span class="semaforo-msg" id="semaforo-msg">❌ Esperando...</span>
       </div>
 
       <!-- Prediction Section -->
@@ -619,10 +586,9 @@
           <div id="prediccion-progreso" class="pred-progress"></div>
         </div>
       </div>
-
       <!-- Open Positions -->
       <div class="table-container">
-        <h3 style="padding: 12px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border); font-size: 1.1em;">Posiciones Abiertas</h3>
+        <h3 style="padding: 15px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border);">Posiciones Abiertas (Testnet)</h3>
         <table id="operaciones-abiertas">
           <thead>
             <tr>
@@ -639,10 +605,9 @@
           </tbody>
         </table>
       </div>
-
       <!-- Order History -->
       <div class="table-container">
-        <h3 style="padding: 12px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border); font-size: 1.1em;">Últimas 10 Órdenes</h3>
+        <h3 style="padding: 15px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border);">Últimas 10 Órdenes</h3>
         <table id="historial">
           <thead>
             <tr>
