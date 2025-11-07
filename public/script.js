@@ -11,7 +11,7 @@ let operaciones = [];
 let ultimoPrecio = 0;
 let streamingInterval = null;
 let simboloActual = 'BTCUSDT';
-
+//diego tiapa disenador 
 // === INDICADORES TÉCNICOS ===
 function calcularRSI(precios, periodo = 14) {
   if (precios.length < periodo + 1) return Array(precios.length).fill(50);
