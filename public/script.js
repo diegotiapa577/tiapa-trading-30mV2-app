@@ -1,18 +1,35 @@
-// ✅ SCRIPT ESTABLE — Corregido y mejorado para Binance Testnet
-let chart;
-let dataSeries;
-let precios = [];
-let modelo = null;
-let capitalInicial = 1000;
-let capitalActual = 1000;
-let maxOperaciones = 3;
-let takeProfitPct = 5.0;
-let stopLossPct = 3.0;
-let operaciones = [];
-let ultimoPrecio = 0;
-let streamingInterval = null;
-let simboloActual = 'BTCUSDT';
-let symbolInfo = null;
+// 🔐 CLAVE SECRETA — Cámbiala en producción
+const CLAVE_SECRETA = '19344828';
+let AUTENTICADO = false;
+
+// ✅ Verificar clave (debe estar al inicio)
+function verificarClave() {
+  const input = document.getElementById('clave-acceso');
+  const msg = document.getElementById('auth-msg');
+  if (input.value === CLAVE_SECRETA) {
+    AUTENTICADO = true;
+    document.getElementById('auth-modal').style.display = 'none';
+    const main = document.getElementById('main-container');
+    main.style.display = 'grid';
+
+    // ✅ Llamar retryInitChart tras hacer visible el contenedor (garantiza offset > 0)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        retryInitChart();
+      });
+    });
+  } else {
+    msg.textContent = '❌ Clave incorrecta.';
+    input.value = '';
+    input.focus();
+  }
+}
+
+// === VARIABLES GLOBALES ===
+let chart, dataSeries, precios = [], modelo = null;
+let capitalInicial = 1000, capitalActual = 1000;
+let operaciones = [], ultimoPrecio = 0, streamingInterval = null;
+let simboloActual = 'BTCUSDT', symbolInfo = null;
 
 // === UTILIDADES ===
 async function fetchSymbolInfo(symbol = 'BTCUSDT') {
@@ -24,15 +41,17 @@ async function fetchSymbolInfo(symbol = 'BTCUSDT') {
     const sym = data.symbols.find(s => s.symbol === symbol);
     if (!sym) throw new Error(`Símbolo no encontrado: ${symbol}`);
     const filters = {};
-    sym.filters.forEach(f => {
-      if (f.filterType === 'LOT_SIZE') {
-        filters.stepSize = parseFloat(f.stepSize);
-        filters.minQty = parseFloat(f.minQty);
-      }
-      if (f.filterType === 'MIN_NOTIONAL') {
-        filters.minNotional = parseFloat(f.notional);
-      }
-    });
+    if (Array.isArray(sym.filters)) {
+      sym.filters.forEach(f => {
+        if (f && f.filterType === 'LOT_SIZE') {
+          filters.stepSize = f.stepSize ? parseFloat(f.stepSize) : 0.001;
+          filters.minQty = f.minQty ? parseFloat(f.minQty) : 0.001;
+        }
+        if (f && f.filterType === 'MIN_NOTIONAL') {
+          filters.minNotional = f.notional ? parseFloat(f.notional) : 100;
+        }
+      });
+    }
     symbolInfo = filters;
     console.log(`✅ Info de ${symbol} cargada:`, symbolInfo);
     return symbolInfo;
@@ -52,7 +71,6 @@ function calculateQuantity(price, notional = 100) {
 }
 
 // === INDICADORES TÉCNICOS ===
-// (Tus funciones calcularRSI, EMA, MACD, BB, ATR, OBV — ya están bien)
 function calcularRSI(precios, periodo = 14) {
   if (precios.length < periodo + 1) return Array(precios.length).fill(50);
   const rsi = Array(periodo).fill(50);
@@ -196,13 +214,19 @@ function calcularADX(klines, period = 14) {
 // === GRÁFICOS ===
 function initChart() {
   const chartContainer = document.getElementById('chart');
+  if (!chartContainer || chartContainer.offsetWidth === 0 || chartContainer.offsetHeight === 0) {
+    throw new Error('Contenedor #chart no tiene tamaño (¿está oculto con display:none?)');
+  }
+
   chart = LightweightCharts.createChart(chartContainer, {
     layout: { backgroundColor: '#121212', textColor: 'white' },
     grid: { vertLines: { color: '#333' }, horzLines: { color: '#333' } },
     crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
     priceScale: { borderColor: '#444' },
-    timeScale: { borderColor: '#444' }
+    timeScale: { borderColor: '#444' },
+    autoSize: true
   });
+
   dataSeries = chart.addCandlestickSeries({
     upColor: '#26a69a',
     downColor: '#ef5350',
@@ -210,6 +234,36 @@ function initChart() {
     wickUpColor: '#26a69a',
     wickDownColor: '#ef5350'
   });
+
+  console.log('✅ Gráfico inicializado correctamente');
+}
+
+// ✅ Nueva función robusta: reintentar initChart hasta que el DOM esté listo
+function retryInitChart(attempts = 0) {
+  const chartContainer = document.getElementById('chart');
+  if (!chartContainer || chartContainer.offsetWidth === 0 || chartContainer.offsetHeight === 0) {
+    if (attempts < 20) {
+      requestAnimationFrame(() => retryInitChart(attempts + 1));
+      return;
+    } else {
+      console.error('❌ #chart no disponible tras 20 intentos');
+      const estadoEl250 = document.getElementById('estado');
+if (estadoEl250) estadoEl250.textContent = '❌ Gráfico: no se pudo inicializar';
+      return;
+    }
+  }
+
+  try {
+    initChart();
+    actualizarCapitalTestnet();
+    actualizarPosicionesAbiertas();
+    renderizarHistorial();
+    console.log('✅ Sistema UI inicializado con éxito');
+  } catch (err) {
+    console.error('❌ Error al inicializar UI:', err);
+    const estadoEl263 = document.getElementById('estado');
+if (estadoEl263) estadoEl263.textContent = `❌ Inicialización fallida: ${err.message}`;
+  }
 }
 
 // === DATOS ===
@@ -235,7 +289,6 @@ async function obtenerOpenInterest(symbol = 'BTCUSDT') {
 }
 
 // === MODELO IA ===
-// (Tus funciones crearModelo, entrenarRed, predecir — ya están bien)
 async function crearModelo() {
   const model = tf.sequential();
   model.add(tf.layers.dense({ units: 64, activation: 'relu', inputShape: [23] }));
@@ -282,7 +335,12 @@ function prepararDatosParaIA(klines, openInterest = 0) {
   return { X: tf.tensor2d(X), y: tf.tensor2d(y, [y.length, 1]) };
 }
 
+// ✅ ENTRENAR RED — Corregida y accesible
 async function entrenarRed() {
+  if (!AUTENTICADO) {
+    alert('🔒 Acceso denegado. Ingresa la clave primero.');
+    return;
+  }
   document.getElementById('estado').textContent = '⏳ Descargando datos...';
   try {
     const klines = await obtenerDatos(simboloActual, '15m', 1000);
@@ -298,6 +356,7 @@ async function entrenarRed() {
     document.getElementById('estado').textContent = `❌ ${err.message}`;
   }
 }
+window._entrenarRed = entrenarRed;
 
 async function predecir(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, macdActual, signalActual, posicionBB, anchoBB, atrActual, obvActual, precioActual, openInterest = 0) {
   if (!modelo) return null;
@@ -359,26 +418,97 @@ function renderizarHistorial() {
   });
 }
 
-function registrarOperacionReal(symbol, side, entrada, salida, cantidad, pnl) {
+// ✅ TELEGRAM MEJORADO
+async function enviarTelegram(mensaje) {
+  try {
+    let token = (localStorage.getItem('TELEGRAM_TOKEN') || '').trim();
+    let chatId = (localStorage.getItem('TELEGRAM_CHAT_ID') || '').trim();
+    if (!token) {
+      token = '8535799982:AAF2c2iy_xP-OXqBTqiOsq4_4rAWtK7ZvZc';
+      localStorage.setItem('TELEGRAM_TOKEN', token);
+    }
+    if (!chatId) {
+      chatId = '5684283330';
+      localStorage.setItem('5684283330', chatId);
+    }
+    if (token.length < 30 || !chatId || chatId === 'TU_CHAT_ID') {
+      console.warn('⚠️ Telegram: token o chat ID inválido. Revisa localStorage.');
+      return;
+    }
+    const url = `https://api.telegram.org/bot${token}/sendMessage`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: mensaje,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true
+      })
+    });
+    if (!res.ok) {
+      const errorData = await res.json();
+      console.error('❌ Telegram error:', errorData);
+      if (errorData.error_code === 401) {
+        alert('❌ Token de Telegram inválido. Verifica en @BotFather.');
+      }
+    } else {
+      console.log('✅ Telegram enviado con éxito');
+    }
+  } catch (e) {
+    console.error('🚨 Fallo crítico al enviar a Telegram:', e.message);
+  }
+}
+
+// ✅ REGISTRAR OPERACIÓN — Segura, sin `leverage`, con datos reales y claros
+function registrarOperacionReal(symbol, side, entrada, salida, cantidad, pnl, motivo = 'Manual') {
+  // ✅ Validación de entrada mínima
+  if (!symbol || isNaN(entrada) || isNaN(salida) || isNaN(cantidad) || isNaN(pnl)) {
+    console.warn('⚠️ Datos inválidos en registrarOperacionReal');
+    return;
+  }
+
   const op = {
-    entrada: entrada || 0,
-    salida: salida || 0,
+    entrada: parseFloat(entrada) || 0,
+    salida: parseFloat(salida) || 0,
     ganancia: parseFloat(pnl) || 0,
     montoInvertido: Math.abs(cantidad * entrada),
     timestampEntrada: Date.now() - 60000,
     timestampSalida: Date.now(),
     resultado: (pnl >= 0) ? 'GANANCIA' : 'PÉRDIDA',
-    simbolo: symbol
+    simbolo: symbol,
+    motivo
   };
+
   operaciones.unshift(op);
   if (operaciones.length > 50) operaciones = operaciones.slice(0, 50);
   localStorage.setItem('historialOperaciones', JSON.stringify(operaciones));
   actualizarPanelFinanciero();
   renderizarHistorial();
+
+  // ✅ Cálculo seguro del % de cambio en precio
+  let cambioPrecioPct = 0;
+  if (entrada && entrada !== 0) {
+    cambioPrecioPct = ((salida - entrada) / entrada) * 100;
+  }
+
+  const simPnl = pnl >= 0 ? '+' : '';
+  const emoji = pnl >= 0 ? '🟢' : '🔴';
+  const dirPrecio = cambioPrecioPct >= 0 ? '+' : '';
+
+  // ✅ Mensaje claro, sin ambigüedad, sin `leverage`
+  const msg = `${emoji} *${symbol} ${side}* (${motivo})
+Entrada: $${entrada.toFixed(2)}
+Salida: $${salida.toFixed(2)}
+Δ Precio: ${dirPrecio}${Math.abs(cambioPrecioPct).toFixed(2)}%
+Ganancia: ${simPnl}$${Math.abs(pnl).toFixed(2)}`;
+
+  enviarTelegram(msg);
 }
 
 // === CAPITAL TESTNET ===
 async function actualizarCapitalTestnet() {
+  if (!AUTENTICADO) return;
   try {
     const res = await fetch('/api/binance/futures/account');
     const data = await res.json();
@@ -391,7 +521,7 @@ async function actualizarCapitalTestnet() {
     const ticker = await (await fetch('/api/binance/ticker?symbol=BTCUSDT')).json();
     const precioBTC = parseFloat(ticker.price) || 1;
     const saldoBTC = saldoUSDT / precioBTC;
-    const montoInvertir = parseFloat(document.getElementById('montoCompra')?.value) || 10;
+    const montoInvertir = parseFloat(document.getElementById('montoCompra')?.value) || 100;
     const usdtEl = document.getElementById('saldo-usdt');
     const btcEl = document.getElementById('saldo-btc');
     const invEl = document.getElementById('monto-invertir');
@@ -402,7 +532,7 @@ async function actualizarCapitalTestnet() {
     const usdtEl = document.getElementById('saldo-usdt');
     const btcEl = document.getElementById('saldo-btc');
     const invEl = document.getElementById('monto-invertir');
-    const montoInvertir = parseFloat(document.getElementById('montoCompra')?.value) || 10;
+    const montoInvertir = parseFloat(document.getElementById('montoCompra')?.value) || 100;
     if (usdtEl) usdtEl.textContent = `$1000.00`;
     if (btcEl) btcEl.textContent = `0.000000 BTC`;
     if (invEl) invEl.textContent = `$${montoInvertir.toFixed(2)}`;
@@ -411,41 +541,41 @@ async function actualizarCapitalTestnet() {
 
 // === ÓRDENES ===
 async function abrirPosicionReal(side) {
+  if (!AUTENTICADO) return;
   try {
     const ticker = await (await fetch(`/api/binance/ticker?symbol=${simboloActual}`)).json();
     const precio = parseFloat(ticker.price);
-    let monto = parseFloat(document.getElementById('montoCompra').value) || 10;
+    let monto = parseFloat(document.getElementById('montoCompra').value) || 100;
     if (monto < 100) monto = 100;
     let qty = symbolInfo ? calculateQuantity(precio, monto) : Math.floor((monto / precio) / 0.001) * 0.001;
     const lev = parseInt(document.getElementById('apalancamiento').value) || 4;
-
-    // ✅ Modo TP/SL
-    const tpslMode = document.getElementById('tpsl-mode')?.value || 'dinamico';
-    let takeProfit = 5.0, stopLoss = 3.0;
-    if (tpslMode === 'manual') {
-      takeProfit = parseFloat(document.getElementById('takeProfit').value) || 5.0;
-      stopLoss = parseFloat(document.getElementById('stopLoss').value) || 3.0;
-    } else {
-      // Dinámico con ATR
+    console.log(`🔍 [DEBUG] Monto deseado: $${monto}`);
+    console.log(`🔍 [DEBUG] Precio: $${precio}`);
+    console.log(`🔍 [DEBUG] Size calculado: ${qty.toFixed(8)} BTC`);
+    console.log(`🔍 [DEBUG] Notional real: $${(qty * precio).toFixed(2)}`);
+     const tpslMode = document.getElementById('tpsl-mode')?.value || 'dinamico';
+    let takeProfit = 1.5, stopLoss = 0.5;
+    // En abrirPosicionReal():
+     if (tpslMode === 'manual') {
+    takeProfit = Math.max(0.5, parseFloat(document.getElementById('takeProfit').value) || 3.0); // ← de 1.5 → 3.0
+    stopLoss = Math.max(0.5, parseFloat(document.getElementById('stopLoss').value) || 1.5);  // ← de 0.5 → 1.5
+    }else {
       const k5m = await obtenerDatos(simboloActual, '5m', 50);
       const atrArr = k5m.length >= 20 ? calcularATR(k5m, 14) : [];
       const atrVal = atrArr.length > 0 ? atrArr[atrArr.length - 1] : 0;
-      takeProfit = (atrVal * 6 / precio) * 100;
-      stopLoss = (atrVal * 3 / precio) * 100;
+      takeProfit = Math.max(0.8, (atrVal * 6 / precio) * 100);
+      stopLoss = Math.max(0.3, (atrVal * 3 / precio) * 100);
     }
-
     const res = await fetch('/api/binance/futures/order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ symbol: simboloActual, side, quantity: qty.toString(), leverage: lev })
     });
-
     if (!res.ok) {
       const err = await res.json();
       throw new Error(`${err.msg || 'Error Binance'} (code: ${err.code})`);
     }
-
-    console.log(`🟢 Orden ${side} abierta | TP: ${takeProfit.toFixed(2)}% | SL: ${stopLoss.toFixed(2)}% | Modo: ${tpslMode}`);
+    console.log(`🟢 Orden ${side} abierta | TP: ${takeProfit.toFixed(2)}% | SL: ${stopLoss.toFixed(2)}%`);
     document.getElementById('estado').textContent = `✅ ${side} ${qty} ${simboloActual}`;
     await actualizarPosicionesAbiertas();
   } catch (err) {
@@ -455,20 +585,29 @@ async function abrirPosicionReal(side) {
   }
 }
 
-async function cerrarPosicion(symbol, positionSide = 'BOTH') {
+// ✅ CERRAR POSICIÓN — Corregido: sin errores, con leverage real y PnL exacto
+async function cerrarPosicion(symbol, positionSide = 'BOTH', motivo = 'Manual') {
   try {
+    // 1. Obtener posiciones actuales
     const posResponse = await fetch('/api/binance/futures/positions');
     const posiciones = await posResponse.json();
     const posicion = Array.isArray(posiciones)
       ? posiciones.find(p => p.symbol === symbol && p.positionSide === positionSide)
       : null;
-    if (!posicion || Math.abs(parseFloat(posicion.positionAmt)) < 0.0001) {
-      throw new Error('Sin posición abierta');
+
+    // 2. Validar existencia
+    if (!posicion || Math.abs(parseFloat(posicion.positionAmt || 0)) < 0.0001) {
+      throw new Error(`Sin posición abierta para ${symbol}`);
     }
+
+    // 3. Extraer datos reales (¡sin asumir!)
     const precioEntrada = parseFloat(posicion.entryPrice) || parseFloat(posicion.markPrice) || 0;
     const positionAmt = parseFloat(posicion.positionAmt) || 0;
     const cantidad = Math.abs(positionAmt);
     const sideActual = positionAmt > 0 ? 'LONG' : 'SHORT';
+    const leverage = parseFloat(posicion.leverage) || 1;  // ✅ ÚNICA FUENTE DE VERDAD
+
+    // 4. Cerrar en Binance
     const closeRes = await fetch('/api/binance/futures/close-position', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -476,41 +615,78 @@ async function cerrarPosicion(symbol, positionSide = 'BOTH') {
     });
     const resultado = await closeRes.json();
     const precioSalida = parseFloat(resultado.avgPrice) || parseFloat(posicion.markPrice) || precioEntrada;
-    const pnl = sideActual === 'LONG'
-      ? (precioSalida - precioEntrada) * cantidad
-      : (precioEntrada - precioSalida) * cantidad;
-    registrarOperacionReal(symbol, sideActual, precioEntrada, precioSalida, cantidad, pnl);
-    document.getElementById('estado').textContent = `CloseOperation exitosa`;
+
+    // 5. Calcular PnL REAL (con apalancamiento)
+    let pnl = 0;
+    if (sideActual === 'LONG') {
+      pnl = (precioSalida - precioEntrada) * cantidad * leverage;
+    } else {
+      pnl = (precioEntrada - precioSalida) * cantidad * leverage;
+    }
+
+    // 6. Registrar operación
+    registrarOperacionReal(symbol, sideActual, precioEntrada, precioSalida, cantidad, pnl, motivo);
+
+    // 7. Feedback visual
+    const simPnl = pnl >= 0 ? '+' : '';
+    document.getElementById('estado').textContent = 
+      `✅ ${symbol} ${sideActual} cerrada | ${motivo} | ${simPnl}$${Math.abs(pnl).toFixed(2)}`;
+
+    // 8. Actualizar UI
     await actualizarPosicionesAbiertas();
+
   } catch (err) {
-    document.getElementById('estado').textContent = `CloseOperation fallida: ${err.message}`;
+    // ✅ Mensaje seguro: err.message siempre existe
+    const msg = `CloseOperation fallida: ${err.message || 'Error desconocido'}`;
+    console.error(msg); // ← línea 683: ahora NO falla
+    const estadoEl = document.getElementById('estado');
+    if (estadoEl) estadoEl.textContent = msg;
   }
 }
 
+// ✅ ACTUALIZAR POSICIONES — Seguro
 async function actualizarPosicionesAbiertas() {
   try {
-    const data = await (await fetch('/api/binance/futures/positions')).json();
-    const tbody = document.querySelector('#operaciones-abiertas tbody');
+    const res = await fetch(`/api/binance/futures/positions?_t=${Date.now()}`);
+    const data = await res.json();
+    const table = document.getElementById('operaciones-abiertas');
+    if (!table) return;
+    if (!table.querySelector('tbody')) {
+      const tbody = document.createElement('tbody');
+      table.appendChild(tbody);
+    }
+    const tbody = table.querySelector('tbody');
     tbody.innerHTML = '';
-    data.filter(p => Math.abs(parseFloat(p.positionAmt)) > 0.0001).forEach(pos => {
-      const size = parseFloat(pos.positionAmt);
-      const entry = parseFloat(pos.entryPrice);
-      const mark = parseFloat(pos.markPrice);
-      const pnl = parseFloat(pos.unRealizedProfit);
-      const roe = ((mark - entry) / entry) * (size > 0 ? 1 : -1) * 100;
+    const posicionesAbiertas = data.filter(p => p.symbol && Math.abs(parseFloat(p.positionAmt || 0)) > 0.0001);
+    posicionesAbiertas.forEach(pos => {
+      const size = parseFloat(pos.positionAmt) || 0;
+      const entry = parseFloat(pos.entryPrice) || parseFloat(pos.markPrice) || 0;
+      const mark = parseFloat(pos.markPrice) || entry;
+      const pnl = parseFloat(pos.unRealizedProfit) || 0;
+      const roe = (entry !== 0) ? ((mark - entry) / entry) * (size > 0 ? 1 : -1) * 100 : 0;
       const row = document.createElement('tr');
       row.innerHTML = `
-        <td>${pos.symbol}</td>
+        <td>${pos.symbol || '—'}</td>
         <td>${size > 0 ? 'LONG' : 'SHORT'}</td>
         <td>$${entry.toFixed(2)}</td>
         <td>${roe.toFixed(2)}%</td>
         <td>$${pnl.toFixed(2)}</td>
-        <td><button class="btn btn-outline" style="padding:4px 8px;font-size:0.8em;" onclick="cerrarPosicion('${pos.symbol}', '${pos.positionSide}')">CloseOperation</button></td>
+        <td><button class="btn btn-outline" style="padding:4px 8px;font-size:0.8em;" 
+            onclick="cerrarPosicion('${pos.symbol}', '${pos.positionSide}', 'Manual')">CloseOperation</button></td>
       `;
       tbody.appendChild(row);
     });
+    if (posicionesAbiertas.length === 0) {
+      const emptyRow = document.createElement('tr');
+      emptyRow.innerHTML = `<td colspan="6" style="text-align:center;color:#666;">Sin posiciones abiertas</td>`;
+      tbody.appendChild(emptyRow);
+    }
   } catch (err) {
-    console.error('Error actualizando posiciones:', err);
+    console.error('🔴 Error actualizando posiciones:', err);
+    const tbody = document.querySelector('#operaciones-abiertas tbody');
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="6" style="color:#ef5350;text-align:center;">⚠️ Error al cargar posiciones</td></tr>`;
+    }
   }
 }
 
@@ -523,46 +699,29 @@ function actualizarSemaforo({ adx = 0, confianza = 0, preciosLen = 0, modo = 'vo
   if (modo === 'volatil') modoOk = true;
   else if (modo === 'alcista') modoOk = alcista;
   else if (modo === 'bajista') modoOk = bajista;
-
-  console.log('📊 [SEMAFORO]', {
-    adx: adx.toFixed(2),
-    confianza: (confianza * 100).toFixed(1) + '%',
-    modo,
-    alcista, bajista,
-    adxOk, modoOk, predOk, datosOk
-  });
-
   const adxEl = document.getElementById('cond-adx');
   const modoEl = document.getElementById('cond-modo');
   const predEl = document.getElementById('cond-pred');
   const datosEl = document.getElementById('cond-datos');
   const msgEl = document.getElementById('semaforo-msg');
-
   if (adxEl) adxEl.style.backgroundColor = adxOk ? '#26a69a' : '#ef5350';
   if (modoEl) modoEl.style.backgroundColor = modoOk ? '#26a69a' : '#ef5350';
   if (predEl) predEl.style.backgroundColor = predOk ? '#26a69a' : '#ef5350';
   if (datosEl) datosEl.style.backgroundColor = datosOk ? '#26a69a' : '#ef5350';
-
   if (msgEl) {
     if (adxOk && modoOk && predOk && datosOk) {
       msgEl.textContent = '✅ Listo para operar';
       msgEl.style.color = '#26a69a';
-      console.log('🟢 ✅ TODAS LAS CONDICIONES CUMPLIDAS — sistema listo para operar');
     } else {
-      const faltantes = [];
-      if (!adxOk) faltantes.push(`ADX: ${adx.toFixed(1)} < 20`);
-      if (!modoOk) faltantes.push(`Modo: ${modo} (pero tendencia no coincide)`);
-      if (!predOk) faltantes.push(`Confianza: ${(confianza * 100).toFixed(1)}% < 60%`);
-      if (!datosOk) faltantes.push(`Velas: ${preciosLen} < 55`);
-      msgEl.textContent = `❌ Faltan: ${faltantes.join(', ')}`;
+      msgEl.textContent = '❌ Condiciones no cumplidas';
       msgEl.style.color = '#ef5350';
-      console.log(`🔴 ❌ Condiciones faltantes: ${faltantes.join(' | ')}`);
     }
   }
 }
 
 // === STREAMING ===
 async function iniciarStreaming() {
+  if (!AUTENTICADO) return;
   if (streamingInterval) return;
   if (!modelo) { alert('Entrena el modelo primero'); return; }
   simboloActual = document.getElementById('simbolo').value.toUpperCase();
@@ -571,6 +730,17 @@ async function iniciarStreaming() {
   ultimoPrecio = klines[klines.length - 1].close;
   dataSeries.setData(klines);
   if (!symbolInfo) await fetchSymbolInfo(simboloActual);
+
+  // ✅ Recuperar capital desde localStorage
+  const savedCapital = parseFloat(localStorage.getItem('capitalActual'));
+  const savedHistorial = JSON.parse(localStorage.getItem('historialOperaciones') || '[]');
+  if (savedHistorial.length > 0 && !isNaN(savedCapital)) {
+    operaciones = savedHistorial;
+    capitalActual = savedCapital;
+    capitalInicial = parseFloat(localStorage.getItem('capitalInicial')) || 1000;
+    actualizarPanelFinanciero();
+    renderizarHistorial();
+  }
 
   streamingInterval = setInterval(async () => {
     try {
@@ -586,7 +756,6 @@ async function iniciarStreaming() {
         klines[klines.length - 1] = { ...ultimaVela, high: Math.max(ultimaVela.high, ultimoPrecio), low: Math.min(ultimaVela.low, ultimoPrecio), close: ultimoPrecio };
         dataSeries.update(klines[klines.length - 1]);
       }
-
       const closes = klines.slice(-100).map(k => k.close);
       const rsi = calcularRSI(closes, 14);
       const ema20 = calcularEMA(closes, 20);
@@ -596,7 +765,6 @@ async function iniciarStreaming() {
       const atrArr = calcularATR(klines.slice(-100), 14);
       const adxArr = calcularADX(klines.slice(-100), 14);
       const obv = calcularOBV(klines.slice(-100));
-
       const rsiActual = rsi[rsi.length - 1] || 50;
       const e20 = ema20.length > 0 ? ema20[ema20.length - 1] : ultimoPrecio;
       const e50 = ema50.length > 0 ? ema50[ema50.length - 1] : ultimoPrecio;
@@ -611,19 +779,16 @@ async function iniciarStreaming() {
       const atrGlobal = atrArr.length > 0 ? atrArr[atrArr.length - 1] : 0;
       const adxActual = adxArr.length > 0 ? adxArr[adxArr.length - 1] : 0;
       const obvActual = obv[obv.length - 1] || 0;
-
       const adxE = document.getElementById('adx-valor');
       const atrE = document.getElementById('atr-valor');
       if (adxE) adxE.textContent = adxActual.toFixed(1);
       if (atrE) atrE.textContent = `ATR: ${atrGlobal.toFixed(2)}`;
-
-      const tpPct = (atrGlobal * 6 / ultimoPrecio) * 100;
-      const slPct = (atrGlobal * 3 / ultimoPrecio) * 100;
-      const tpEl = document.getElementById('tp-dinamico');
-      const slEl = document.getElementById('sl-dinamico');
-      if (tpEl) tpEl.textContent = `TP: ${tpPct.toFixed(2)}%`;
-      if (slEl) slEl.textContent = `SL: ${slPct.toFixed(2)}%`;
-
+     // const tpPct = (atrGlobal * 6 / ultimoPrecio) * 100;
+      //const slPct = (atrGlobal * 3 / ultimoPrecio) * 100;
+      //const tpEl = document.getElementById('tp-dinamico');
+      //const slEl = document.getElementById('sl-dinamico');
+     // if (tpEl) tpEl.textContent = `TP: ${tpPct.toFixed(2)}%`;
+     // if (slEl) slEl.textContent = `SL: ${slPct.toFixed(2)}%`;
       let prediccionRaw = null, confianza = 0;
       if (precios.length >= 30) {
         const openInterest = await obtenerOpenInterest(simboloActual);
@@ -659,46 +824,85 @@ async function iniciarStreaming() {
           if (prog) prog.style.width = '0%';
         }
       }
-
       const modo = document.getElementById('modo-mercado')?.value || 'volatil';
       actualizarSemaforo({ adx: adxActual, confianza, preciosLen: precios.length, modo, alcista, bajista });
 
       // === TRADING AUTOMÁTICO ===
-      if (!document.getElementById('autoTrading')?.checked) return;
+      if (!document.getElementById('autoTrading')?.checked ?? false) return;
       const posiciones = await (await fetch('/api/binance/futures/positions')).json();
       const posicionActual = posiciones.find(p => p.symbol === simboloActual && Math.abs(parseFloat(p.positionAmt)) > 0.0001);
+  if (posicionActual) {
+  const size = parseFloat(posicionActual.positionAmt);
+  const entryPrice = parseFloat(posicionActual.entryPrice);
+  const markPrice = parseFloat(posicionActual.markPrice);
+  const leverage = parseFloat(posicionActual.leverage);
+  const esLong = size > 0;
+  const esShort = size < 0;
 
-      if (posicionActual) {
-        const size = parseFloat(posicionActual.positionAmt);
-        const entryPrice = parseFloat(posicionActual.entryPrice);
-        const markPrice = parseFloat(posicionActual.markPrice);
-        const leverage = parseFloat(posicionActual.leverage);
-        const esLong = size > 0;
-        const esShort = size < 0;
-        let atrTPSL = 0;
-        try {
-          const k5m = await obtenerDatos(simboloActual, '5m', 50);
-          if (k5m.length >= 20) {
-            const a = calcularATR(k5m, 14);
-            atrTPSL = a[a.length - 1] || 0;
-          }
-        } catch (e) {
-          const a = calcularATR(klines.slice(-50), 14);
-          atrTPSL = a[a.length - 1] || 0;
-        }
-        const slPct = (atrTPSL * 3 / entryPrice) * 100;
-        const tpPct = (atrTPSL * 6 / entryPrice) * 100;
-        const tpEl = document.getElementById('tp-dinamico');
-        const slEl = document.getElementById('sl-dinamico');
-        if (tpEl) tpEl.textContent = `TP: ${tpPct.toFixed(2)}%`;
-        if (slEl) slEl.textContent = `SL: ${slPct.toFixed(2)}%`;
-        const roePct = ((markPrice - entryPrice) / entryPrice) * leverage * (esLong ? 1 : -1) * 100;
-        if (roePct >= tpPct || roePct <= -slPct || 
-           (prediccionRaw != null && confianza >= 0.7 && 
-             ((esLong && prediccionRaw <= 0.5) || (esShort && prediccionRaw > 0.5)))) {
-          cerrarPosicion(simboloActual, posicionActual.positionSide);
-        }
-      } else {
+  if (!size || !entryPrice || isNaN(entryPrice) || isNaN(markPrice) || leverage <= 0) {
+    console.warn('⚠️ Datos de posición inválidos. Saltando evaluación.');
+    return;
+  }
+
+  // ✅ Obtener TP/SL reales del DOM (modo manual o dinámico)
+  let tpPct = 1.5, slPct = 0.5;
+  const modoTPSL = document.getElementById('tpsl-mode')?.value || 'dinamico';
+
+  if (modoTPSL === 'manual') {
+    const tpInput = document.getElementById('takeProfit');
+    const slInput = document.getElementById('stopLoss');
+    tpPct = tpInput ? Math.max(0.3, parseFloat(tpInput.value) || 1.5) : 1.5;
+    slPct = slInput ? Math.max(0.3, parseFloat(slInput.value) || 0.5) : 0.5;
+  } else {
+    // Dinámico: solo si no es manual
+    try {
+      const k5m = await obtenerDatos(simboloActual, '5m', 50);
+      if (k5m.length >= 20) {
+        const a = calcularATR(k5m, 14);
+        const atrVal = a[a.length - 1] || 0;
+        tpPct = Math.max(0.5, (atrVal * 6 / entryPrice) * 100);
+        slPct = Math.max(0.3, (atrVal * 3 / entryPrice) * 100);
+      }
+    } catch (e) {
+      tpPct = 1.5;
+      slPct = 0.5;
+    }
+  }
+
+  // ✅ Asegurar valores mínimos
+  tpPct = Math.max(0.5, tpPct);
+  slPct = Math.max(0.3, slPct);
+
+  // ✅ Actualizar visualización
+  const tpEl = document.getElementById('tp-dinamico');
+  const slEl = document.getElementById('sl-dinamico');
+  if (tpEl) tpEl.textContent = `TP: ${tpPct.toFixed(2)}%`;
+  if (slEl) slEl.textContent = `SL: ${slPct.toFixed(2)}%`;
+
+  // ✅ ROE en % de capital (con apalancamiento)
+  const roePct = ((markPrice - entryPrice) / entryPrice) * leverage * (esLong ? 1 : -1) * 100;
+
+  // ✅ Cierre por TP/SL/IA
+  const debeCerrarPorIA = prediccionRaw != null &&
+    confianza >= 0.7 &&
+    roePct < 0 &&
+    Math.abs(roePct) > (slPct * 0.5) &&
+    ((esLong && prediccionRaw <= 0.3) || (esShort && prediccionRaw >= 0.7));
+
+  let motivo = 'CloseOperation';
+  if (roePct >= tpPct) {
+    motivo = `TP alcanzado (${tpPct.toFixed(1)}%)`;
+  } else if (roePct <= -slPct) {
+    motivo = `SL alcanzado (${slPct.toFixed(1)}%)`;
+  } else if (debeCerrarPorIA) {
+    motivo = `IA cambio + PnL=${roePct.toFixed(2)}%`;
+  }
+
+  if (roePct >= tpPct || roePct <= -slPct || debeCerrarPorIA) {
+    cerrarPosicion(simboloActual, posicionActual.positionSide, motivo);
+  }
+}     
+       else {
         if (prediccionRaw != null && confianza >= 0.7 && precios.length >= 55 && adxActual > 20) {
           const side = prediccionRaw > 0.5 ? 'BUY' : 'SELL';
           let operar = false;
@@ -708,7 +912,6 @@ async function iniciarStreaming() {
           if (operar) abrirPosicionReal(side);
         }
       }
-
     } catch (err) {
       console.error('🔴 Streaming error:', err);
       document.getElementById('estado').textContent = `⚠️ ${err.message}`;
@@ -717,78 +920,299 @@ async function iniciarStreaming() {
 }
 
 async function detenerStreaming() {
+  if (!AUTENTICADO) return;
   if (streamingInterval) clearInterval(streamingInterval);
   streamingInterval = null;
   document.getElementById('estado').textContent = '⏹️ Detenido';
 }
 
-// === INICIALIZACIÓN ===
-window.onload = () => {
-  initChart();
-  takeProfitPct = parseFloat(document.getElementById('takeProfit').value) || 5.0;
-  stopLossPct = parseFloat(document.getElementById('stopLoss').value) || 3.0;
-  maxOperaciones = parseInt(document.getElementById('maxOperaciones')?.value) || 3;
-  actualizarCapitalTestnet();
-
-  // Eventos
-  const btnReiniciar = document.getElementById('btn-reiniciar');
-  if (btnReiniciar) btnReiniciar.onclick = () => {
+// === RECARGAR TESTNET ===
+async function recargarTestnet() {
+  if (!AUTENTICADO) return;
+  if (confirm('¿Reiniciar capital a $1000 y borrar historial?')) {
     capitalActual = capitalInicial = 1000;
     operaciones = [];
+    localStorage.removeItem('historialOperaciones');
+    localStorage.setItem('capitalActual', 1000);
+    localStorage.setItem('capitalInicial', 1000);
     actualizarPanelFinanciero();
     renderizarHistorial();
-  };
+    await actualizarCapitalTestnet();
+    alert('✅ Testnet recargado con $1000');
+  }
+}
 
-  const btnExportar = document.getElementById('btn-exportar');
-  if (btnExportar) btnExportar.onclick = () => {
-    const csv = ['"Entrada","Salida","Ganancia"'].concat(
-      operaciones.map(o => `"${new Date(o.timestampEntrada).toISOString()}","${new Date(o.timestampSalida).toISOString()}","${o.ganancia.toFixed(2)}"`)
-    ).join('\n');  // ✅ Corregido: \n en vez de '
-    const a = document.createElement('a');
-    a.href = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
-    a.download = `trading_${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
-  };
+// === PRUEBA MANUAL ===
+async function operacionPrueba() {
+  if (!AUTENTICADO) return;
+  const dir = document.getElementById('prediccion-direccion').textContent;
+  const adxE = document.getElementById('adx-valor');
+  const adxActual = parseFloat(adxE?.textContent) || 0;
+  if (adxActual < 20) {
+    const continuar = confirm(`⚠️ ADX: ${adxActual.toFixed(1)} (<20). ¿Forzar orden?`);
+    if (!continuar) return;
+  }
+  if (!dir.includes('SUBIDA') && !dir.includes('BAJADA')) {
+    alert('⚠️ Sin señal clara de IA.');
+    return;
+  }
+  try {
+    if (dir.includes('SUBIDA')) await abrirPosicionReal('BUY');
+    else if (dir.includes('BAJADA')) await abrirPosicionReal('SELL');
+  } catch (err) {
+    alert(`❌ ${err.message}`);
+  }
+}
 
-  // Cargar historial
+// ✅ BACKTESTING MEJORADO — Realista, con fees y lógica completa
+// ✅ BACKTESTING REALISTA — Basado en tu lógica operativa real
+async function ejecutarBacktesting() {
+  const msgEl = document.getElementById('backtesting-msg');
+  if (!msgEl) return;
+  msgEl.textContent = '⏳ Descargando datos históricos...';
+  msgEl.style.color = '#aaa';
+
+  try {
+    // 🔹 Parámetros configurables desde UI
+    const simbolo = document.getElementById('simbolo')?.value.toUpperCase() || 'BTCUSDT';
+    const modo = document.getElementById('modo-mercado')?.value || 'volatil';
+    const tpslMode = document.getElementById('tpsl-mode')?.value || 'dinamico';
+    const leverage = parseInt(document.getElementById('apalancamiento')?.value) || 4;
+    const montoBase = parseFloat(document.getElementById('montoCompra')?.value) || 100;
+
+    // ✅ Permitir ajustar rango e intervalo (puedes hacer inputs más adelante)
+    const interval = document.getElementById('backtest-interval')?.value || '5m';
+    const dias = parseInt(document.getElementById('backtest-dias')?.value) || 3;
+    const limit = interval === '1m' ? 1440 * dias :
+              interval === '5m' ? 288 * dias :
+              interval === '15m' ? 96 * dias : 24 * dias;
+    // 🔹 Descargar datos reales
+    const klines = await obtenerDatos(simbolo, interval, limit);
+    if (klines.length < 100) throw new Error('Se necesitan ≥100 velas');
+
+    // 🔹 Extraer series
+    const closes = klines.map(k => k.close);
+    const highs = klines.map(k => k.high);
+    const lows = klines.map(k => k.low);
+
+    // 🔹 Variables de simulación
+    let capital = 1000;
+    let peak = capital;
+    let maxDrawdown = 0;
+    let operacionesSim = [];
+    let posicionAbierta = null; // { entrada, size, side, tp, sl, leverage, timestamp }
+
+    // 🔹 Simular paso a paso
+    for (let i = 50; i < klines.length - 1; i++) {
+      const vela = klines[i];
+      const precio = vela.close;
+
+      // 🔸 Calcular indicadores en tiempo real (como en streaming)
+      const rsiArr = calcularRSI(closes.slice(0, i + 1), 14);
+      const ema20Arr = calcularEMA(closes.slice(0, i + 1), 20);
+      const ema50Arr = calcularEMA(closes.slice(0, i + 1), 50);
+      const adxArr = calcularADX(klines.slice(0, i + 1), 14);
+      const atrArr = calcularATR(klines.slice(0, i + 1), 14);
+
+      const rsiActual = rsiArr[rsiArr.length - 1] || 50;
+      const e20 = ema20Arr[ema20Arr.length - 1] || precio;
+      const e50 = ema50Arr[ema50Arr.length - 1] || precio;
+      const alcista = e20 > e50;
+      const bajista = e20 < e50;
+      const adxActual = adxArr.length > 0 ? adxArr[adxArr.length - 1] : 0;
+      const atrActual = atrArr.length > 0 ? atrArr[atrArr.length - 1] : 0;
+
+      // 🔸 IA simulada (usando lógica de tendencia + RSI + ADX, como en tu sistema)
+      let prediccionRaw = 0.5;
+      if (adxActual > 15) {
+        if (alcista && rsiActual < 70) prediccionRaw = 0.72;
+        else if (bajista && rsiActual > 30) prediccionRaw = 0.28;
+      }
+      const confianza = Math.abs(prediccionRaw - 0.5) * 2;
+
+      // 🔹 GESTIÓN DE POSICIÓN ABIERTA
+      if (posicionAbierta) {
+        const { entrada, size, side, tp, sl } = posicionAbierta;
+        const roePct = ((precio - entrada) / entrada) * leverage * (side === 'LONG' ? 1 : -1) * 100;
+
+        let cerrar = false;
+        let motivo = 'CloseOperation';
+
+        // ✅ Cierre por TP
+        if (roePct >= tp) {
+          cerrar = true; motivo = `TP ${tp.toFixed(1)}%`;
+        }
+        // ✅ Cierre por SL
+        else if (roePct <= -sl) {
+          cerrar = true; motivo = `SL ${sl.toFixed(1)}%`;
+        }
+        // ✅ Cierre por IA (solo si PnL < 0 y |PnL| > 50% SL)
+        else if (confianza >= 0.7 && roePct < 0 && Math.abs(roePct) > (sl * 0.5)) {
+          const debeCerrarIA = (side === 'LONG' && prediccionRaw <= 0.3) || (side === 'SHORT' && prediccionRaw >= 0.7);
+          if (debeCerrarIA) {
+            cerrar = true; motivo = `IA cambio`;
+          }
+        }
+
+        // ✅ Ejecutar cierre
+        if (cerrar) {
+          const pnl = (precio - entrada) * size * (side === 'LONG' ? 1 : -1);
+          capital += pnl;
+          operacionesSim.push({
+            entrada,
+            salida: precio,
+            pnl,
+            motivo,
+            timestamp: vela.time * 1000,
+            roe: roePct
+          });
+          posicionAbierta = null;
+          peak = Math.max(peak, capital);
+          maxDrawdown = Math.max(maxDrawdown, (peak - capital) / peak);
+        }
+      }
+
+      // 🔹 ABRIR NUEVA POSICIÓN (solo si no hay abierta)
+      if (!posicionAbierta && confianza >= 0.7 && adxActual > 20) {
+        let side = null;
+        if (modo === 'alcista' && prediccionRaw > 0.5 && alcista) side = 'LONG';
+        else if (modo === 'bajista' && prediccionRaw <= 0.5 && bajista) side = 'SHORT';
+        else if (modo === 'volatil' && ((prediccionRaw > 0.5 && alcista) || (prediccionRaw <= 0.5 && bajista))) {
+          side = prediccionRaw > 0.5 ? 'LONG' : 'SHORT';
+        }
+
+        if (side) {
+          // ✅ Determinar TP/SL (igual que en abrirPosicionReal)
+          let tpPct = 3.0, slPct = 1.5;
+          if (tpslMode === 'manual') {
+            tpPct = Math.max(0.3, parseFloat(document.getElementById('takeProfit')?.value) || 3.0);
+            slPct = Math.max(0.3, parseFloat(document.getElementById('stopLoss')?.value) || 1.5);
+          } else {
+            tpPct = Math.max(0.5, (atrActual * 6 / precio) * 100);
+            slPct = Math.max(0.3, (atrActual * 3 / precio) * 100);
+          }
+
+          const size = montoBase / precio;
+          posicionAbierta = {
+            entrada: precio,
+            size,
+            side,
+            tp: tpPct,
+            sl: slPct,
+            leverage
+          };
+        }
+      }
+
+      peak = Math.max(peak, capital);
+    }
+
+    // 🔹 Cerrar posición abierta al final (si existe)
+    if (posicionAbierta) {
+      const { entrada, size, side } = posicionAbierta;
+      const precioFinal = klines[klines.length - 1].close;
+      const pnl = (precioFinal - entrada) * size * (side === 'LONG' ? 1 : -1);
+      capital += pnl;
+      operacionesSim.push({
+        entrada,
+        salida: precioFinal,
+        pnl,
+        motivo: 'Final',
+        timestamp: klines[klines.length - 1].time * 1000
+      });
+    }
+
+    // 🔹 Calcular métricas
+    const winRate = operacionesSim.length > 0
+      ? operacionesSim.filter(o => o.pnl > 0).length / operacionesSim.length
+      : 0;
+    const roiBruto = ((capital - 1000) / 1000) * 100;
+    const fees = operacionesSim.length * 0.001 * 100; // 0.1% por operación (ida + vuelta ~0.08-0.1%)
+    const roiNeto = roiBruto - fees;
+
+    // ✅ Mostrar resultado
+    msgEl.innerHTML = `
+      ✅ ${operacionesSim.length} ops | Win: ${(winRate * 100).toFixed(1)}% |
+      ROI bruto: ${roiBruto >= 0 ? '+' : ''}${roiBruto.toFixed(1)}% |
+      Neto: ${roiNeto >= 0 ? '+' : ''}${roiNeto.toFixed(1)}% |
+      DD: ${(maxDrawdown * 100).toFixed(1)}%
+    `;
+    msgEl.style.color = roiNeto >= 0 ? '#26a69a' : '#ef5350';
+
+    // ✅ Opcional: guardar para análisis posterior
+    localStorage.setItem('backtest-last', JSON.stringify({
+      fecha: new Date().toISOString(),
+      simbolo,
+      interval,
+      operaciones: operacionesSim,
+      roi: roiNeto,
+      winRate,
+      maxDrawdown
+    }));
+
+  } catch (err) {
+    console.error('❌ Backtesting falló:', err);
+    msgEl.textContent = `❌ ${err.message}`;
+    msgEl.style.color = '#ef5350';
+  }
+}
+
+// Helper para backtesting
+function predRawValida(modo, p, alcista, bajista) {
+  return (modo === 'volatil' && ((p > 0.5 && alcista) || (p <= 0.5 && bajista)));
+}
+
+// === INICIALIZACIÓN SEGURA ===
+document.addEventListener('DOMContentLoaded', () => {
+  // 1. Cargar historial y capital desde localStorage
   const hist = JSON.parse(localStorage.getItem('historialOperaciones') || '[]');
-  if (hist.length > 0) {
+  const savedCapital = parseFloat(localStorage.getItem('capitalActual'));
+  const savedInicial = parseFloat(localStorage.getItem('capitalInicial'));
+
+  if (hist.length > 0 && !isNaN(savedCapital)) {
     operaciones = hist;
-    actualizarPanelFinanciero();
-    renderizarHistorial();
+    capitalActual = savedCapital;
+    capitalInicial = !isNaN(savedInicial) ? savedInicial : 1000;
+  } else {
+    capitalActual = capitalInicial = 1000;
   }
 
-  // Métodos globales
+  // 2. Registrar funciones globales
   window.entrenarRed = entrenarRed;
   window.iniciarStreaming = iniciarStreaming;
   window.detenerStreaming = detenerStreaming;
-  window.operacionPrueba = async () => {
-    const dir = document.getElementById('prediccion-direccion').textContent;
-    const adxE = document.getElementById('adx-valor');
-    const adxActual = parseFloat(adxE?.textContent) || 0;
-    if (adxActual < 20) {
-      const continuar = confirm(`⚠️ ADX: ${adxActual.toFixed(1)} (<20). ¿Forzar orden?`);
-      if (!continuar) return;
-    }
-    if (!dir.includes('SUBIDA') && !dir.includes('BAJADA')) {
-      alert('⚠️ Sin señal clara de IA.');
-      return;
-    }
-    try {
-      if (dir.includes('SUBIDA')) await abrirPosicionReal('BUY');
-      else if (dir.includes('BAJADA')) await abrirPosicionReal('SELL');
-    } catch (err) {
-      alert(`❌ ${err.message}`);
-    }
-  };
+  window.operacionPrueba = operacionPrueba;
   window.cerrarPosicion = cerrarPosicion;
+  window.recargarTestnet = recargarTestnet;
+  window.ejecutarBacktesting = ejecutarBacktesting;
 
-  // Actualizaciones
-  setInterval(actualizarPosicionesAbiertas, 10000);
-  setInterval(actualizarCapitalTestnet, 60000);
-  fetchSymbolInfo(simboloActual).catch(console.warn);
+  // 3. Eventos
+  const btnReiniciar = document.getElementById('btn-reiniciar');
+  if (btnReiniciar) {
+    btnReiniciar.onclick = () => {
+      capitalActual = capitalInicial = 1000;
+      operaciones = [];
+      actualizarPanelFinanciero();
+      renderizarHistorial();
+      localStorage.removeItem('historialOperaciones');
+      localStorage.setItem('capitalActual', 1000);
+      localStorage.setItem('capitalInicial', 1000);
+    };
+  }
+  const btnExportar = document.getElementById('btn-exportar');
+  if (btnExportar) {
+    btnExportar.onclick = () => {
+      const csv = ['"Entrada","Salida","Ganancia"'].concat(
+        operaciones.map(o => `"${new Date(o.timestampEntrada).toISOString()}","${new Date(o.timestampSalida).toISOString()}","${o.ganancia.toFixed(2)}"`)
+      ).join('\n');
+      const a = document.createElement('a');
+      a.href = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
+      a.download = `trading_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+    };
+  }
 
-  // ✅ Listener TP/SL
+  // 4. Listener TP/SL
   const tpslModeSelect = document.getElementById('tpsl-mode');
   if (tpslModeSelect) {
     tpslModeSelect.addEventListener('change', function() {
@@ -799,4 +1223,9 @@ window.onload = () => {
       if (g2) g2.style.display = showManual ? 'block' : 'none';
     });
   }
-};
+
+  // 5. Actualizaciones periódicas
+  setInterval(actualizarPosicionesAbiertas, 10000);
+  setInterval(actualizarCapitalTestnet, 60000);
+  fetchSymbolInfo(simboloActual).catch(console.warn);
+});
