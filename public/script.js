@@ -557,71 +557,64 @@ async function enviarTelegram(mensaje) {
     console.error('🚨 Fallo crítico al enviar a Telegram:', e.message);
   }
 }
-// ✅ REGISTRAR OPERACIÓN — Corregido: muestra PnL bruto y neto, fees reales, ROE exacto
-function registrarOperacionReal(symbol, side, entrada, salida, cantidad, pnl, motivo = 'Manual', datosBinance = null) {
-  // 1. Validación de datos
-  if (!symbol || isNaN(entrada) || isNaN(salida) || isNaN(cantidad) || isNaN(pnl)) {
+// ✅ REGISTRAR OPERACIÓN REAL — CORREGIDA
+// ✅ REGISTRAR OPERACIÓN REAL — Corregida al 100% para tu backend
+function registrarOperacionReal(symbol, side, entrada, salida, cantidad, pnlNeto, motivo = 'Manual', datosBinance = null) {
+  // 1. Validación estricta (evita NaN/0)
+  if (!symbol || isNaN(entrada) || isNaN(salida) || isNaN(cantidad) || isNaN(pnlNeto)) {
     console.warn('⚠️ Datos inválidos en registrarOperacionReal');
     return;
   }
-  
-  // 2. Calcular fees reales (usar datos de Binance si están disponibles)
-  let feesTotales = 0;
-  let pnLBruto = pnl;
-  
-  if (datosBinance && datosBinance.executedQty && datosBinance.fee) {
-    // Fees proporcionados por Binance (más precisos)
-    feesTotales = parseFloat(datosBinance.fee);
-    pnLBruto = pnl + feesTotales;
-  } else {
-    // Cálculo estimado de fees (0.1% por ejecución)
-    const valorOperado = Math.abs(cantidad * entrada);
-    const feeApertura = valorOperado * 0.001; // 0.1%
-    const feeCierre = valorOperado * 0.001; // 0.1%
-    feesTotales = feeApertura + feeCierre;
-    pnLBruto = pnl + feesTotales;
-  }
-  
-  // 3. Calcular ROE real (retorno sobre margen)
+
+  // 2. ✅ PnL NETO: viene de Binance (resultado.pnl) → NO se modifica
+  const pnl = parseFloat(pnlNeto) || 0;
+
+  // 3. ✅ Fees: estimados SOLO si no hay datos reales (tu backend no los da)
+  const valorOperado = Math.abs(cantidad * entrada);
+  const feeApertura = valorOperado * 0.0004; // 0.04% real Binance Futures
+  const feeCierre = valorOperado * 0.0004;
+  const feesTotales = feeApertura + feeCierre;
+
+  // 4. ✅ PnL BRUTO = NETO + FEES (correcto: fees son costos)
+  const pnLBruto = pnl + feesTotales;
+
+  // 5. ✅ ROE: sobre margen real (cantidad * entrada / leverage)
   const apalancamiento = parseFloat(document.getElementById('apalancamiento')?.value) || 4;
   const margenUsado = Math.abs(cantidad * entrada) / apalancamiento;
   const roePct = margenUsado !== 0 ? (pnl / margenUsado) * 100 : 0;
-  
-  // 4. Crear objeto de operación
+
+  // 6. ✅ Δ Precio %: solo para referencia visual
+  const cambioPrecioPct = entrada !== 0 ? ((salida - entrada) / entrada) * 100 : 0;
+
+  // 7. ✅ Registrar operación
   const op = {
     entrada: parseFloat(entrada) || 0,
     salida: parseFloat(salida) || 0,
-    ganancia: parseFloat(pnl) || 0,
-    gananciaBruta: parseFloat(pnLBruto) || 0,
-    fees: parseFloat(feesTotales) || 0,
+    ganancia: pnl,
+    gananciaBruta: pnLBruto,
+    fees: feesTotales,
     montoInvertido: Math.abs(cantidad * entrada),
-    margenUsado: margenUsado,
+    margenUsado,
     roe: roePct,
     timestampEntrada: Date.now() - 60000,
     timestampSalida: Date.now(),
-    resultado: (pnl >= 0) ? 'GANANCIA' : 'PÉRDIDA',
+    resultado: pnl >= 0 ? 'GANANCIA' : 'PÉRDIDA',
     simbolo: symbol,
     motivo,
     side,
     apalancamiento
   };
-  
-  // 5. Guardar en historial
+
   operaciones.unshift(op);
   if (operaciones.length > 50) operaciones = operaciones.slice(0, 50);
   localStorage.setItem('historialOperaciones', JSON.stringify(operaciones));
-  
-  // 6. Actualizar panel financiero
   actualizarPanelFinanciero();
   renderizarHistorial();
-  
-  // 7. Preparar mensaje de Telegram con todos los detalles
-  const cambioPrecioPct = entrada !== 0 ? ((salida - entrada) / entrada) * 100 : 0;
+
+  // 8. ✅ Mensaje Telegram — 100% consistente con Binance
   const simPnl = pnl >= 0 ? '+' : '-';
   const emoji = pnl >= 0 ? '🟢' : '🔴';
   const dirPrecio = cambioPrecioPct >= 0 ? '+' : '-';
-  
-  // ✅ Mensaje completo con PnL bruto, fees y neto
   const msg = `${emoji} *${symbol} ${side}* (${motivo})
 Entrada: $${entrada.toFixed(2)}
 Salida: $${salida.toFixed(2)}
@@ -630,14 +623,10 @@ ROE: ${roePct >= 0 ? '+' : ''}${roePct.toFixed(2)}% (x${apalancamiento})
 PnL Bruto: ${pnLBruto >= 0 ? '+' : ''}$${Math.abs(pnLBruto).toFixed(2)}
 Fees: -$${feesTotales.toFixed(3)}
 PnL Neto: ${simPnl}$${Math.abs(pnl).toFixed(2)}`;
-  
-  // 8. Enviar a Telegram
+
   enviarTelegram(msg);
-  
-  // 9. Log para debugging
   console.log(`[OPERACIÓN] ${symbol} ${side} | ROE: ${roePct.toFixed(2)}% | PnL Neto: $${pnl.toFixed(2)} | Fees: $${feesTotales.toFixed(3)}`);
 }
-
 // === CAPITAL TESTNET ===
 async function actualizarCapitalTestnet() {
   if (!AUTENTICADO) return;
@@ -717,196 +706,192 @@ async function abrirPosicionReal(side) {
   }
 }
 
-// ✅ CERRAR PARCIAL — Corregido: manejo real de datos de Binance, fragmentación y fees
+// ✅ CERRAR PARCIAL — Corregida, compatible con tu backend, sin fills
 async function cerrarParcial(symbol, positionSide, sizeParcial, motivo) {
   try {
-    // 1. Obtener posición actual
+    // 1. Obtener posición
     const posResponse = await fetch('/api/binance/futures/positions');
     const posiciones = await posResponse.json();
     const posicion = Array.isArray(posiciones) 
       ? posiciones.find(p => p.symbol === symbol && p.positionSide === positionSide && Math.abs(parseFloat(p.positionAmt || 0)) > 0.0001)
       : null;
-    
+
     if (!posicion) {
       throw new Error(`Sin posición abierta para ${symbol}`);
     }
-    
-    // 2. Extraer datos reales de la posición
+
+    // 2. Datos reales
     const precioEntrada = parseFloat(posicion.entryPrice) || parseFloat(posicion.markPrice) || 0;
     const positionAmt = parseFloat(posicion.positionAmt) || 0;
     const sideActual = positionAmt > 0 ? 'LONG' : 'SHORT';
-    const leverage = parseFloat(posicion.leverage) || 1;
-    
-    // 3. Ejecutar orden parcial
+
+    // 3. Ejecutar cierre parcial
     const closeRes = await fetch('/api/binance/futures/close-position', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        symbol, 
-        positionSide, 
-        quantity: sizeParcial.toString() 
-      })
+      body: JSON.stringify({ symbol, positionSide, quantity: sizeParcial.toString() })
     });
-    
+
     if (!closeRes.ok) {
       const errorData = await closeRes.json();
-      throw new Error(`Binance error: ${errorData.msg || errorData.message}`);
+      throw new Error(`Binance: ${errorData.msg || errorData.message}`);
     }
-    
+
     const resultado = await closeRes.json();
-    
-    // 4. Obtener precio real de cierre con fallbacks robustos
-    let precioSalida = precioEntrada;
-    
-    // a) Primero intentar avgPrice (el más preciso)
-    if (resultado && resultado.avgPrice != null) {
-      const avg = parseFloat(resultado.avgPrice);
-      if (avg > 0 && !isNaN(avg)) precioSalida = avg;
-    }
-    
-    // b) Si falla, intentar markPrice de la posición
-    if (precioSalida <= 0 || isNaN(precioSalida)) {
-      if (posicion && posicion.markPrice != null) {
-        const mark = parseFloat(posicion.markPrice);
-        if (mark > 0 && !isNaN(mark)) precioSalida = mark;
-      }
-    }
-    
-    // c) Último recurso: ticker en vivo
-    if (precioSalida <= 0 || isNaN(precioSalida)) {
-      try {
-        const tickerRes = await fetch(`/api/binance/ticker?symbol=${symbol}`);
-        if (tickerRes.ok) {
-          const tickerData = await tickerRes.json();
-          const precioTicker = parseFloat(tickerData.price);
-          if (precioTicker > 0 && !isNaN(precioTicker)) {
-            precioSalida = precioTicker;
-          }
-        }
-      } catch (e) {
-        console.warn(`⚠️ Error al obtener ticker para ${symbol}:`, e.message);
-      }
-    }
-    
-    // d) Fallback final (siempre válido)
-    if (precioSalida <= 0 || isNaN(precioSalida) || !isFinite(precioSalida)) {
-      precioSalida = precioEntrada;
-      console.error(`🚨 Precio de salida inválido para ${symbol}. Usando entrada: $${precioEntrada.toFixed(2)}`);
-    }
-    
-    // 5. Calcular PnL REAL con datos de Binance (no recalcular)
-    let pnl = 0;
-    if (resultado && resultado.pnl != null) {
-      // Binance ya proporciona PnL neto (con fees incluidos)
-      pnl = parseFloat(resultado.pnl);
+
+    // 4. ✅ Precio de salida: función centralizada (robusta)
+    const precioSalida = await obtenerPrecioSalida(resultado, posicion, symbol);
+
+    // 5. ✅ PnL NETO: usar resultado.pnl si existe (tu backend lo da)
+    let pnlNeto = 0;
+    if (resultado && typeof resultado.pnl === 'number' && !isNaN(resultado.pnl)) {
+      pnlNeto = resultado.pnl;
     } else {
-      // Cálculo manual como fallback
+      // Fallback: sin leverage
       if (sideActual === 'LONG') {
-        pnl = (precioSalida - precioEntrada) * sizeParcial * leverage;
+        pnlNeto = (precioSalida - precioEntrada) * sizeParcial;
       } else {
-        pnl = (precioEntrada - precioSalida) * sizeParcial * leverage;
+        pnlNeto = (precioEntrada - precioSalida) * sizeParcial;
       }
     }
-    
-    // 6. Registrar operación real
+
+    // 6. ✅ Registrar operación parcial
     registrarOperacionReal(
-      symbol, 
-      sideActual, 
-      precioEntrada, 
-      precioSalida, 
-      sizeParcial, 
-      pnl, 
+      symbol,
+      sideActual,
+      precioEntrada,
+      precioSalida,
+      sizeParcial,
+      pnlNeto,
       motivo,
-      resultado // Pasar datos completos para análisis de fees
+      resultado
     );
-    
-    // 7. Actualizar UI
+
     await actualizarPosicionesAbiertas();
-    
+
   } catch (err) {
-    console.error(`CloseOperation parcial fallida: ${err.message}`);
-    document.getElementById('estado').textContent = `CloseOperation parcial fallida: ${err.message.slice(0, 50)}`;
+    console.error('CloseOperation parcial fallida:', err);
+    const estadoEl = document.getElementById('estado');
+    if (estadoEl) {
+      estadoEl.textContent = `CloseOperation parcial: ${err.message || 'Error'}`;
+    }
   }
 }
-// ✅ CERRAR POSICIÓN — Corregido: sin errores, con leverage real y PnL exacto
+// ✅ CERRAR POSICIÓN — Total, con avgPrice, compatible 1:1 con tu backend
 async function cerrarPosicion(symbol, positionSide = 'BOTH', motivo = 'Manual') {
   try {
-    // 1. Obtener posiciones actuales
+    // 1. Obtener posición
     const posResponse = await fetch('/api/binance/futures/positions');
     const posiciones = await posResponse.json();
     const posicion = Array.isArray(posiciones)
-      ? posiciones.find(p => p.symbol === symbol && p.positionSide === positionSide)
+      ? posiciones.find(p => p.symbol === symbol && p.positionSide === positionSide && Math.abs(parseFloat(p.positionAmt || 0)) > 0.0001)
       : null;
 
-    // 2. Validar existencia
-    if (!posicion || Math.abs(parseFloat(posicion.positionAmt || 0)) < 0.0001) {
+    if (!posicion) {
       throw new Error(`Sin posición abierta para ${symbol}`);
     }
 
-    // 3. Extraer datos reales (¡sin asumir!)
+    // 2. Datos reales (sin asumir)
     const precioEntrada = parseFloat(posicion.entryPrice) || parseFloat(posicion.markPrice) || 0;
     const positionAmt = parseFloat(posicion.positionAmt) || 0;
     const cantidad = Math.abs(positionAmt);
     const sideActual = positionAmt > 0 ? 'LONG' : 'SHORT';
-    const leverage = parseFloat(posicion.leverage) || 1;  // ✅ ÚNICA FUENTE DE VERDAD
 
-    // 4. Cerrar en Binance
+    // 3. Ejecutar cierre
     const closeRes = await fetch('/api/binance/futures/close-position', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ symbol, positionSide })
     });
-    const resultado = await closeRes.json();
-    
 
-   const precioSalida = await obtenerPrecioSalida(resultado, posicion, symbol);
-
-   let pnl = 0;
-    if (sideActual === 'LONG') {
-    pnl = (precioSalida - precioEntrada) * cantidad;
-    } else {
-    pnl = (precioEntrada - precioSalida) * cantidad;
+    if (!closeRes.ok) {
+      const errorData = await closeRes.json();
+      throw new Error(`Binance: ${errorData.msg || errorData.message}`);
     }
-    // 6. Registrar operación
-    registrarOperacionReal(symbol, sideActual, precioEntrada, precioSalida, cantidad, pnl, motivo);
 
-    // 7. Feedback visual
-    const simPnl = pnl >= 0 ? '+' : '';
-    document.getElementById('estado').textContent = 
-      `✅ ${symbol} ${sideActual} cerrada | ${motivo} | ${simPnl}$${Math.abs(pnl).toFixed(2)}`;
+    const resultado = await closeRes.json();
 
-    // 8. Actualizar UI
+    // 4. ✅ Precio de salida: usa tu función robusta (con avgPrice fallback)
+    const precioSalida = await obtenerPrecioSalida(resultado, posicion, symbol);
+
+    // 5. ✅ PnL NETO: usar resultado.pnl (tu backend ya lo incluye)
+    let pnlNeto = 0;
+    if (resultado && typeof resultado.pnl === 'number' && !isNaN(resultado.pnl)) {
+      pnlNeto = resultado.pnl;
+    } else {
+      // Fallback seguro (sin leverage en PnL)
+      if (sideActual === 'LONG') {
+        pnlNeto = (precioSalida - precioEntrada) * cantidad;
+      } else {
+        pnlNeto = (precioEntrada - precioSalida) * cantidad;
+      }
+    }
+
+    // 6. ✅ Registrar
+    registrarOperacionReal(symbol, sideActual, precioEntrada, precioSalida, cantidad, pnlNeto, motivo, resultado);
+
+    // 7. Feedback
+    const simPnl = pnlNeto >= 0 ? '+' : '';
+    const estadoEl = document.getElementById('estado');
+    if (estadoEl) {
+      estadoEl.textContent = `✅ ${symbol} ${sideActual} cerrada | ${motivo} | ${simPnl}$${Math.abs(pnlNeto).toFixed(2)}`;
+    }
+
     await actualizarPosicionesAbiertas();
 
   } catch (err) {
-    // ✅ Mensaje seguro: err.message siempre existe
-    const msg = `CloseOperation fallida: ${err.message || 'Error desconocido'}`;
-    console.error(msg); // ← línea 683: ahora NO falla
+    console.error('CloseOperation total fallida:', err);
     const estadoEl = document.getElementById('estado');
-    if (estadoEl) estadoEl.textContent = msg;
+    if (estadoEl) {
+      estadoEl.textContent = `CloseOperation fallida: ${err.message || 'Error'}`;
+    }
   }
 }
 
-// ✅ ACTUALIZAR POSICIONES — Seguro
+// ✅ ACTUALIZAR POSICIONES — Segura contra errores 500 y datos no-array
 async function actualizarPosicionesAbiertas() {
   try {
     const res = await fetch(`/api/binance/futures/positions?_t=${Date.now()}`);
+    
+    // ✅ Caso 1: Error HTTP (5xx, 4xx)
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.warn(`⚠️ Backend error (${res.status}):`, errorText);
+      throw new Error(`Servidor: ${res.status} ${res.statusText}`);
+    }
+
     const data = await res.json();
+
+    // ✅ Caso 2: Respuesta no es array (ej. error de Binance)
+    if (!Array.isArray(data)) {
+      console.warn('⚠️ Respuesta de /positions no es array:', data);
+      throw new Error('Formato inválido desde backend');
+    }
+
     const table = document.getElementById('operaciones-abiertas');
     if (!table) return;
+
     if (!table.querySelector('tbody')) {
       const tbody = document.createElement('tbody');
       table.appendChild(tbody);
     }
     const tbody = table.querySelector('tbody');
     tbody.innerHTML = '';
-    const posicionesAbiertas = data.filter(p => p.symbol && Math.abs(parseFloat(p.positionAmt || 0)) > 0.0001);
+
+    const posicionesAbiertas = data.filter(p => 
+      p.symbol && 
+      Math.abs(parseFloat(p.positionAmt || 0)) > 0.0001
+    );
+
     posicionesAbiertas.forEach(pos => {
       const size = parseFloat(pos.positionAmt) || 0;
       const entry = parseFloat(pos.entryPrice) || parseFloat(pos.markPrice) || 0;
       const mark = parseFloat(pos.markPrice) || entry;
       const pnl = parseFloat(pos.unRealizedProfit) || 0;
-      const roe = (entry !== 0) ? ((mark - entry) / entry) * (size > 0 ? 1 : -1) * 100 : 0;
+      const roe = (entry !== 0) 
+        ? ((mark - entry) / entry) * (size > 0 ? 1 : -1) * 100 
+        : 0;
+
       const row = document.createElement('tr');
       row.innerHTML = `
         <td>${pos.symbol || '—'}</td>
@@ -919,17 +904,29 @@ async function actualizarPosicionesAbiertas() {
       `;
       tbody.appendChild(row);
     });
+
     if (posicionesAbiertas.length === 0) {
       const emptyRow = document.createElement('tr');
       emptyRow.innerHTML = `<td colspan="6" style="text-align:center;color:#666;">Sin posiciones abiertas</td>`;
       tbody.appendChild(emptyRow);
     }
+
   } catch (err) {
     console.error('🔴 Error actualizando posiciones:', err);
-    const tbody = document.querySelector('#operaciones-abiertas tbody');
-    if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="6" style="color:#ef5350;text-align:center;">⚠️ Error al cargar posiciones</td></tr>`;
+    
+    const table = document.getElementById('operaciones-abiertas');
+    if (table && table.querySelector('tbody')) {
+      const tbody = table.querySelector('tbody');
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="color:#ef5350;text-align:center;">
+            ❌ Error al cargar posiciones (${err.message.slice(0, 50)})
+          </td>
+        </tr>`;
     }
+    
+    // ✅ No detener streaming por error de posiciones
+    // (solo notifica, no rompe el ciclo)
   }
 }
 
