@@ -240,6 +240,7 @@ app.get("/api/binance/futures/account", async (req, res) => {
 });
 
 // 📊 Posiciones
+// 📊 Posiciones — CORREGIDO: manejo de errores robusto
 app.get("/api/binance/futures/positions", async (req, res) => {
   if (!API_KEY || !API_SECRET) return res.status(500).json({ error: "Claves no configuradas" });
   try {
@@ -249,12 +250,29 @@ app.get("/api/binance/futures/positions", async (req, res) => {
     const signature = signParams(params);
     const url = `${BINANCE_FUTURES_URL}/fapi/v2/positionRisk?${new URLSearchParams(params)}&signature=${signature}`;
     const response = await fetch(url, { headers: { "X-MBX-APIKEY": API_KEY } });
-    const data = await response.json();
-    if (data.code) throw new Error(JSON.stringify(data));
-    res.json(data.filter(p => Math.abs(parseFloat(p.positionAmt)) > 0.0001));
+    
+    // ✅ Validar respuesta de Binance ANTES de parsear
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`Binance error ${response.status}: ${errorBody}`);
+    }
+    
+    const positions = await response.json();
+    if (positions.code) throw new Error(JSON.stringify(positions));
+    
+    // ✅ Filtrar solo posiciones con size > 0.0001 BTC
+    const filtered = positions.filter(p => 
+      p.symbol && 
+      Math.abs(parseFloat(p.positionAmt || 0)) > 0.0001
+    );
+    res.json(filtered);
   } catch (error) {
-    console.error("Error en /positions:", error.message);
-    res.status(500).json({ error: error.message });
+    console.error("🔴 Error en /positions:", error.message || error);
+    // ✅ Responder con error amigable para el frontend
+    res.status(500).json({ 
+      error: "Error temporal de Binance", 
+      details: error.message?.slice(0, 100) || "Sin detalles"
+    });
   }
 });
 
@@ -277,9 +295,7 @@ app.post("/api/binance/futures/order", async (req, res) => {
     const response = await fetch(orderUrl, { method: "POST", headers: { "X-MBX-APIKEY": API_KEY } });
     const result = await response.json();
     if (result.code) throw new Error(JSON.stringify(result));
-  // Enviar alerta por Telegram
     const mensajeApertura = `🟢 Nueva posición\nSímbolo: ${symbol}\nLado: ${side}\nCantidad: ${quantity}`;
-    enviarMensajeTelegram(mensajeApertura);
           
     res.json(result);
   } catch (error) {
@@ -317,13 +333,11 @@ app.post("/api/binance/futures/close-position", async (req, res) => {
     result.avgPriceReal = parseFloat(result.avgPrice) || parseFloat(pos.markPrice);
     result.pnlReal = parseFloat(result.cumQuote) || 0;
 
-    // ✅ Enviar alerta por Telegram con datos reales
     const pnlReal = result.pnlReal;
     const emoji = pnlReal >= 0 ? '✅' : '❌';
     const ganancia = Math.abs(pnlReal).toFixed(2);
     const tipo = pnlReal >= 0 ? 'Ganancia' : 'Pérdida';
     const mensajeCierre = `${emoji} Posición cerrada\nSímbolo: ${symbol}\nPnL: ${pnlReal >= 0 ? '+' : ''}${ganancia} USDT\n(${tipo})`;
-    enviarMensajeTelegram(mensajeCierre);
 
     res.json(result);
   } catch (error) {
@@ -334,34 +348,6 @@ app.post("/api/binance/futures/close-position", async (req, res) => {
 
 app.get("/favicon.ico", (req, res) => res.status(204).end());
 
-// === ALERTAS POR TELEGRAM ===
-async function enviarMensajeTelegram(mensaje) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
-  
-  if (!token || !chatId) {
-    console.warn("⚠️ Telegram no configurado");
-    return;
-  }
-
-  const url = `https://api.telegram.org/bot${token}/sendMessage`;
-  const data = {
-    chat_id: chatId,
-    text: mensaje,
-    parse_mode: "HTML"
-  };
-
-  try {
-    await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    console.log("✅ Alerta enviada a Telegram");
-  } catch (err) {
-    console.error("❌ Error al enviar alerta:", err.message);
-  }
-}
 
 app.listen(PORT, () => {
   console.log(`✅ Servidor en http://localhost:${PORT}`);
