@@ -14,9 +14,7 @@ const PORT = process.env.PORT || 8080;
 //---- Modificacion en la nube
 //---- Modificacion en la nube
 // 🔑 URL CORREGIDA: solo Futures Testnet (sin espacios)
-const BINANCE_FUTURES_URL ="https://testnet.binancefuture.com";
-
-const BINANCE_MAINNET_URL ="https://fapi.binance.com";           // Solo para klines/ticker (backtesting)
+const BINANCE_FUTURES_URL = "https://testnet.binancefuture.com";
 
 // 🔒 Claves API
 const API_KEY = process.env.BINANCE_API_KEY;
@@ -41,36 +39,148 @@ async function getServerTime() {
   return data.serverTime;
 }
 
-// 📈 Klines → ahora usa MAINNET (pública, sin claves, estable)
+// 📈 Klines desde FUTURES Testnet
 app.get("/api/binance/klines", async (req, res) => {
   const { symbol = "BTCUSDT", interval = "1m", limit = 100 } = req.query;
-  const url = `${BINANCE_MAINNET_URL}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  const url = `${BINANCE_FUTURES_URL}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
   try {
     const response = await fetch(url);
     const data = await response.json();
     res.json(data);
   } catch (err) {
-    console.error("Error en /klines (Mainnet):", err.message);
-    res.status(500).json({ error: "Error al obtener klines desde Mainnet" });
+    console.error("Error en /klines:", err.message);
+    res.status(500).json({ error: "Error al obtener klines" });
   }
 });
 
-// 💰 Ticker → ahora usa MAINNET (pública, sin claves, estable)
+// 💰 Precio actual
 app.get("/api/binance/ticker", async (req, res) => {
   const { symbol = "BTCUSDT" } = req.query;
-  const url = `${BINANCE_MAINNET_URL}/fapi/v1/ticker/price?symbol=${symbol}`;
+  const url = `${BINANCE_FUTURES_URL}/fapi/v1/ticker/price?symbol=${symbol}`;
   try {
     const response = await fetch(url);
     const data = await response.json();
     res.json(data);
   } catch (err) {
-    console.error("Error en /ticker (Mainnet):", err.message);
-    res.status(500).json({ error: "Error al obtener precio desde Mainnet" });
+    console.error("Error en /ticker:", err.message);
+    res.status(500).json({ error: "Error al obtener precio" });
   }
 });
+// 📉 Datos históricos para backtesting
+// 🧪 Backtesting con IA real
+app.post("/api/backtest", async (req, res) => {
+  const { symbol = "BTCUSDT", interval = "15m", days = 30, takeProfit = 5, stopLoss = 3 } = req.body;
+  
+  try {
+    // Obtener datos históricos
+    const limit = Math.min(1500, days * (interval === '1m' ? 1440 : interval === '5m' ? 288 : interval === '15m' ? 96 : 24));
+    const url = `${BINANCE_FUTURES_URL}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+    const response = await fetch(url);
+    const klinesRaw = await response.json();
+    const klines = klinesRaw.map(k => ({
+      time: Math.floor(k[0] / 1000),
+      open: parseFloat(k[1]),
+      high: parseFloat(k[2]),
+      low: parseFloat(k[3]),
+      close: parseFloat(k[4]),
+      volume: parseFloat(k[5])
+    }));
 
+    // Entrenar modelo
+    const modelo = await entrenarModelo(klines, 0, 0); // fundingRate y openInterest fijos por ahora
 
+    // Simular trading
+    let operaciones = [];
+    let capital = 1000;
+    let posicionAbierta = null;
+    let maxEquity = capital;
+    let drawdownMax = 0;
 
+    for (let i = 30; i < klines.length; i++) {
+      const closes = klines.slice(0, i).map(k => k.close);
+      const ultimos10Precios = closes.slice(-10);
+      const ultimos10Volumenes = klines.slice(i - 10, i).map(k => k.volume);
+      const rsi = calcularRSI(closes, 14);
+      const ema = calcularEMA(closes, 20);
+      const { macdLine, signalLine } = calcularMACD(closes, 12, 26, 9);
+      const { media: bbMedia, superior: bbSuperior, inferior: bbInferior } = calcularBandasBollinger(closes, 20, 2);
+      const atr = calcularATR(klines.slice(0, i), 14);
+      const obv = calcularOBV(klines.slice(0, i));
+
+      const rsiActual = rsi[rsi.length - 1] || 50;
+      const emaActual = ema[ema.length - 1] || closes[closes.length - 1];
+      const macdActual = macdLine[macdLine.length - 1] || 0;
+      const signalActual = signalLine[signalLine.length - 1] || 0;
+      const bbMedio = bbMedia[bbMedia.length - 1] || closes[closes.length - 1];
+      const bbSup = bbSuperior[bbSuperior.length - 1] || closes[closes.length - 1];
+      const bbInf = bbInferior[bbInferior.length - 1] || closes[closes.length - 1];
+      const anchoBB = bbSup - bbInf;
+      const posicionBB = anchoBB > 0 ? (closes[closes.length - 1] - bbInf) / anchoBB : 0.5;
+      const atrActual = atr[atr.length - 1] || 0;
+      const obvActual = obv[obv.length - 1] || 0;
+
+      const prediccionRaw = await predecirConModelo(
+        modelo,
+        ultimos10Precios,
+        ultimos10Volumenes,
+        rsiActual,
+        emaActual,
+        macdActual,
+        signalActual,
+        posicionBB,
+        anchoBB,
+        atrActual,
+        obvActual,
+        klines[i].close,
+        0,
+        0
+      );
+
+      const confianza = prediccionRaw > 0.5 ? prediccionRaw : 1 - prediccionRaw;
+      const direccion = prediccionRaw > 0.5 ? 'SUBIDA' : 'BAJADA';
+      const precioActual = klines[i].close;
+      const leverage = 10;
+
+      if (posicionAbierta) {
+        const roePct = ((precioActual - posicionAbierta.precioEntrada) / posicionAbierta.precioEntrada) * leverage * (posicionAbierta.esLong ? 1 : -1) * 100;
+        if (roePct >= takeProfit || roePct <= -stopLoss) {
+          const ganancia = ((precioActual - posicionAbierta.precioEntrada) / posicionAbierta.precioEntrada) * posicionAbierta.montoInvertido * leverage;
+          operaciones.push({ ganancia, resultado: ganancia >= 0 ? 'GANANCIA' : 'PÉRDIDA' });
+          capital += ganancia;
+          posicionAbierta = null;
+        }
+      } else if (confianza > 0.55) {
+        const montoInvertido = capital * 0.1;
+        const esLong = direccion === 'SUBIDA';
+        posicionAbierta = { precioEntrada: precioActual, montoInvertido, esLong };
+      }
+
+      if (capital > maxEquity) maxEquity = capital;
+      const drawdown = ((maxEquity - capital) / maxEquity) * 100;
+      if (drawdown > drawdownMax) drawdownMax = drawdown;
+    }
+
+    // Calcular métricas
+    const ganancias = operaciones.filter(o => o.ganancia > 0).length;
+    const winRate = operaciones.length > 0 ? (ganancias / operaciones.length) * 100 : 0;
+    const gananciasTotales = operaciones.filter(o => o.ganancia > 0).reduce((sum, o) => sum + o.ganancia, 0);
+    const perdidasTotales = Math.abs(operaciones.filter(o => o.ganancia < 0).reduce((sum, o) => sum + o.ganancia, 0));
+    const profitFactor = perdidasTotales > 0 ? gananciasTotales / perdidasTotales : gananciasTotales;
+    const roeTotal = ((capital - 1000) / 1000) * 100;
+
+    res.json({
+      operaciones: operaciones.length,
+      winRate,
+      profitFactor,
+      maxDrawdown: drawdownMax,
+      roeTotal
+    });
+
+  } catch (error) {
+    console.error("Error en backtesting:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
 // 💸 Funding Rate (desde premiumIndex)
 app.get("/api/binance/futures/funding", async (req, res) => {
   const { symbol = "BTCUSDT" } = req.query;
@@ -255,5 +365,5 @@ async function enviarMensajeTelegram(mensaje) {
 
 app.listen(PORT, () => {
   console.log(`✅ Servidor en http://localhost:${PORT}`);
-  console.log("🧪 Conectado a Binance Futures TESTNET Y MAIN");
+  console.log("🧪 Conectado a Binance Futures TESTNET");
 });
