@@ -162,63 +162,55 @@ function calcularOBV(klines) {
 }
 
 function calcularADX(klines, period = 14) {
-  if (!Array.isArray(klines) || klines.length < period * 2) {
-    console.warn('⚠️ calcularADX: datos insuficientes o formato inválido');
-    return [];
+  if (!Array.isArray(klines) || klines.length < period + 10) return [];
+  const highs = klines.map(k => k.high);
+  const lows  = klines.map(k => k.low);
+  const closes = klines.map(k => k.close);
+  const n = highs.length;
+  const tr = new Array(n).fill(0);
+  const plusDM = new Array(n).fill(0);
+  const minusDM = new Array(n).fill(0);
+  for (let i = 1; i < n; i++) {
+    const upMove = highs[i] - highs[i - 1];
+    const downMove = lows[i - 1] - lows[i];
+    plusDM[i] = upMove > downMove && upMove > 0 ? upMove : 0;
+    minusDM[i] = downMove > upMove && downMove > 0 ? downMove : 0;
+    const hl = highs[i] - lows[i];
+    const hc = Math.abs(highs[i] - closes[i - 1]);
+    const lc = Math.abs(lows[i] - closes[i - 1]);
+    tr[i] = Math.max(hl, hc, lc);
   }
-  try {
-    const highs = klines.map(k => k.high != null ? parseFloat(k.high) : parseFloat(k[2]));
-    const lows = klines.map(k => k.low != null ? parseFloat(k.low) : parseFloat(k[3]));
-    const closes = klines.map(k => k.close != null ? parseFloat(k.close) : parseFloat(k[4]));
-    const n = highs.length;
-    if (n < period * 2) return [];
-    const tr = new Array(n).fill(0);
-    const plusDM = new Array(n).fill(0);
-    const minusDM = new Array(n).fill(0);
-    for (let i = 1; i < n; i++) {
-      const upMove = highs[i] - highs[i - 1];
-      const downMove = lows[i - 1] - lows[i];
-      plusDM[i] = upMove > downMove && upMove > 0 ? upMove : 0;
-      minusDM[i] = downMove > upMove && downMove > 0 ? downMove : 0;
-      const hl = highs[i] - lows[i];
-      const hc = Math.abs(highs[i] - closes[i - 1]);
-      const lc = Math.abs(lows[i] - closes[i - 1]);
-      tr[i] = Math.max(hl, hc, lc);
-    }
-    let trSmooth = tr.slice(1, period + 1).reduce((a, b) => a + b, 0);
-    let plusDMSmooth = plusDM.slice(1, period + 1).reduce((a, b) => a + b, 0);
-    let minusDMSmooth = minusDM.slice(1, period + 1).reduce((a, b) => a + b, 0);
-    const plusDI = [], minusDI = [], dx = [];
-    const firstPlusDI = (plusDMSmooth / trSmooth) * 100;
-    const firstMinusDI = (minusDMSmooth / trSmooth) * 100;
-    plusDI[period] = isNaN(firstPlusDI) ? 0 : firstPlusDI;
-    minusDI[period] = isNaN(firstMinusDI) ? 0 : firstMinusDI;
-    const firstDX = Math.abs(plusDI[period] - minusDI[period]) / (plusDI[period] + minusDI[period]) * 100;
-    dx[period] = isNaN(firstDX) ? 0 : firstDX;
-    for (let i = period + 1; i < n; i++) {
-      trSmooth = trSmooth - trSmooth / period + tr[i];
-      plusDMSmooth = plusDMSmooth - plusDMSmooth / period + plusDM[i];
-      minusDMSmooth = minusDMSmooth - minusDMSmooth / period + minusDM[i];
-      const pdi = (plusDMSmooth / trSmooth) * 100;
-      const mdi = (minusDMSmooth / trSmooth) * 100;
-      plusDI[i] = isNaN(pdi) ? 0 : pdi;
-      minusDI[i] = isNaN(mdi) ? 0 : mdi;
-      const currentDX = (pdi + mdi) !== 0 ? (Math.abs(pdi - mdi) / (pdi + mdi)) * 100 : 0;
-      dx[i] = isNaN(currentDX) ? 0 : currentDX;
-    }
-    const adx = new Array(n).fill(0);
-    let dxSum = dx.slice(period, period * 2).reduce((a, b) => a + b, 0);
-    adx[period * 2 - 1] = dxSum / period;
-    for (let i = period * 2; i < n; i++) {
-      dxSum = dxSum - dxSum / period + dx[i];
-      adx[i] = dxSum / period;
-    }
-    return adx.slice(period * 2 - 1).map(val => Math.max(0, parseFloat(val.toFixed(2))));
-  } catch (e) {
-    console.error('❌ Error en calcularADX:', e.message);
-    return [];
+  let trSmooth = tr.slice(1, period + 1).reduce((a, b) => a + b, 0);
+  let plusDMSmooth = plusDM.slice(1, period + 1).reduce((a, b) => a + b, 0);
+  let minusDMSmooth = minusDM.slice(1, period + 1).reduce((a, b) => a + b, 0);
+  const plusDI = [], minusDI = [], dx = [];
+  const firstPlusDI = (plusDMSmooth / trSmooth) * 100;
+  const firstMinusDI = (minusDMSmooth / trSmooth) * 100;
+  plusDI[period] = isNaN(firstPlusDI) ? 0 : firstPlusDI;
+  minusDI[period] = isNaN(firstMinusDI) ? 0 : firstMinusDI;
+  const firstDX = Math.abs(plusDI[period] - minusDI[period]) / (plusDI[period] + minusDI[period]) * 100;
+  dx[period] = isNaN(firstDX) ? 0 : firstDX;
+  for (let i = period + 1; i < n; i++) {
+    trSmooth = trSmooth - trSmooth / period + tr[i];
+    plusDMSmooth = plusDMSmooth - plusDMSmooth / period + plusDM[i];
+    minusDMSmooth = minusDMSmooth - minusDMSmooth / period + minusDM[i];
+    const pdi = (plusDMSmooth / trSmooth) * 100;
+    const mdi = (minusDMSmooth / trSmooth) * 100;
+    plusDI[i] = isNaN(pdi) ? 0 : pdi;
+    minusDI[i] = isNaN(mdi) ? 0 : mdi;
+    const currentDX = (pdi + mdi) !== 0 ? (Math.abs(pdi - mdi) / (pdi + mdi)) * 100 : 0;
+    dx[i] = isNaN(currentDX) ? 0 : currentDX;
   }
+  const adx = new Array(n).fill(0);
+  let dxSum = dx.slice(period, period * 2).reduce((a, b) => a + b, 0);
+  adx[period * 2 - 1] = dxSum / period;
+  for (let i = period * 2; i < n; i++) {
+    dxSum = dxSum - dxSum / period + dx[i];
+    adx[i] = dxSum / period;
+  }
+  return adx.slice(period * 2 - 1).map(val => Math.max(0, parseFloat(val.toFixed(2))));
 }
+
 // === GRÁFICOS ===
 function initChart() {
   const chartContainer = document.getElementById('chart');
