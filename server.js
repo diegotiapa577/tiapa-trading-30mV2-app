@@ -1,20 +1,23 @@
 // ✅ Open Interest activo - 2025-04-05
 // server.js
+//npm install axios
 import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
 import crypto from "crypto";
 import dotenv from "dotenv";
 import { entrenarModelo, predecirConModelo } from './ia-backend.js';
+import axios from "axios"; // ← IMPORTADO
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-//---- Modificacion en la nube
-//---- Modificacion en la nube
+
 // 🔑 URL CORREGIDA: solo Futures Testnet (sin espacios)
 const BINANCE_FUTURES_URL = "https://testnet.binancefuture.com";
+
+const BINANCE_MAINNET_URL = "https://fapi.binance.com"; // Solo para klines/ticker (backtesting)
 
 // 🔒 Claves API
 const API_KEY = process.env.BINANCE_API_KEY;
@@ -39,148 +42,34 @@ async function getServerTime() {
   return data.serverTime;
 }
 
-// 📈 Klines desde FUTURES Testnet
+// 📈 Klines → ahora usa MAINNET (pública, sin claves, estable)
 app.get("/api/binance/klines", async (req, res) => {
   const { symbol = "BTCUSDT", interval = "1m", limit = 100 } = req.query;
-  const url = `${BINANCE_FUTURES_URL}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  const url = `${BINANCE_MAINNET_URL}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
   try {
     const response = await fetch(url);
     const data = await response.json();
     res.json(data);
   } catch (err) {
-    console.error("Error en /klines:", err.message);
-    res.status(500).json({ error: "Error al obtener klines" });
+    console.error("Error en /klines (Mainnet):", err.message);
+    res.status(500).json({ error: "Error al obtener klines desde Mainnet" });
   }
 });
 
-// 💰 Precio actual
+// 💰 Ticker → ahora usa MAINNET (pública, sin claves, estable)
 app.get("/api/binance/ticker", async (req, res) => {
   const { symbol = "BTCUSDT" } = req.query;
-  const url = `${BINANCE_FUTURES_URL}/fapi/v1/ticker/price?symbol=${symbol}`;
+  const url = `${BINANCE_MAINNET_URL}/fapi/v1/ticker/price?symbol=${symbol}`;
   try {
     const response = await fetch(url);
     const data = await response.json();
     res.json(data);
   } catch (err) {
-    console.error("Error en /ticker:", err.message);
-    res.status(500).json({ error: "Error al obtener precio" });
+    console.error("Error en /ticker (Mainnet):", err.message);
+    res.status(500).json({ error: "Error al obtener precio desde Mainnet" });
   }
 });
-// 📉 Datos históricos para backtesting
-// 🧪 Backtesting con IA real
-app.post("/api/backtest", async (req, res) => {
-  const { symbol = "BTCUSDT", interval = "15m", days = 30, takeProfit = 5, stopLoss = 3 } = req.body;
-  
-  try {
-    // Obtener datos históricos
-    const limit = Math.min(1500, days * (interval === '1m' ? 1440 : interval === '5m' ? 288 : interval === '15m' ? 96 : 24));
-    const url = `${BINANCE_FUTURES_URL}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-    const response = await fetch(url);
-    const klinesRaw = await response.json();
-    const klines = klinesRaw.map(k => ({
-      time: Math.floor(k[0] / 1000),
-      open: parseFloat(k[1]),
-      high: parseFloat(k[2]),
-      low: parseFloat(k[3]),
-      close: parseFloat(k[4]),
-      volume: parseFloat(k[5])
-    }));
 
-    // Entrenar modelo
-    const modelo = await entrenarModelo(klines, 0, 0); // fundingRate y openInterest fijos por ahora
-
-    // Simular trading
-    let operaciones = [];
-    let capital = 1000;
-    let posicionAbierta = null;
-    let maxEquity = capital;
-    let drawdownMax = 0;
-
-    for (let i = 30; i < klines.length; i++) {
-      const closes = klines.slice(0, i).map(k => k.close);
-      const ultimos10Precios = closes.slice(-10);
-      const ultimos10Volumenes = klines.slice(i - 10, i).map(k => k.volume);
-      const rsi = calcularRSI(closes, 14);
-      const ema = calcularEMA(closes, 20);
-      const { macdLine, signalLine } = calcularMACD(closes, 12, 26, 9);
-      const { media: bbMedia, superior: bbSuperior, inferior: bbInferior } = calcularBandasBollinger(closes, 20, 2);
-      const atr = calcularATR(klines.slice(0, i), 14);
-      const obv = calcularOBV(klines.slice(0, i));
-
-      const rsiActual = rsi[rsi.length - 1] || 50;
-      const emaActual = ema[ema.length - 1] || closes[closes.length - 1];
-      const macdActual = macdLine[macdLine.length - 1] || 0;
-      const signalActual = signalLine[signalLine.length - 1] || 0;
-      const bbMedio = bbMedia[bbMedia.length - 1] || closes[closes.length - 1];
-      const bbSup = bbSuperior[bbSuperior.length - 1] || closes[closes.length - 1];
-      const bbInf = bbInferior[bbInferior.length - 1] || closes[closes.length - 1];
-      const anchoBB = bbSup - bbInf;
-      const posicionBB = anchoBB > 0 ? (closes[closes.length - 1] - bbInf) / anchoBB : 0.5;
-      const atrActual = atr[atr.length - 1] || 0;
-      const obvActual = obv[obv.length - 1] || 0;
-
-      const prediccionRaw = await predecirConModelo(
-        modelo,
-        ultimos10Precios,
-        ultimos10Volumenes,
-        rsiActual,
-        emaActual,
-        macdActual,
-        signalActual,
-        posicionBB,
-        anchoBB,
-        atrActual,
-        obvActual,
-        klines[i].close,
-        0,
-        0
-      );
-
-      const confianza = prediccionRaw > 0.5 ? prediccionRaw : 1 - prediccionRaw;
-      const direccion = prediccionRaw > 0.5 ? 'SUBIDA' : 'BAJADA';
-      const precioActual = klines[i].close;
-      const leverage = 10;
-
-      if (posicionAbierta) {
-        const roePct = ((precioActual - posicionAbierta.precioEntrada) / posicionAbierta.precioEntrada) * leverage * (posicionAbierta.esLong ? 1 : -1) * 100;
-        if (roePct >= takeProfit || roePct <= -stopLoss) {
-          const ganancia = ((precioActual - posicionAbierta.precioEntrada) / posicionAbierta.precioEntrada) * posicionAbierta.montoInvertido * leverage;
-          operaciones.push({ ganancia, resultado: ganancia >= 0 ? 'GANANCIA' : 'PÉRDIDA' });
-          capital += ganancia;
-          posicionAbierta = null;
-        }
-      } else if (confianza > 0.55) {
-        const montoInvertido = capital * 0.1;
-        const esLong = direccion === 'SUBIDA';
-        posicionAbierta = { precioEntrada: precioActual, montoInvertido, esLong };
-      }
-
-      if (capital > maxEquity) maxEquity = capital;
-      const drawdown = ((maxEquity - capital) / maxEquity) * 100;
-      if (drawdown > drawdownMax) drawdownMax = drawdown;
-    }
-
-    // Calcular métricas
-    const ganancias = operaciones.filter(o => o.ganancia > 0).length;
-    const winRate = operaciones.length > 0 ? (ganancias / operaciones.length) * 100 : 0;
-    const gananciasTotales = operaciones.filter(o => o.ganancia > 0).reduce((sum, o) => sum + o.ganancia, 0);
-    const perdidasTotales = Math.abs(operaciones.filter(o => o.ganancia < 0).reduce((sum, o) => sum + o.ganancia, 0));
-    const profitFactor = perdidasTotales > 0 ? gananciasTotales / perdidasTotales : gananciasTotales;
-    const roeTotal = ((capital - 1000) / 1000) * 100;
-
-    res.json({
-      operaciones: operaciones.length,
-      winRate,
-      profitFactor,
-      maxDrawdown: drawdownMax,
-      roeTotal
-    });
-
-  } catch (error) {
-    console.error("Error en backtesting:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
 // 💸 Funding Rate (desde premiumIndex)
 app.get("/api/binance/futures/funding", async (req, res) => {
   const { symbol = "BTCUSDT" } = req.query;
@@ -258,80 +147,150 @@ app.get("/api/binance/futures/positions", async (req, res) => {
   }
 });
 
-// 🚀 Abrir orden
-app.post("/api/binance/futures/order", async (req, res) => {
-  if (!API_KEY || !API_SECRET) return res.status(500).json({ error: "Claves no configuradas" });
-  const { symbol, side, quantity, leverage, positionSide = "BOTH" } = req.body;
-  if (!symbol || !side || !quantity || !leverage)
-    return res.status(400).json({ error: "Faltan parámetros" });
+// 🚀 Abrir orden — ✅ CORREGIDO
+app.post('/api/binance/futures/order', async (req, res) => {
+  const { symbol, side, quantity } = req.body; // leverage NO va aquí
+
+  if (!symbol || !side || !quantity) {
+    return res.status(400).json({ msg: 'Faltan parámetros: symbol, side, quantity' });
+  }
+
   try {
-    const timestamp = await getServerTime();
-    const recvWindow = 60000;
-    const levParams = { symbol, leverage, timestamp, recvWindow };
-    const levSignature = signParams(levParams);
-    const levUrl = `${BINANCE_FUTURES_URL}/fapi/v1/leverage?${new URLSearchParams(levParams)}&signature=${levSignature}`;
-    await fetch(levUrl, { method: "POST", headers: { "X-MBX-APIKEY": API_KEY } });
-    const orderParams = { symbol, side, type: "MARKET", quantity, positionSide, timestamp, recvWindow };
-    const orderSig = signParams(orderParams);
-    const orderUrl = `${BINANCE_FUTURES_URL}/fapi/v1/order?${new URLSearchParams(orderParams)}&signature=${orderSig}`;
-    const response = await fetch(orderUrl, { method: "POST", headers: { "X-MBX-APIKEY": API_KEY } });
-    const result = await response.json();
-    if (result.code) throw new Error(JSON.stringify(result));
-  // Enviar alerta por Telegram
-    const mensajeApertura = `🟢 Nueva posición\nSímbolo: ${symbol}\nLado: ${side}\nCantidad: ${quantity}`;
-    enviarMensajeTelegram(mensajeApertura);
-          
-    res.json(result);
-  } catch (error) {
-    console.error("Error en /order:", error.message);
-    res.status(500).json({ error: error.message });
+    // ✅ 1. Ajustar precisión (tu lógica ya es buena)
+    const exchangeInfo = await axios.get(`${BINANCE_FUTURES_URL}/fapi/v1/exchangeInfo`);
+    const sym = exchangeInfo.data.symbols.find(s => s.symbol === symbol);
+    if (!sym) return res.status(400).json({ msg: 'Símbolo no encontrado' });
+
+    const lotSizeFilter = sym.filters.find(f => f.filterType === 'LOT_SIZE');
+    if (!lotSizeFilter) return res.status(400).json({ msg: 'Filtro LOT_SIZE no encontrado' });
+
+    const stepSize = parseFloat(lotSizeFilter.stepSize);
+    const qty = parseFloat(quantity);
+    const roundedQty = Math.round(qty / stepSize) * stepSize;
+    const formattedQty = roundedQty.toFixed(Math.max(0, Math.ceil(-Math.log10(stepSize))));
+
+    // ✅ 2. Parámetros firmados: SOLO los que Binance acepta en /order + timestamp [+ recvWindow opcional]
+    const timestamp = Date.now();
+    const recvWindow = 5000; // más seguro: 5000 ms en lugar de 60000 para testnet
+
+    // ⚠️ Ordenar alfabéticamente: recvWindow, quantity, side, symbol, timestamp, type
+    const params = {
+      recvWindow,
+      quantity: formattedQty,
+      side,
+      symbol,
+      timestamp,
+      type: 'MARKET'
+    };
+
+    // ✅ Firmar con parámetros ordenados explícitamente
+    const sortedKeys = Object.keys(params).sort();
+    const queryString = sortedKeys.map(key => `${key}=${params[key]}`).join('&');
+    const signature = crypto.createHmac('sha256', API_SECRET).update(queryString).digest('hex');
+
+    // ✅ URL final
+    const url = `${BINANCE_FUTURES_URL}/fapi/v1/order?${queryString}&signature=${signature}`;
+
+    // ✅ POST sin cuerpo
+    const orderRes = await axios.post(url, null, {
+      headers: { 'X-MBX-APIKEY': API_KEY }
+    });
+
+    res.json(orderRes.data);
+  } catch (err) {
+    console.error('❌ Error en /order (CORREGIDO):', err.response?.data || err.message || err);
+    res.status(500).json({
+      msg: 'Error al abrir orden',
+      code: err.response?.data?.code,
+      details: err.response?.data?.msg || err.message
+    });
   }
 });
 
-// 🔻 Cerrar posición
+// 🔻 Cerrar posición — ✅ CORREGIDO
 app.post("/api/binance/futures/close-position", async (req, res) => {
   if (!API_KEY || !API_SECRET) return res.status(500).json({ error: "Claves no configuradas" });
-  const { symbol, positionSide = "BOTH" } = req.body;
+  const { symbol } = req.body;
   if (!symbol) return res.status(400).json({ error: "Falta symbol" });
+
   try {
-    const timestamp = await getServerTime();
-    const recvWindow = 60000;
-    const params = { timestamp, recvWindow };
-    const sig = signParams(params);
-    const url = `${BINANCE_FUTURES_URL}/fapi/v2/positionRisk?${new URLSearchParams(params)}&signature=${sig}`;
-    const posRes = await fetch(url, { headers: { "X-MBX-APIKEY": API_KEY } });
-    const positions = await posRes.json();
-    const pos = positions.find(p => p.symbol === symbol && p.positionSide === positionSide);
-    if (!pos || Math.abs(parseFloat(pos.positionAmt)) < 0.0001)
-      return res.status(400).json({ error: "No hay posición abierta" });
+    const recvWindow = 5000;
+
+    // ✅ 1. Obtener posición actual (con timestamp fresco)
+    const timestamp1 = Date.now();
+    const posParams = { timestamp: timestamp1, recvWindow };
+    const posSig = signParams(posParams);
+    const posUrl = `${BINANCE_FUTURES_URL}/fapi/v2/positionRisk?${new URLSearchParams(posParams)}&signature=${posSig}`;
+    
+    const posRes = await axios.get(posUrl, { headers: { "X-MBX-APIKEY": API_KEY } });
+    const positions = posRes.data;
+    const pos = positions.find(p => p.symbol === symbol && Math.abs(parseFloat(p.positionAmt)) > 0.0001);
+    if (!pos) return res.status(400).json({ error: "No hay posición abierta" });
+
+    // ✅ 2. Obtener stepSize para formatear quantity correctamente
+    const infoRes = await axios.get(`${BINANCE_FUTURES_URL}/fapi/v1/exchangeInfo`);
+    const symInfo = infoRes.data.symbols.find(s => s.symbol === symbol);
+    if (!symInfo) return res.status(400).json({ error: "Símbolo no válido" });
+
+    const lotFilter = symInfo.filters.find(f => f.filterType === 'LOT_SIZE');
+    const stepSize = parseFloat(lotFilter.stepSize);
+    const rawQty = Math.abs(parseFloat(pos.positionAmt));
+    const roundedQty = Math.round(rawQty / stepSize) * stepSize;
+    const formattedQty = roundedQty.toFixed(Math.max(0, -Math.floor(Math.log10(stepSize))));
+
+    // ✅ 3. Preparar orden de cierre (sin positionSide si no es hedge mode)
     const side = parseFloat(pos.positionAmt) > 0 ? "SELL" : "BUY";
-    const quantity = Math.abs(parseFloat(pos.positionAmt)).toFixed(3);
-    const closeParams = { symbol, side, type: "MARKET", quantity, positionSide, timestamp, recvWindow };
-    const closeSig = signParams(closeParams);
-    const closeUrl = `${BINANCE_FUTURES_URL}/fapi/v1/order?${new URLSearchParams(closeParams)}&signature=${closeSig}`;
-    const closeRes = await fetch(closeUrl, { method: "POST", headers: { "X-MBX-APIKEY": API_KEY } });
-    const result = await closeRes.json();
-    if (result.code) throw new Error(JSON.stringify(result));
+    const timestamp2 = Date.now(); // ⏱️ fresco
 
-    // ✅ Añadir datos reales de ejecución a la respuesta
-    result.avgPriceReal = parseFloat(result.avgPrice) || parseFloat(pos.markPrice);
-    result.pnlReal = parseFloat(result.cumQuote) || 0;
+    // Solo incluir positionSide si Binance lo reportó y es distinto de "BOTH"
+    const closeParams = {
+      recvWindow,
+      side,
+      symbol,
+      type: "MARKET",
+      quantity: formattedQty,
+      timestamp: timestamp2
+    };
 
-    // ✅ Enviar alerta por Telegram con datos reales
-    const pnlReal = result.pnlReal;
-    const emoji = pnlReal >= 0 ? '✅' : '❌';
-    const ganancia = Math.abs(pnlReal).toFixed(2);
-    const tipo = pnlReal >= 0 ? 'Ganancia' : 'Pérdida';
-    const mensajeCierre = `${emoji} Posición cerrada\nSímbolo: ${symbol}\nPnL: ${pnlReal >= 0 ? '+' : ''}${ganancia} USDT\n(${tipo})`;
-    enviarMensajeTelegram(mensajeCierre);
+    // Si estás en modo hedge y la posición lo requiere, añade positionSide
+    if (pos.positionSide && pos.positionSide !== "BOTH") {
+      closeParams.positionSide = pos.positionSide;
+    }
 
-    res.json(result);
+    // ✅ Firmar con parámetros ordenados
+    const sortedKeys = Object.keys(closeParams).sort();
+    const queryString = sortedKeys.map(k => `${k}=${closeParams[k]}`).join('&');
+    const closeSig = crypto.createHmac('sha256', API_SECRET).update(queryString).digest('hex');
+
+    // ✅ URL final
+    const closeUrl = `${BINANCE_FUTURES_URL}/fapi/v1/order?${queryString}&signature=${closeSig}`;
+
+    // ✅ Enviar orden
+    const closeRes = await axios.post(closeUrl, null, { headers: { "X-MBX-APIKEY": API_KEY } });
+    const result = closeRes.data;
+
+    // ✅ Telegram (reutiliza tu función, solo mejoro el mensaje)
+    const avgPrice = parseFloat(result.avgPrice) || parseFloat(pos.markPrice) || 0;
+    const cumQuote = parseFloat(result.cumQuote) || 0;
+    // PnL aproximado: (price - entry) * qty — pero Binance no da entry en esta respuesta
+    // Así que usamos cumQuote solo como referencia
+    const pnl = cumQuote > 0 ? cumQuote : -cumQuote;
+    const isProfit = cumQuote > 0;
+    const emoji = isProfit ? '✅' : '❌';
+    const mensajeCierre = `${emoji} Posición cerrada
+📌 ${symbol} | ${side === 'BUY' ? 'SHORT' : 'LONG'}
+💵 PnL: ${isProfit ? '+' : ''}${pnl.toFixed(2)} USDT`;
+
+    await enviarMensajeTelegram(mensajeCierre);
+
+    res.json({ ...result, formattedQty, avgPrice });
+
   } catch (error) {
-    console.error("Error en /close-position:", error.message);
-    res.status(500).json({ error: error.message });
+    const errMsg = error.response?.data || error.message || error;
+    console.error("❌ Error en /close-position:", errMsg);
+    res.status(500).json({ error: "Error al cerrar posición", details: errMsg });
   }
 });
-
 app.get("/favicon.ico", (req, res) => res.status(204).end());
 
 // === ALERTAS POR TELEGRAM ===
@@ -365,5 +324,5 @@ async function enviarMensajeTelegram(mensaje) {
 
 app.listen(PORT, () => {
   console.log(`✅ Servidor en http://localhost:${PORT}`);
-  console.log("🧪 Conectado a Binance Futures TESTNET");
+  console.log("🧪 Conectado a Binance Futures TESTNET Y MAIN");
 });
