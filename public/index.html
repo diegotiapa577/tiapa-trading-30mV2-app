@@ -576,6 +576,26 @@
         <label for="montoCompra">Monto Compra (USDT)</label>
         <input type="number" id="montoCompra" value="240" step="1" min="100">
       </div>
+      <!-- Añadir esto dentro del <body> de tu HTML, por ejemplo, dentro de un div de controles generales -->
+<div id="controles-ejecucion" style="margin-top: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+    <h4>Controles de Ejecución Automática</h4>
+    <label for="objetivo-ops-exitosas">Objetivo Operaciones Exitosas:</label>
+    <input type="number" id="objetivo-ops-exitosas" min="0" value="2" step="1" style="width: 60px; margin-right: 10px;">
+
+    <label for="limite-ops-totales">Límite Operaciones Totales:</label>
+    <input type="number" id="limite-ops-totales" min="0" value="5" step="1" style="width: 60px; margin-right: 10px;">
+
+    <label for="stop-loss-capital">Stop Loss Capital (USDT):</label>
+    <input type="number" id="stop-loss-capital" min="0" value="50" step="0.01" style="width: 80px; margin-right: 10px;" placeholder="0 para desactivar">
+
+    <label for="stop-loss-drawdown">Stop Loss Drawdown (%):</label>
+    <input type="number" id="stop-loss-drawdown" min="0" value="5" step="0.1" style="width: 80px;" placeholder="0 para desactivar">
+    <span style="font-size: 0.8em; color: #666;">(Negativo)</span>
+
+    <!-- Opcional: Botón para activar/desactivar el controlador -->
+    <button id="toggle-controlador" style="margin-left: 10px;">Activar Control</button>
+</div>
+<!-- (El resto de tu HTML) -->
       <div class="control-group">
         <label for="tpsl-mode">TP/SL</label>
         <select id="tpsl-mode">
@@ -620,6 +640,16 @@
           style="width:100%; background:#333; border-color:#555;">
           <i class="fas fa-bolt"></i> Forzar Cierre por IA
         </button>
+      </div>
+        
+       <div class="panel-modelo">
+        <h3>Modelo de IA Entrenar</h3>
+        <!-- Botón para entrenar -->
+         <button id="btnEntrenar" class="btn btn-primary">Entrenar Modelo</button>
+        <!-- Elemento para mostrar el estado del entrenamiento -->
+         <div id="estado-entrenamiento" class="estado-entrenamiento">Modelo no entrenado</div>
+        <!-- Opcional: Barra de progreso si deseas una visualización más gráfica -->
+        <!-- <div id="progress-bar-entrenamiento" class="progress-bar" style="display: none;"></div> -->
       </div>
 
       <div class="btn-group">
@@ -771,7 +801,7 @@
         <div class="semaforo-indicator" id="cond-adx"></div>
         <span>Modo</span>
         <div class="semaforo-indicator" id="cond-modo"></div>
-        <span>Pred > 70%</span>
+        <span>Pred > 65%</span>
         <div class="semaforo-indicator" id="cond-pred"></div>
         <span>Datos ≥ 55</span>
         <div class="semaforo-indicator" id="cond-datos"></div>
@@ -824,8 +854,7 @@
       </div>
     </main>
   </div>
-
   <script src="script.js"></script>
+  <script src="controlador_operaciones.js"></script>  
 </body>
-
 </html>

@@ -1,4 +1,3 @@
-// ✅ Open Interest activo - 2025-04-05
 // server.js
 //npm install axios
 import express from "express";
@@ -17,7 +16,7 @@ const PORT = process.env.PORT || 8080;
 // 🔑 URL CORREGIDA: solo Futures Testnet (sin espacios)
 const BINANCE_FUTURES_URL = "https://testnet.binancefuture.com";
 
-//const BINANCE_MAINNET_URL = "https://fapi.binance.com"; // Solo para klines/ticker (backtesting)
+const BINANCE_MAINNET_URL = "https://fapi.binance.com"; // Solo para klines/ticker (backtesting)
 
 // 🔒 Claves API
 const API_KEY = process.env.BINANCE_API_KEY;
@@ -36,6 +35,7 @@ function signParams(params) {
   return crypto.createHmac("sha256", API_SECRET).update(queryString).digest("hex");
 }
 
+// ✅ FUNCIÓN PARA OBTENER EL TIEMPO DEL SERVIDOR DE BINANCE
 async function getServerTime() {
   const res = await fetch(`${BINANCE_FUTURES_URL}/fapi/v1/time`);
   const data = await res.json();
@@ -45,7 +45,7 @@ async function getServerTime() {
 // 📈 Klines → ahora usa MAINNET (pública, sin claves, estable)
 app.get("/api/binance/klines", async (req, res) => {
   const { symbol = "BTCUSDT", interval = "1m", limit = 100 } = req.query;
-  const url = `${BINANCE_FUTURES_URL}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  const url = `${BINANCE_MAINNET_URL}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
   try {
     const response = await fetch(url);
     const data = await response.json();
@@ -59,7 +59,7 @@ app.get("/api/binance/klines", async (req, res) => {
 // 💰 Ticker → ahora usa MAINNET (pública, sin claves, estable)
 app.get("/api/binance/ticker", async (req, res) => {
   const { symbol = "BTCUSDT" } = req.query;
-  const url = `${BINANCE_FUTURES_URL}/fapi/v1/ticker/price?symbol=${symbol}`;
+  const url = `${BINANCE_MAINNET_URL}/fapi/v1/ticker/price?symbol=${symbol}`;
   try {
     const response = await fetch(url);
     const data = await response.json();
@@ -114,7 +114,7 @@ app.get("/api/binance/futures/open-interest", async (req, res) => {
 app.get("/api/binance/futures/account", async (req, res) => {
   if (!API_KEY || !API_SECRET) return res.status(500).json({ error: "Claves no configuradas" });
   try {
-    const timestamp = await getServerTime();
+    const timestamp = await getServerTime(); // ✅ CORREGIDO
     const recvWindow = 60000;
     const params = { timestamp, recvWindow };
     const signature = signParams(params);
@@ -132,7 +132,7 @@ app.get("/api/binance/futures/account", async (req, res) => {
 app.get("/api/binance/futures/positions", async (req, res) => {
   if (!API_KEY || !API_SECRET) return res.status(500).json({ error: "Claves no configuradas" });
   try {
-    const timestamp = await getServerTime();
+    const timestamp = await getServerTime(); // ✅ CORREGIDO
     const recvWindow = 60000;
     const params = { timestamp, recvWindow };
     const signature = signParams(params);
@@ -147,7 +147,7 @@ app.get("/api/binance/futures/positions", async (req, res) => {
   }
 });
 
-// 🚀 Abrir orden — ✅ CORREGIDO
+// 🚀 Abrir orden — ✅ CORREGIDO: usa getServerTime()
 app.post('/api/binance/futures/order', async (req, res) => {
   const { symbol, side, quantity } = req.body; // leverage NO va aquí
 
@@ -170,7 +170,8 @@ app.post('/api/binance/futures/order', async (req, res) => {
     const formattedQty = roundedQty.toFixed(Math.max(0, Math.ceil(-Math.log10(stepSize))));
 
     // ✅ 2. Parámetros firmados: SOLO los que Binance acepta en /order + timestamp [+ recvWindow opcional]
-    const timestamp = Date.now();
+    // ✅ CORREGIDO: Usar getServerTime()
+    const timestamp = await getServerTime(); // <-- CORREGIDO
     const recvWindow = 5000; // más seguro: 5000 ms en lugar de 60000 para testnet
 
     // ⚠️ Ordenar alfabéticamente: recvWindow, quantity, side, symbol, timestamp, type
@@ -207,7 +208,7 @@ app.post('/api/binance/futures/order', async (req, res) => {
   }
 });
 
-// 🔻 Cerrar posición — ✅ CORREGIDO
+// 🔻 Cerrar posición — ✅ CORREGIDO: usa getServerTime()
 app.post("/api/binance/futures/close-position", async (req, res) => {
   if (!API_KEY || !API_SECRET) return res.status(500).json({ error: "Claves no configuradas" });
   const { symbol } = req.body;
@@ -216,12 +217,13 @@ app.post("/api/binance/futures/close-position", async (req, res) => {
   try {
     const recvWindow = 5000;
 
-    // ✅ 1. Obtener posición actual (con timestamp fresco)
-    const timestamp1 = Date.now();
+    // ✅ 1. Obtener posición actual (con timestamp fresco del servidor Binance)
+    // ✅ CORREGIDO: Usar getServerTime()
+    const timestamp1 = await getServerTime(); // <-- CORREGIDO
     const posParams = { timestamp: timestamp1, recvWindow };
     const posSig = signParams(posParams);
     const posUrl = `${BINANCE_FUTURES_URL}/fapi/v2/positionRisk?${new URLSearchParams(posParams)}&signature=${posSig}`;
-    
+
     const posRes = await axios.get(posUrl, { headers: { "X-MBX-APIKEY": API_KEY } });
     const positions = posRes.data;
     const pos = positions.find(p => p.symbol === symbol && Math.abs(parseFloat(p.positionAmt)) > 0.0001);
@@ -240,7 +242,8 @@ app.post("/api/binance/futures/close-position", async (req, res) => {
 
     // ✅ 3. Preparar orden de cierre (sin positionSide si no es hedge mode)
     const side = parseFloat(pos.positionAmt) > 0 ? "SELL" : "BUY";
-    const timestamp2 = Date.now(); // ⏱️ fresco
+    // ✅ CORREGIDO: Usar getServerTime()
+    const timestamp2 = await getServerTime(); // <-- CORREGIDO
 
     // Solo incluir positionSide si Binance lo reportó y es distinto de "BOTH"
     const closeParams = {
@@ -291,6 +294,55 @@ app.post("/api/binance/futures/close-position", async (req, res) => {
     res.status(500).json({ error: "Error al cerrar posición", details: errMsg });
   }
 });
+
+// +++ NUEVO: Endpoint para cambiar apalancamiento +++
+app.post('/api/binance/futures/leverage', async (req, res) => {
+  if (!API_KEY || !API_SECRET) return res.status(500).json({ error: "Claves no configuradas" });
+  const { symbol, leverage } = req.body;
+
+  if (!symbol || !leverage) {
+    return res.status(400).json({ msg: 'Faltan parámetros: symbol, leverage' });
+  }
+
+  const leverageNum = parseInt(leverage);
+  if (isNaN(leverageNum) || leverageNum < 1 || leverageNum > 125) {
+    return res.status(400).json({ msg: 'Leverage inválido: debe ser un número entre 1 y 125' });
+  }
+
+  try {
+    // ✅ CORREGIDO: Usar getServerTime()
+    const timestamp = await getServerTime(); // <-- CORREGIDO
+    const recvWindow = 5000;
+
+    const params = {
+      symbol,
+      leverage: leverageNum.toString(), // Binance espera un string
+      timestamp,
+      recvWindow
+    };
+
+    const queryString = new URLSearchParams(params).toString();
+    const signature = signParams(params); // Reutiliza tu función signParams
+
+    const url = `${BINANCE_FUTURES_URL}/fapi/v1/leverage?${queryString}&signature=${signature}`;
+
+    const response = await axios.post(url, null, {
+      headers: { 'X-MBX-APIKEY': API_KEY }
+    });
+
+    res.json(response.data);
+
+  } catch (err) {
+    console.error('❌ Error en /leverage:', err.response?.data || err.message || err);
+    res.status(500).json({
+      msg: 'Error al cambiar apalancamiento',
+      code: err.response?.data?.code,
+      details: err.response?.data?.msg || err.message
+    });
+  }
+});
+// --- Fin NUEVO ---
+
 app.get("/favicon.ico", (req, res) => res.status(204).end());
 
 // === ALERTAS POR TELEGRAM ===
