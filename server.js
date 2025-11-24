@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 8080;
 // 🔑 URL CORREGIDA: solo Futures Testnet (sin espacios)
 const BINANCE_FUTURES_URL = "https://testnet.binancefuture.com";
 
-const BINANCE_MAINNET_URL = "https://fapi.binance.com"; // Solo para klines/ticker (backtesting)
+//const BINANCE_MAINNET_URL = "https://fapi.binance.com"; // Solo para klines/ticker (backtesting)
 
 // 🔒 Claves API
 const API_KEY = process.env.BINANCE_API_KEY;
@@ -45,7 +45,7 @@ async function getServerTime() {
 // 📈 Klines → ahora usa MAINNET (pública, sin claves, estable)
 app.get("/api/binance/klines", async (req, res) => {
   const { symbol = "BTCUSDT", interval = "1m", limit = 100 } = req.query;
-  const url = `${BINANCE_MAINNET_URL}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  const url = `${BINANCE_FUTURES_URL}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
   try {
     const response = await fetch(url);
     const data = await response.json();
@@ -59,7 +59,7 @@ app.get("/api/binance/klines", async (req, res) => {
 // 💰 Ticker → ahora usa MAINNET (pública, sin claves, estable)
 app.get("/api/binance/ticker", async (req, res) => {
   const { symbol = "BTCUSDT" } = req.query;
-  const url = `${BINANCE_MAINNET_URL}/fapi/v1/ticker/price?symbol=${symbol}`;
+  const url = `${BINANCE_FUTURES_URL}/fapi/v1/ticker/price?symbol=${symbol}`;
   try {
     const response = await fetch(url);
     const data = await response.json();
