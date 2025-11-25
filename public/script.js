@@ -608,10 +608,6 @@ function prepararDatosParaIA(klines, openInterest = 0) {
 }
 
 // === ENTRENAMIENTO (CORREGIDO - MultiSímbolo con gather) ===
-// baraja los datos, crea el modelo con más dropout, y lo entrena.
-// === ENTRENAMIENTO (MULTI-SÍMBOLO) ===
-// Esta función descarga datos de múltiples símbolos, los prepara con etiquetas,
-// los concatena, baraja los datos mezclados, crea el modelo con Dropout y lo entrena.
 async function entrenarRed() {
   if (!AUTENTICADO) {
     alert('🔒 Acceso denegado. Ingresa la clave primero.');
@@ -619,9 +615,9 @@ async function entrenarRed() {
   }
 
   // Definir símbolos a usar para entrenamiento
-  const SIMBOLOS_ENTRENAMIENTO = ['BTCUSDT', 'ETHUSDT'];
+  const SIMBOLOS_ENTRENAMIENTO = ['BTCUSDT','ETHUSDT'];
   const INTERVALO = '1m'; // Usamos 4h como acordamos
-  const LIMITE_DATOS = 50000; // Ajusta este número. Por ejemplo, 15000 velas de 4h por símbolo
+  const LIMITE_DATOS = 100000; // Ajusta este número. Por ejemplo, 15000 velas de 4h por símbolo
   const EPOCAS = 50;
   const BATCH_SIZE = 32;
 
@@ -743,10 +739,6 @@ async function entrenarRed() {
             monitor: 'val_loss', // Monitorea la pérdida en validación
             patience: 5,        // Detiene si no mejora por 5 épocas consecutivas
             // restoreBestWeights: true // <-- COMENTADO: No soportado en esta versión de TFJS
-            // onEpochEnd: async (epoch, logs) => {
-            //   // Opcional: Actualizar estado con la época actual y las métricas
-            //   // estadoEntrenamientoEl.textContent = `🧠 Entrenando... Época ${epoch+1}/${epocas} - Loss: ${logs.loss.toFixed(4)}, Val Loss: ${logs.val_loss.toFixed(4)}`;
-            //   // console.log(`[Entrenamiento] Época ${epoch+1}/${epocas} - Loss: ${logs.loss.toFixed(4)}, Val Loss: ${logs.val_loss.toFixed(4)}`);
             // }
           })
           // Puedes agregar más callbacks aquí si es necesario
