@@ -468,8 +468,10 @@
       color: var(--accent-red);
       font-weight: bold;
     }
-
-    .semaforo-container {
+   
+    /* Resto de estilos (igual que indexV4.txt) */
+    
+    /*.semaforo-container {
       background: var(--bg-card);
       border-radius: 8px;
       padding: 10px 15px;
@@ -493,6 +495,7 @@
       font-weight: bold;
       color: #ef5350;
     }
+   */
 
     @media (max-width: 1024px) {
       .container {
@@ -548,9 +551,37 @@
     #tpsl-manual-group2 {
       transition: opacity 0.3s ease, height 0.3s ease;
     }
+   .chart-container {
+  width: 100%;
+  height: 500px; /* ¡Debe estar en px o %, no solo en .main-content */
+  background: var(--bg-card);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  position: relative;
+  }
+  .semaforo {
+    padding: 12px;
+    background: #1e1e1e;
+    border-radius: 8px;
+    color: white;
+    font-size: 14px;
+    margin: 10px 0;
+  }
+  .luz {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-left: 8px;
+  }
+  #semaforo-msg {
+    margin: 8px 0 0 0;
+    font-weight: bold;
+  }
   </style>
-</head>
 
+</head>
 <body>
   <!-- 🔐 Modal de autenticación -->
   <div id="auth-modal">
@@ -567,35 +598,38 @@
   <div class="container" id="main-container" style="display:none;">
     <!-- Sidebar -->
     <aside class="sidebar">
-      <div class="status-bar">Esperando...</div>
+      <!--  <div class="status-bar">Esperando...</div> -->
       <div class="section-title">
         <i class="fas fa-sliders-h"></i> Panel de Control
-        <span style="font-size: 0.8em; color: #aaa; margin-left: 10px;">Avanzado</span>
+         <!--<span style="font-size: 0.8em; color: #aaa; margin-left: 10px;">Avanzado</span>-->
       </div>
+      
       <div class="control-group">
         <label for="montoCompra">Monto Compra (USDT)</label>
         <input type="number" id="montoCompra" value="240" step="1" min="100">
       </div>
-      <!-- Añadir esto dentro del <body> de tu HTML, por ejemplo, dentro de un div de controles generales -->
-<div id="controles-ejecucion" style="margin-top: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
-    <h4>Controles de Ejecución Automática</h4>
-    <label for="objetivo-ops-exitosas">Objetivo Operaciones Exitosas:</label>
-    <input type="number" id="objetivo-ops-exitosas" min="0" value="2" step="1" style="width: 60px; margin-right: 10px;">
+                 <!-- Añadir esto dentro del <body> de tu HTML, por ejemplo, dentro de un div de controles generales -->
+       
+             <!-- <div id="controles-ejecucion" style="margin-top: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+              <h4>Controles de Ejecución Automática</h4>
+              <label for="objetivo-ops-exitosas">Objetivo Operaciones Exitosas:</label>
+              <input type="number" id="objetivo-ops-exitosas" min="0" value="2" step="1" style="width: 60px; margin-right: 10px;">
 
-    <label for="limite-ops-totales">Límite Operaciones Totales:</label>
-    <input type="number" id="limite-ops-totales" min="0" value="5" step="1" style="width: 60px; margin-right: 10px;">
+              <label for="limite-ops-totales">Límite Operaciones Totales:</label>
+               <input type="number" id="limite-ops-totales" min="0" value="5" step="1" style="width: 60px; margin-right: 10px;">
 
-    <label for="stop-loss-capital">Stop Loss Capital (USDT):</label>
-    <input type="number" id="stop-loss-capital" min="0" value="50" step="0.01" style="width: 80px; margin-right: 10px;" placeholder="0 para desactivar">
+         <label for="stop-loss-capital">Stop Loss Capital (USDT):</label>
+                 <input type="number" id="stop-loss-capital" min="0" value="50" step="0.01" style="width: 80px; margin-right: 10px;" placeholder="0 para desactivar">
 
-    <label for="stop-loss-drawdown">Stop Loss Drawdown (%):</label>
-    <input type="number" id="stop-loss-drawdown" min="0" value="5" step="0.1" style="width: 80px;" placeholder="0 para desactivar">
-    <span style="font-size: 0.8em; color: #666;">(Negativo)</span>
+             <label for="stop-loss-drawdown">Stop Loss Drawdown (%):</label>
+               <input type="number" id="stop-loss-drawdown" min="0" value="5" step="0.1" style="width: 80px;" placeholder="0 para desactivar">
+              <span style="font-size: 0.8em; color: #666;">(Negativo)</span>
 
-    <!-- Opcional: Botón para activar/desactivar el controlador -->
-    <button id="toggle-controlador" style="margin-left: 10px;">Activar Control</button>
-</div>
-<!-- (El resto de tu HTML) -->
+               Opcional: Botón para activar/desactivar el controlador 
+             <button id="toggle-controlador" style="margin-left: 10px;">Activar Control</button>
+          </div> -->
+
+             <!-- (El resto de tu HTML) -->
       <div class="control-group">
         <label for="tpsl-mode">TP/SL</label>
         <select id="tpsl-mode">
@@ -627,12 +661,16 @@
         <label for="simbolo">Símbolo</label>
         <input type="text" id="simbolo" value="BTCUSDT" style="width: 100%; text-align: center;">
       </div>
+
+
       <div class="control-group">
         <label for="autoTrading">Auto-Trading (IA)</label>
         <div class="toggle-switch">
           <input type="checkbox" id="autoTrading" checked>
         </div>
       </div>
+
+
       <!-- ✅ Botón de prueba forzada (solo para desarrollo) -->
       <div class="control-group">
         <label>Prueba Forzada IA</label>
@@ -641,16 +679,7 @@
           <i class="fas fa-bolt"></i> Forzar Cierre por IA
         </button>
       </div>
-        
-       <div class="panel-modelo">
-        <h3>Modelo de IA Entrenar</h3>
-        <!-- Botón para entrenar -->
-         <button id="btnEntrenar" class="btn btn-primary">Entrenar Modelo</button>
-        <!-- Elemento para mostrar el estado del entrenamiento -->
-         <div id="estado-entrenamiento" class="estado-entrenamiento">Modelo no entrenado</div>
-        <!-- Opcional: Barra de progreso si deseas una visualización más gráfica -->
-        <!-- <div id="progress-bar-entrenamiento" class="progress-bar" style="display: none;"></div> -->
-      </div>
+         
 
       <div class="btn-group">
         <button class="btn btn-primary" onclick="iniciarStreaming()">
@@ -659,7 +688,10 @@
         <button class="btn btn-danger" onclick="detenerStreaming()">
           <i class="fas fa-stop"></i> Parar Streaming
         </button>
-        <button class="btn btn-outline" onclick="operacionPrueba()">
+        <button id="reiniciar-flujo" class="btn btn-outline">
+         🔄 Reiniciar Flujo
+         </button>
+                <button class="btn btn-outline" onclick="operacionPrueba()">
           <i class="fas fa-magic"></i> Prueba Manual
         </button>
       </div>
@@ -703,6 +735,8 @@
           <div class="stat-value" id="perdidas">$0.00</div>
         </div>
       </div>
+
+
       <div class="section-title">
         <i class="fas fa-chart-line"></i> TP/SL Dinámico
       </div>
@@ -714,14 +748,15 @@
         <div class="stat-title">SL</div>
         <div class="stat-value" id="sl-dinamico">—</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-title">ATR</div>
-        <div class="stat-value" id="atr-valor">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-title">ADX</div>
-        <div class="stat-value" id="adx-valor">—</div>
-      </div>
+
+               <div class="stat-card">
+               <div class="stat-title">ATR</div>
+               <div class="stat-value" id="atr-valor">—</div>
+               </div>
+               <div class="stat-card">
+               <div class="stat-title">ADX</div>
+               <div class="stat-value" id="adx-valor">—</div>
+               </div>
 
 <!-- Selector de intervalo -->
 <label>Intervalo:</label>
@@ -783,8 +818,8 @@
     <main class="main-content">
       <header>
         <div class="logo">
-          <i class="fas fa-robot"></i>
-          Trading Predictivo T  IA  PA 🔐
+           <!--<i class="fas fa-robot"></i>-->
+             Trading Predictivo T  IA  PA 🔐
         </div>
       </header>
       <div class="controls-row">
@@ -796,18 +831,58 @@
       <div class="chart-container">
         <div id="chart"></div>
       </div>
-      <div class="semaforo-container">
-        <span>ADX > 20</span>
-        <div class="semaforo-indicator" id="cond-adx"></div>
-        <span>Modo</span>
-        <div class="semaforo-indicator" id="cond-modo"></div>
-        <span>Pred > 65%</span>
-        <div class="semaforo-indicator" id="cond-pred"></div>
-        <span>Datos ≥ 55</span>
-        <div class="semaforo-indicator" id="cond-datos"></div>
-        <span class="semaforo-msg" id="semaforo-msg">❌ Esperando...</span>
-      </div>
-      <div class="prediction-section fade-in">
+
+      <div id="semaforo" class="semaforo">
+          <h4>🚦 Semáforo de Trading</h4>
+         
+
+          <div>Tendencia (ADX):   
+            <span id="cond-adx" class="luz"></span> 
+            <span id="adx1-valor">—</span>
+           
+            <div>Modo (modo): 
+            <span id="cond-modo" class="luz"></span> 
+           <span id="modo-valor">—</span>
+           </div>
+
+            <div>Confianza IA: 
+            <span id="cond-pred" class="luz"></span> 
+           <span id="confianza-valor">—</span>
+          </div>
+
+          <div>Datos suficientes: 
+          <span id="cond-datos" class="luz"></span> 
+          <span id="datos-valor">—</span>
+           </div>
+          <p id="semaforo-msg" style="margin-top: 10px;">⏳ Inicializando...</p>
+       </div>
+
+
+       <!--<div class="sidebar">
+        Indicador de estado de conexión 
+       <div style="margin-top: 10px; padding: 8px; background: #1a1a1a; border-radius: 6px; font-size: 12px;">
+         <strong>📡 Estado Conexión</strong>
+         <p id="streamingActivo " style="margin: 5px 0; color: orange;">🟡 Inicializando...</p>
+       </div>
+      </div>-->
+          <div id="indicators" class="ïndicators">
+             <h4> Indicadores Tecnicos</h4>
+             <div>
+               <div>Ultimo Precio:
+                 <div id="precio-actual">—</div>
+                 </div>
+                 <div>EMA-50:
+                 <div id="ema-valor">—</div>
+                 </div>  
+                  <div>RSI: 
+                 <div id="rsi-valor">—</div>
+                  </div>
+                  <div>ATR:             
+                 <div id="atr-valor">—</div>
+                  </div> 
+              </div>
+          </div>
+        <div class="prediction-section fade-in">
         <div class="prediction-header">
           <i class="fas fa-microchip"></i>
           Predicción IA
@@ -818,6 +893,7 @@
           <div id="prediccion-progreso" class="pred-progress"></div>
         </div>
       </div>
+
       <div class="table-container">
         <h3 style="padding: 15px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border);">
           Posiciones Abiertas (Testnet)</h3>
@@ -855,6 +931,5 @@
     </main>
   </div>
   <script src="script.js"></script>
-  <script src="controlador_operaciones.js"></script>  
 </body>
 </html>

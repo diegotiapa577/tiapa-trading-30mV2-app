@@ -1,5 +1,6 @@
-// 🔐 CLAVE SECRETA — Cámbiala en producción
-const CLAVE_SECRETA = '19344828';
+
+    // 🔐 CLAVE SECRETA — Cámbiala en producción
+const CLAVE_SECRETA = '11';
 let AUTENTICADO = false;
 
 // ✅ Verificar clave (debe estar al inicio)
@@ -25,8 +26,15 @@ function verificarClave() {
 }
 
 // === VARIABLES GLOBALES ===
+// === ESTADO DEL STREAMING (MANTENIDO EN TIEMPO REAL) ===
 
-let chart, dataSeries, precios = [], modelo = null;
+// Array para almacenar las últimas 10 velas cerradas (para predicción)
+let ws = null; // ← Declárala aquí
+const MAX_VELAS_HISTORICAS = 10;
+let historialVelas = []; // ← Guarda las velas cerradas completas
+let precios = [], modelo = null;
+let chart = null;
+let dataSeries = null;
 let capitalInicial = 1000, capitalActual = 1000;
 let operaciones = [], ultimoPrecio = 0, streamingInterval = null;
 let simboloActual = 'BTCUSDT', symbolInfo = null;
@@ -34,11 +42,116 @@ let lineaPE = null, lineaTP = null, lineaSL = null; // ✅ Líneas de PE/TP/SL
 let autoTrading = false;      // <-- Debe existir
 let ordenEnCurso = false;
 let sideActual = null;    /////AQUI ESTA
+let ultimosPrecios = [];
+let ultimosVolumenes = [];
+let rsiActual = 50;
+let emaActual = 0;
+let macdActual = 0;
+let signalActual = 0;
+let posicionBB = 0.5;
+let anchoBB = 0;
+let atrActual = 0.001;
+let adxActual = 0; // ← ¡Declárala aquí!
+
+// ✅ PRUEBA TEMPORAL: Forzamos atrActual con el valor de la UI
+//setInterval(() => {
+ // const atrUI = document.getElementById('atr-valor');
+  //if (atrUI && atrUI.textContent !== '—') {
+   // const valor = parseFloat(atrUI.textContent.replace('ATR: ', ''));
+   // if (!isNaN(valor)) {
+    //  atrActual = valor; // ← ¡AQUÍ ESTÁ LA MAGIA!
+    //  console.log('🔄 [DIAGNÓSTICO] atrActual forzado desde UI:', atrActual);
+   // }
+ // }
+//}, 1000); // Se ejecuta cada 1 segundo
+let obvActual = 0;
+let precioActual = 0;
+let openInterest = 0;
+let streamingActivo = false; // ← Evita múltiples conexiones
+// ✅ Para contar velas cerradas
+let velasCerradas = 0;
+
+// ✅ Estado de autoTrading (global)
+window.autoTrading = false;
+window.tradingActivo= false;
+
+
+function calcularRSI(precios, periodo = 14) {
+  if (precios.length < periodo + 1) return Array(precios.length).fill(50);
+  const rsi = Array(periodo).fill(50);
+  let gananciaProm = 0;
+  let perdidaProm = 0;
+  for (let i = 1; i <= periodo; i++) {
+    const cambio = precios[i] - precios[i - 1];
+    if (cambio > 0) gananciaProm += cambio;
+    else perdidaProm -= cambio;
+  }
+  gananciaProm /= periodo;
+  perdidaProm /= periodo;
+  for (let i = periodo; i < precios.length; i++) {
+    const cambio = precios[i] - precios[i - 1];
+    const ganancia = cambio > 0 ? cambio : 0;
+    const perdida = cambio < 0 ? -cambio : 0;
+    gananciaProm = (gananciaProm * (periodo - 1) + ganancia) / periodo;
+    perdidaProm = (perdidaProm * (periodo - 1) + perdida) / periodo;
+    const rs = perdidaProm === 0 ? 100 : gananciaProm / perdidaProm;
+    rsi.push(100 - (100 / (1 + rs)));
+  }
+  return rsi;
+}
+
+function calcularEMA(precios, periodo = 20) {
+  if (precios.length === 0) return [];
+  const ema = [precios[0]];
+  const k = 2 / (periodo + 1);
+  for (let i = 1; i < precios.length; i++) {
+    ema.push(precios[i] * k + ema[i - 1] * (1 - k));
+  }
+  return ema;
+}
+
+function calcularATR(klines, periodo = 14) {
+  if (!Array.isArray(klines) || klines.length < periodo) return [];
+  
+  const trs = [];
+  const atr = [];
+
+  for (let i = 0; i < klines.length; i++) {
+    // ✅ CONVERSIÓN EXPLÍCITA A NÚMERO — CLAVE
+    const high = parseFloat(klines[i].h) || parseFloat(klines[i].high);
+    const low = parseFloat(klines[i].l) || parseFloat(klines[i].low);
+    const close = parseFloat(klines[i].c) || parseFloat(klines[i].close);
+    const prevClose = i > 0 
+      ? parseFloat(klines[i - 1].c) || parseFloat(klines[i - 1].close) 
+      : close;
+
+    const tr1 = high - low;
+    const tr2 = Math.abs(high - prevClose);
+    const tr3 = Math.abs(low - prevClose);
+    const tr = Math.max(tr1, tr2, tr3);
+    trs.push(tr);
+  }
+
+  // ✅ Inicialización SMA del primer periodo
+  let sum = 0;
+  for (let i = 0; i < periodo; i++) {
+    sum += trs[i];
+  }
+  atr[periodo - 1] = sum / periodo;
+
+  // ✅ WMA (Wilders) para el resto
+  for (let i = periodo; i < trs.length; i++) {
+    atr[i] = (atr[i - 1] * (periodo - 1) + trs[i]) / periodo;
+  }
+
+  // ✅ Devolver solo los valores válidos (desde el periodo en adelante)
+  return atr.slice(periodo - 1);
+}
 // [Agregado] Asegurar que operaciones esté disponible globalmente para controlador_operaciones.js
-window.operaciones = operaciones;
+//window.operaciones = operaciones;
 // [Agregado] Asegurar que otras variables críticas también estén disponibles globalmente si es necesario
-window.capitalActual = capitalActual;
-window.capitalInicial = capitalInicial;
+//window.capitalActual = capitalActual;
+//window.capitalInicial = capitalInicial;
 // Nota: capitalActual y capitalInicial se actualizan en otras funciones, por lo que debes asegurarte
 // que cuando se actualicen, también se actualice el valor en window.capitalActual
 // por ejemplo, en actualizarPanelFinanciero() o donde se modifique capitalActual.
@@ -81,20 +194,69 @@ function calculateQuantity(price, notional = 100) {
   return parseFloat(qty.toFixed(8));
 }
 
+
+function inicializarGrafico() {
+  const container = document.getElementById('chart');
+  if (!container) {
+    console.error('❌ Contenedor #chart no encontrado.');
+    return;
+  }
+
+  // Si ya existe un gráfico, destrúyelo
+  if (chart) {
+    chart.remove(); // O usa chart.applyOptions({ width: 1 }) si remove falla
+    chart = null;
+  }
+
+  // Crear nuevo gráfico
+  chart = LightweightCharts.createChart(container, {
+    width: container.clientWidth,
+    height: container.clientHeight,
+    layout: {
+      backgroundColor: '#121416',
+      textColor: '#d9d9d9',
+    },
+    grid: {
+      vertLines: { color: 'rgba(42, 46, 57, 0)' },
+      horzLines: { color: 'rgba(42, 46, 57, 0)' },
+    },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    rightPriceScale: { borderColor: '#494c58' },
+    timeScale: { borderColor: '#494c58', timeVisible: true },
+    autoSize: true
+  });
+
+  // ✅ Asignar la serie a la variable global
+  dataSeries = chart.addCandlestickSeries({
+    upColor: '#26a69a',
+    downColor: '#ef5350',
+    borderUpColor: '#26a69a',
+    borderDownColor: '#ef5350',
+    wickUpColor: '#26a69a',
+    wickDownColor: '#ef5350'
+  });
+}
 // === GRÁFICOS CON LÍNEAS PE/TP/SL ===
 function initChart() {
+  // ✅ Obtener el contenedor del gráfico
   const chartContainer = document.getElementById('chart');
+
+  // ✅ Validar que exista y tenga tamaño
   if (!chartContainer || chartContainer.offsetWidth === 0 || chartContainer.offsetHeight === 0) {
-    throw new Error('Contenedor #chart no tiene tamaño (¿está oculto con display:none?)');
+    console.error('❌ #chart no encontrado o sin tamaño');
+    return;
   }
+
+  // ✅ Crear el gráfico
   chart = LightweightCharts.createChart(chartContainer, {
     layout: { backgroundColor: '#121212', textColor: 'white' },
     grid: { vertLines: { color: '#333' }, horzLines: { color: '#333' } },
     crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-    priceScale: { borderColor: '#444' },
-    timeScale: { borderColor: '#444' },
+    priceScale: { borderColor: '#494c58' },
+    timeScale: { borderColor: '#494c58' },
     autoSize: true
   });
+
   dataSeries = chart.addCandlestickSeries({
     upColor: '#26a69a',
     downColor: '#ef5350',
@@ -102,15 +264,15 @@ function initChart() {
     wickUpColor: '#26a69a',
     wickDownColor: '#ef5350'
   });
-  
-  // ✅ Crear líneas de PE, TP y SL
+
+  // ✅ Líneas PE/TP/SL
   lineaPE = chart.addLineSeries({
     color: '#2196F3',
     lineWidth: 2,
     crosshairMarkerVisible: false,
     priceLineVisible: false
   });
-  
+
   lineaTP = chart.addLineSeries({
     color: '#4CAF50',
     lineWidth: 2,
@@ -118,7 +280,7 @@ function initChart() {
     crosshairMarkerVisible: false,
     priceLineVisible: false
   });
-  
+
   lineaSL = chart.addLineSeries({
     color: '#F44336',
     lineWidth: 2,
@@ -126,10 +288,26 @@ function initChart() {
     crosshairMarkerVisible: false,
     priceLineVisible: false
   });
-  
+
   console.log('✅ Gráfico inicializado correctamente con líneas de PE/TP/SL');
 }
+// === ACTUALIZAR GRÁFICO CON NUEVA VELA ===
+function actualizarGrafico(nuevaVela) {
+  if (!dataSeries) {
+    console.error('❌ dataSeries no disponible');
+    return;
+  }
 
+  const time = Math.floor(nuevaVela.t / 1000); // segundos
+
+  dataSeries.update({
+    time: time,
+    open: parseFloat(nuevaVela.o),
+    high: parseFloat(nuevaVela.h),
+    low: parseFloat(nuevaVela.l),
+    close: parseFloat(nuevaVela.c)
+  });
+}
 // ✅ Nueva función robusta: reintentar initChart hasta que el DOM esté listo
 function retryInitChart(attempts = 0) {
   const chartContainer = document.getElementById('chart');
@@ -145,11 +323,13 @@ function retryInitChart(attempts = 0) {
     }
   }
   try {
+
     initChart();
     actualizarCapitalTestnet();
     actualizarPosicionesAbiertas();
     renderizarHistorial();
     console.log('✅ Sistema UI inicializado con éxito');
+
   } catch (err) {
     console.error('❌ Error al inicializar UI:', err);
     const estadoEl = document.getElementById('estado');
@@ -259,140 +439,110 @@ async function obtenerDatosHistoricos(symbol, interval, totalLimit) {
 // === ENTRENAMIENTO: PREPARAR DATOS CON ETIQUETAS (CORREGIDA - V6 - Añadido anchoBBRelativo) - CON CONTADOR DE ETIQUETAS===
 // Esta función toma klines históricos y prepara pares (features, label) para entrenamiento.
 // La label indica si el precio cierra más alto o más bajo después de N velas.
-const VELAS_FUTURAS = 5; // Define cuántas velas hacia adelante mira para la etiqueta
 
 
+// === ENTRENAMIENTO: PREPARAR DATOS CON ETIQUETAS (V7 — Balanced, ATR-normalizado, 3 velas) ===
+ const VELAS_FUTURAS = 5; 
 function prepararDatosConEtiquetas(klines) {
-  const featuresList = [];
-  const labelsList = [];
+ // const featuresList = [];
+  //const labelsList = [];
 
-  // Calculamos todos los indicadores para todos los puntos donde tengamos datos suficientes
-  // (por ejemplo, RSI necesita 14 velas anteriores)
   const closes = klines.map(k => k.close);
   const volumes = klines.map(k => k.volume);
-  const rsiArr = calcularRSI(closes, 14); // Longitud: closes.length - 14 + 1 (siempre que haya suficientes datos)
-  const emaArr = calcularEMA(closes, 20); // Longitud: closes.length - 20 + 1
-  const { macdLine, signalLine } = calcularMACD(closes, 12, 26, 9); // Longitud: closes.length - slowPeriod - signalPeriod + 2 + 1 (siempre que haya suficientes datos)
-  const { superior: bbSuperior, inferior: bbInferior } = calcularBandasBollinger(closes, 20, 2); // Longitud: closes.length - 20 + 1
-  const atrArr = calcularATR(klines, 14); // Longitud: klines.length - 14 + 1
-  const adxArr = calcularADX(klines, 14); // Longitud: klines.length - (14 * 2 - 1) (siempre que haya suficientes datos)
-  const obvArr = calcularOBV(klines); // Longitud: klines.length
+  const rsiArr = calcularRSI(closes, 14);
+  const emaArr = calcularEMA(closes, 20);
+  const { macdLine, signalLine } = calcularMACD(closes, 12, 26, 9);
+  const { superior: bbSuperior, inferior: bbInferior } = calcularBandasBollinger(closes, 20, 2);
+  const atrArr = calcularATR(klines, 14);
+  const adxArr = calcularADX(klines, 14);
+  const obvArr = calcularOBV(klines);
 
-  console.log(`[Entrenamiento] Longitudes de arrays calculados - Closes: ${closes.length}, RSI: ${rsiArr.length}, EMA: ${emaArr.length}, MACD: ${macdLine.length}, BB: ${bbSuperior.length}, ATR: ${atrArr.length}, ADX: ${adxArr.length}, OBV: ${obvArr.length}`);
-
-  // Iteramos desde el inicio hasta donde podamos mirar VELAS_FUTURAS adelante
-  // Y aseguramos tener datos para todos los indicadores en el índice i
-  // El desfase máximo es para MACD (índice 0 de macdLine es para closes[33]), luego ADX (índice 0 de adxArr es para klines[27]), etc.
-  // También necesitamos mirar hacia adelante VELAS_FUTURAS
-  // startIndex = max(Desfase_Máximo_Indicador, 10_para_ventana_precios, VELAS_FUTURAS_para_mirar_adelante)
-  const desfaseRsi = 13; // rsiArr[0] <-> closes[13]
-  const desfaseEma = 19; // emaArr[0] <-> closes[19]
-  const desfaseMacd = 33; // macdLine[0] <-> closes[33] (ver implementación de calcularMACD)
-  const desfaseBb = 19; // bbSuperior[0] <-> closes[19]
-  const desfaseAtr = 13; // atrArr[0] <-> klines[13]
-  const desfaseAdx = 27; // adxArr[0] <-> klines[27] (ver implementación de calcularADX)
-  const desfaseObv = 0; // obvArr[0] <-> klines[0]
-
-  const maxDesfase = Math.max(desfaseRsi, desfaseEma, desfaseMacd, desfaseBb, desfaseAtr, desfaseAdx, desfaseObv, 10); // 10 para ventana de precios
-  const startIndex = Math.max(maxDesfase, VELAS_FUTURAS); // Asegura tener datos para indicadores y mirar adelante
-  const endIndex = klines.length - VELAS_FUTURAS; // Hasta donde podemos mirar adelante
+  const desfaseRsi = 13, desfaseEma = 19, desfaseMacd = 33,
+        desfaseBb = 19, desfaseAtr = 13, desfaseAdx = 27, desfaseObv = 0;
+  const maxDesfase = Math.max(desfaseRsi, desfaseEma, desfaseMacd, desfaseBb, desfaseAtr, desfaseAdx, desfaseObv, 10);
+  const startIndex = Math.max(maxDesfase, VELAS_FUTURAS);
+  const endIndex = klines.length - VELAS_FUTURAS;
 
   if (startIndex >= endIndex) {
-      console.error(`[Entrenamiento] startIndex (${startIndex}) >= endIndex (${endIndex}). No hay suficientes datos para el rango requerido con ${klines.length} velas.`);
-      return { X: null, y: null };
-  }
-
-  console.log(`[Entrenamiento] Bucle desde vela ${startIndex} hasta ${endIndex}. Total velas: ${closes.length}, Rango usable: ${startIndex} - ${endIndex}`);
-
-  for (let i = startIndex; i < endIndex; i++) {
-    // Extraemos los valores actuales de los indicadores CORREGIDOS
-    // Asumiendo que los arrays calculados empiezan en el índice correspondiente al primer valor válido
-    // Por ejemplo, si RSI(14) se calcula, rsiArr[0] es para closes[13]. Por lo tanto, para closes[i], el valor es rsiArr[i - 13].
-    // Si i < 13, rsiArr[i - 13] no existe y daría undefined. El operador || maneja eso.
-    const rsiActual = rsiArr[i - desfaseRsi] || 50;
-    const emaActual = emaArr[i - desfaseEma] || klines[i].close;
-    const macdActual = macdLine[i - desfaseMacd] || 0;
-    const signalActual = signalLine[i - desfaseMacd] || 0;
-    const bbSup = bbSuperior[i - desfaseBb] || klines[i].close;
-    const bbInf = bbInferior[i - desfaseBb] || klines[i].close;
-    const atrActual = atrArr[i - desfaseAtr] || 0;
-    const adxActual = adxArr[i - desfaseAdx] || 0;
-    const obvActual = obvArr[i - desfaseObv] || 0; // Obv no tiene desfase, usa [i]
-
-    // Definir la etiqueta: 1 si sube, 0 si no sube (cierra igual o más bajo)
-    const precioActual = klines[i].close;
-    const precioFuturo = klines[i + VELAS_FUTURAS].close;
-    const etiqueta = precioFuturo > precioActual ? 1 : 0;
-
-    // Extraemos las últimas 10 velas de precios y volúmenes para calcular features
-    const ventanaPrecios = closes.slice(i - 10, i); // Precios en i-9, i-8, ..., i-1 (closes[i-9] a closes[i-1])
-    const ventanaVolumenes = volumes.slice(i - 10, i);
-
-    // Calculamos cambios porcentuales de precios
-    const cambios = ventanaPrecios.map((p, idx) => idx === 0 ? 0 : (p - ventanaPrecios[idx - 1]) / ventanaPrecios[idx - 1]);
-
-    // Calculamos posición relativa en BB
-    const anchoBB = bbSup - bbInf;
-    const posicionBB = anchoBB > 0 ? (precioActual - bbInf) / anchoBB : 0.5;
-
-    // Calculamos ancho de BB relativo al precio
-    const anchoBBRelativo = anchoBB / precioActual;
-
-    // Calculamos ATR relativo al precio
-    const atrRelativo = atrActual / precioActual;
-
-    // Calculamos OBV normalizado
-    const obvNormalizado = obvActual / 1e9;
-
-    // Feature Vector (DEBE coincidir exactamente con la estructura de prepararDatosParaIA usada en predecir)
-    // Conteo: 10 (cambios) + 13 (siguientes) = 23
-    let features;
-    try {
-        features = [
-            ...cambios, // 10 cambios porcentuales
-            ventanaVolumenes.reduce((a, b) => a + b, 0) / 10 / 1e6, // 1. Promedio de volumen normalizado
-            rsiActual / 100, // 2. RSI normalizado
-            precioActual > emaActual ? 1 : 0, // 3. EMA booleana
-            rsiActual > 70 ? 1 : 0, // 4. RSI > 70 booleana
-            rsiActual < 30 ? 1 : 0, // 5. RSI < 30 booleana
-            macdActual / 1000, // 6. MACD normalizado
-            signalActual / 1000, // 7. Signal normalizado
-            (macdActual - signalActual) / 1000, // 8. Histograma MACD normalizado
-            posicionBB, // 9. Posición en BB
-            anchoBBRelativo, // 10. Ancho BB relativo AL PRECIO
-            atrRelativo, // 11. ATR relativo
-            obvNormalizado, // 12. OBV normalizado
-            0 / 1e6 // 13. openInterest simulado como 0 para completar 23 features. Puedes cambiarlo si tienes el valor real.
-        ];
-    } catch (error) {
-        // Si la creación del array falla, registramos el error y saltamos la iteración
-        console.error(`[Entrenamiento] Error al crear features para vela ${i}:`, error);
-        console.log(`[Entrenamiento] Valores en error: rsi: ${rsiActual}, ema: ${emaActual}, precio: ${precioActual}, macd: ${macdActual}, signal: ${signalActual}, bbSup: ${bbSup}, bbInf: ${bbInf}, atr: ${atrActual}, obv: ${obvActual}`);
-        continue; // Saltar esta iteración
-    }
-
-    // Verificamos que el número de features coincida con el inputShape del modelo (23)
-    if (features.length === 23) {
-      featuresList.push(features);
-      labelsList.push(etiqueta);
-    } else {
-      console.warn(`[Entrenamiento] Features para vela ${i} no tiene 23 elementos (tiene ${features.length}). Saltando. Valores: RSI(${rsiActual}), EMA(${emaActual}), MACD(${macdActual}), Signal(${signalActual}), BB(Sup:${bbSup}, Inf:${bbInf}), ATR(${atrActual}), ADX(${adxActual}), OBV(${obvActual})`);
-    }
-  }
-
-  if (featuresList.length === 0) {
-    console.error("[Entrenamiento] No se generaron datos suficientes con la función prepararDatosConEtiquetas.");
-    console.log(`[Entrenamiento] Longitudes de arrays originales - Closes: ${closes.length}, startIndex: ${startIndex}, endIndex: ${endIndex}`);
-    console.log(`[Entrenamiento] Longitudes de arrays calculados - RSI: ${rsiArr.length}, EMA: ${emaArr.length}, MACD: ${macdLine.length}, BB: ${bbSuperior.length}, ATR: ${atrArr.length}, ADX: ${adxArr.length}, OBV: ${obvArr.length}`);
+    console.error(`[Entrenamiento] No hay suficientes datos: ${klines.length} velas → usable: ${endIndex - startIndex}`);
     return { X: null, y: null };
   }
 
-  console.log(`[Entrenamiento] Datos preparados: ${featuresList.length} muestras válidas.`);
+  let muestrasSubida = [];
+  let muestrasBajada = [];
+
+  for (let i = startIndex; i < endIndex; i++) {
+    const rsiActual = rsiArr[i - desfaseRsi] || 50;
+    const emaActual = emaArr[i - desfaseEma] || closes[i];
+    const macdActual = macdLine[i - desfaseMacd] || 0;
+    const signalActual = signalLine[i - desfaseMacd] || 0;
+    const bbSup = bbSuperior[i - desfaseBb] || closes[i];
+    const bbInf = bbInferior[i - desfaseBb] || closes[i];
+    const atrActual = atrArr[i - desfaseAtr] || 0.001;
+    const adxActual = adxArr[i - desfaseAdx] || 0;
+    const obvActual = obvArr[i - desfaseObv] || 0;
+    const precioActual = closes[i];
+    const precioFuturo = closes[i + VELAS_FUTURAS];
+    const retorno = (precioFuturo - precioActual) / precioActual;
+    const retornoNormalizado = retorno / (atrActual / precioActual);
+
+    // ✅ Zona neutral: descartamos ruido (< ±0.3 ATR)
+    if (Math.abs(retornoNormalizado) < 0.3) continue;
+
+    const etiqueta = retornoNormalizado > 0.3 ? 1 : 0;
+
+    const ventanaPrecios = closes.slice(i - 10, i);
+    const cambios = ventanaPrecios.map((p, idx) => idx === 0 ? 0 : (p - ventanaPrecios[idx - 1]) / ventanaPrecios[idx - 1]);
+    const anchoBB = bbSup - bbInf;
+    const posicionBB = anchoBB > 0 ? (precioActual - bbInf) / anchoBB : 0.5;
+    const anchoBBRelativo = anchoBB / precioActual;
+    const atrRelativo = atrActual / precioActual;
+    const obvNormalizado = obvActual / 1e9;
+
+    const features = [
+      ...cambios,
+      volumes.slice(i - 10, i).reduce((a, b) => a + b, 0) / 10 / 1e6,
+      rsiActual / 100,
+      precioActual > emaActual ? 1 : 0,
+      rsiActual > 70 ? 1 : 0,
+      rsiActual < 30 ? 1 : 0,
+      macdActual / 1000,
+      signalActual / 1000,
+      (macdActual - signalActual) / 1000,
+      posicionBB,
+      anchoBBRelativo,
+      atrRelativo,
+      obvNormalizado,
+      0 / 1e6 // openInterest placeholder
+    ];
+
+    if (features.length === 23) {
+      if (etiqueta === 1) {
+        muestrasSubida.push(features);
+      } else {
+        muestrasBajada.push(features);
+      }
+    }
+  }
+
+  // ✅ ✅ ✅ NUEVA LÓGICA: BALANCEAR LAS CLASES
+  const minCount = Math.min(muestrasSubida.length, muestrasBajada.length);
+  const balancedSubida = muestrasSubida.slice(0, minCount);
+  const balancedBajada = muestrasBajada.slice(0, minCount);
+
+  const featuresList = [...balancedSubida, ...balancedBajada];
+  const labelsList = Array(minCount).fill([1]).concat(Array(minCount).fill([0]));
+
+  console.log(`[Entrenamiento] Muestras balanceadas: SUBIDA=${minCount}, BAJADA=${minCount}, Total=${featuresList.length}`);
+
+  if (featuresList.length === 0) return { X: null, y: null };
+
   return {
     X: tf.tensor2d(featuresList),
-    y: tf.tensor2d(labelsList, [labelsList.length, 1])
+    y: tf.tensor2d(labelsList)
   };
 }
+
 
 async function obtenerOpenInterest(symbol = 'BTCUSDT') {
   const res = await fetch(`/api/binance/futures/open-interest?symbol=${symbol}`);
@@ -402,39 +552,8 @@ async function obtenerOpenInterest(symbol = 'BTCUSDT') {
 }
 
 // === INDICADORES TÉCNICOS ===
-function calcularRSI(precios, periodo = 14) {
-  if (precios.length < periodo + 1) return Array(precios.length).fill(50);
-  const rsi = Array(periodo).fill(50);
-  let gananciaProm = 0;
-  let perdidaProm = 0;
-  for (let i = 1; i <= periodo; i++) {
-    const cambio = precios[i] - precios[i - 1];
-    if (cambio > 0) gananciaProm += cambio;
-    else perdidaProm -= cambio;
-  }
-  gananciaProm /= periodo;
-  perdidaProm /= periodo;
-  for (let i = periodo; i < precios.length; i++) {
-    const cambio = precios[i] - precios[i - 1];
-    const ganancia = cambio > 0 ? cambio : 0;
-    const perdida = cambio < 0 ? -cambio : 0;
-    gananciaProm = (gananciaProm * (periodo - 1) + ganancia) / periodo;
-    perdidaProm = (perdidaProm * (periodo - 1) + perdida) / periodo;
-    const rs = perdidaProm === 0 ? 100 : gananciaProm / perdidaProm;
-    rsi.push(100 - (100 / (1 + rs)));
-  }
-  return rsi;
-}
 
-function calcularEMA(precios, periodo = 20) {
-  if (precios.length === 0) return [];
-  const ema = [precios[0]];
-  const k = 2 / (periodo + 1);
-  for (let i = 1; i < precios.length; i++) {
-    ema.push(precios[i] * k + ema[i - 1] * (1 - k));
-  }
-  return ema;
-}
+
 
 function calcularMACD(precios, rapido = 12, lento = 26, signal = 9) {
   const emaRapida = calcularEMA(precios, rapido);
@@ -462,83 +581,91 @@ function calcularBandasBollinger(precios, periodo = 20, desv = 2) {
   return { media: medias, superior, inferior };
 }
 
-function calcularATR(klines, periodo = 14) {
-  if (klines.length < periodo + 1) return Array(klines.length).fill(0);
-  const tr = [];
-  for (let i = 1; i < klines.length; i++) {
-    const high = klines[i].high;
-    const low = klines[i].low;
-    const prevClose = klines[i - 1].close;
-    tr.push(Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose)));
-  }
-  let atr = Array(periodo - 1).fill(0);
-  let suma = tr.slice(0, periodo - 1).reduce((a, b) => a + b, 0);
-  atr.push(suma / (periodo - 1));
-  for (let i = periodo; i < tr.length; i++) {
-    atr.push((atr[atr.length - 1] * (periodo - 1) + tr[i]) / periodo);
-  }
-  while (atr.length < klines.length) atr.unshift(0);
-  return atr;
-}
-
 function calcularOBV(klines) {
   if (klines.length === 0) return [];
   const obv = [0];
   for (let i = 1; i < klines.length; i++) {
-    const delta = klines[i].close - klines[i - 1].close;
-    const vol = klines[i].volume;
-    obv.push(obv[i - 1] + (delta > 0 ? vol : delta < 0 ? -vol : 0));
+    const close = parseFloat(klines[i].c) || parseFloat(klines[i].close);
+    const prevClose = parseFloat(klines[i - 1].c) || parseFloat(klines[i - 1].close);
+    const volume = parseFloat(klines[i].v) || parseFloat(klines[i].volume);
+    const delta = close - prevClose;
+    obv.push(obv[i - 1] + (delta > 0 ? volume : delta < 0 ? -volume : 0));
   }
   return obv;
 }
-
 function calcularADX(klines, period = 14) {
   if (!Array.isArray(klines) || klines.length < period + 10) return [];
-  const highs = klines.map(k => k.high);
-  const lows  = klines.map(k => k.low);
-  const closes = klines.map(k => k.close);
+
+  // ✅ CONVERSIÓN EXPLÍCITA A NÚMERO — CLAVE
+  const highs = klines.map(k => parseFloat(k.h) || parseFloat(k.high));
+  const lows  = klines.map(k => parseFloat(k.l) || parseFloat(k.low));
+  const closes = klines.map(k => parseFloat(k.c) || parseFloat(k.close));
   const n = highs.length;
+
   const tr = new Array(n).fill(0);
   const plusDM = new Array(n).fill(0);
   const minusDM = new Array(n).fill(0);
+
   for (let i = 1; i < n; i++) {
     const upMove = highs[i] - highs[i - 1];
     const downMove = lows[i - 1] - lows[i];
+
     plusDM[i] = upMove > downMove && upMove > 0 ? upMove : 0;
     minusDM[i] = downMove > upMove && downMove > 0 ? downMove : 0;
+
     const hl = highs[i] - lows[i];
     const hc = Math.abs(highs[i] - closes[i - 1]);
     const lc = Math.abs(lows[i] - closes[i - 1]);
     tr[i] = Math.max(hl, hc, lc);
   }
+
+  // ✅ Suma inicial de los primeros `period` valores
   let trSmooth = tr.slice(1, period + 1).reduce((a, b) => a + b, 0);
   let plusDMSmooth = plusDM.slice(1, period + 1).reduce((a, b) => a + b, 0);
   let minusDMSmooth = minusDM.slice(1, period + 1).reduce((a, b) => a + b, 0);
+
   const plusDI = [], minusDI = [], dx = [];
+
   const firstPlusDI = (plusDMSmooth / trSmooth) * 100;
   const firstMinusDI = (minusDMSmooth / trSmooth) * 100;
+
   plusDI[period] = isNaN(firstPlusDI) ? 0 : firstPlusDI;
   minusDI[period] = isNaN(firstMinusDI) ? 0 : firstMinusDI;
-  const firstDX = Math.abs(plusDI[period] - minusDI[period]) / (plusDI[period] + minusDI[period]) * 100;
+
+  const firstDX = (plusDI[period] + minusDI[period]) !== 0 
+    ? (Math.abs(plusDI[period] - minusDI[period]) / (plusDI[period] + minusDI[period])) * 100 
+    : 0;
   dx[period] = isNaN(firstDX) ? 0 : firstDX;
+
+  // ✅ Calcular ADX con Wilders smoothing
   for (let i = period + 1; i < n; i++) {
     trSmooth = trSmooth - trSmooth / period + tr[i];
     plusDMSmooth = plusDMSmooth - plusDMSmooth / period + plusDM[i];
     minusDMSmooth = minusDMSmooth - minusDMSmooth / period + minusDM[i];
+
     const pdi = (plusDMSmooth / trSmooth) * 100;
     const mdi = (minusDMSmooth / trSmooth) * 100;
+
     plusDI[i] = isNaN(pdi) ? 0 : pdi;
     minusDI[i] = isNaN(mdi) ? 0 : mdi;
-    const currentDX = (pdi + mdi) !== 0 ? (Math.abs(pdi - mdi) / (pdi + mdi)) * 100 : 0;
+
+    const currentDX = (pdi + mdi) !== 0 
+      ? (Math.abs(pdi - mdi) / (pdi + mdi)) * 100 
+      : 0;
     dx[i] = isNaN(currentDX) ? 0 : currentDX;
   }
+
+  // ✅ ADX final: promedio móvil de DX (desde period*2)
   const adx = new Array(n).fill(0);
   let dxSum = dx.slice(period, period * 2).reduce((a, b) => a + b, 0);
   adx[period * 2 - 1] = dxSum / period;
+
   for (let i = period * 2; i < n; i++) {
     dxSum = dxSum - dxSum / period + dx[i];
     adx[i] = dxSum / period;
   }
+
+  // ✅ Devolver solo los valores útiles (desde period*2-1)
   return adx.slice(period * 2 - 1).map(val => Math.max(0, parseFloat(val.toFixed(2))));
 }
 
@@ -608,6 +735,11 @@ function prepararDatosParaIA(klines, openInterest = 0) {
 }
 
 // === ENTRENAMIENTO (CORREGIDO - MultiSímbolo con gather) ===
+// baraja los datos, crea el modelo con más dropout, y lo entrena.
+// === ENTRENAMIENTO (MULTI-SÍMBOLO) ===
+// Esta función descarga datos de múltiples símbolos, los prepara con etiquetas,
+// los concatena, baraja los datos mezclados, crea el modelo con Dropout y lo entrena.
+// === ENTRENAMIENTO: MULTI-SÍMBOLO (3+), 15m, 15k velas, portable ===
 async function entrenarRed() {
   if (!AUTENTICADO) {
     alert('🔒 Acceso denegado. Ingresa la clave primero.');
@@ -615,12 +747,12 @@ async function entrenarRed() {
   }
 
   // Definir símbolos a usar para entrenamiento
-  const SIMBOLOS_ENTRENAMIENTO = ['BTCUSDT','ETHUSDT'];
+  const SIMBOLOS_ENTRENAMIENTO = ['BTCUSDT'];
   const INTERVALO = '1m'; // Usamos 4h como acordamos
-  const LIMITE_DATOS = 100000; // Ajusta este número. Por ejemplo, 15000 velas de 4h por símbolo
+  const LIMITE_DATOS = 5500; // Ajusta este número. Por ejemplo, 15000 velas de 4h por símbolo
+  const VELAS_FUTURAS = 3;
   const EPOCAS = 50;
   const BATCH_SIZE = 32;
-
   const estadoEl = document.getElementById('estado');
   if (!estadoEl) {
     console.error("❌ Elemento de estado no encontrado.");
@@ -704,10 +836,12 @@ async function entrenarRed() {
     const trainSize = Math.floor(totalSamples * 0.8); // 80% para entrenamiento
     const valSize = totalSamples - trainSize; // 20% para validación
 
-    const X_train = X_shuffled.slice([0, 0], [trainSize, -1]);
-    const y_train = y_shuffled.slice([0, 0], [trainSize, -1]);
-    const X_val = X_shuffled.slice([trainSize, 0], [valSize, -1]);
-    const y_val = y_shuffled.slice([trainSize, 0], [valSize, -1]);
+    //const X_train = X_shuffled.slice([0, 0], [trainSize, -1]);
+    //const y_train = y_shuffled.slice([0, 0], [trainSize, -1]);
+    const X_train = X_shuffled.slice([0, 0], [totalSamples - valSize, -1]); // Primeros 80% (antiguos)
+    const X_val = X_shuffled.slice([totalSamples - valSize, 0], [valSize, -1]); // Últimos 20% (recientes)
+    const y_train = y_shuffled.slice([0, 0], [totalSamples - valSize, -1]);
+    const y_val = y_shuffled.slice([totalSamples - valSize, 0], [valSize, -1]);
 
     console.log(`[Entrenamiento MultiSímbolo] División (barajada): Entrenamiento: ${X_train.shape[0]}, Validación: ${X_val.shape[0]}`);
 
@@ -739,6 +873,10 @@ async function entrenarRed() {
             monitor: 'val_loss', // Monitorea la pérdida en validación
             patience: 5,        // Detiene si no mejora por 5 épocas consecutivas
             // restoreBestWeights: true // <-- COMENTADO: No soportado en esta versión de TFJS
+            // onEpochEnd: async (epoch, logs) => {
+            //   // Opcional: Actualizar estado con la época actual y las métricas
+            //   // estadoEntrenamientoEl.textContent = `🧠 Entrenando... Época ${epoch+1}/${epocas} - Loss: ${logs.loss.toFixed(4)}, Val Loss: ${logs.val_loss.toFixed(4)}`;
+            //   // console.log(`[Entrenamiento] Época ${epoch+1}/${epocas} - Loss: ${logs.loss.toFixed(4)}, Val Loss: ${logs.val_loss.toFixed(4)}`);
             // }
           })
           // Puedes agregar más callbacks aquí si es necesario
@@ -796,8 +934,10 @@ window._entrenarRed = entrenarRed;
 
 async function predecir(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, macdActual, signalActual, posicionBB, anchoBB, atrActual, obvActual, precioActual, openInterest = 0) {
   if (!modelo) return null;
+
   const ultimos10 = ultimosPrecios.slice(-10);
   const cambios = ultimos10.map((p, idx) => idx === 0 ? 0 : (p - ultimos10[idx - 1]) / ultimos10[idx - 1]);
+
   const features = [
     ...cambios,
     ultimosVolumenes.slice(-10).reduce((a, b) => a + b, 0) / 10 / 1e6,
@@ -806,7 +946,7 @@ async function predecir(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, 
     rsiActual > 70 ? 1 : 0,
     rsiActual < 30 ? 1 : 0,
     macdActual / 1000,
-    signalActual / 1000,
+    (signalActual || 0) / 1000,
     (macdActual - signalActual) / 1000,
     posicionBB,
     anchoBB / precioActual,
@@ -814,11 +954,20 @@ async function predecir(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, 
     obvActual / 1e9,
     openInterest / 1e6
   ];
+
+  if (features.length !== 23) {
+    console.warn(`[Predicción] Features ≠ 23 (${features.length}). Saltando predicción.`);
+    return null;
+  }
+
   const input = tf.tensor2d([features]);
   const pred = modelo.predict(input);
   const valor = await pred.data();
-  input.dispose(); pred.dispose();
-  return valor[0];
+
+  input.dispose();
+  pred.dispose();
+
+  return valor[0]; // ← ¡SOLO DEVUELVE EL VALOR! NADA MÁS.
 }
 
 // === PANEL FINANCIERO ===
@@ -1138,25 +1287,6 @@ async function actualizarCapitalTestnet() {
 // let autoTrading = false;      // <-- Debe existir
 
 // Añadir o asegurar esta función en script-tapa.txt
-function detenerTradingAutomatico() {
-  console.log("Deteniendo trading automático por controlador externo o manualmente.");
-  autoTrading = false; // Desactivar bandera de trading automático si se usa
-  if (streamingInterval) {
-    clearInterval(streamingInterval);
-    streamingInterval = null;
-    console.log("✅ Bucle de streaming detenido.");
-  } else {
-    console.log("ℹ️ Bucle de streaming no estaba activo.");
-  }
-  // Opcional: Actualizar UI
-  const estadoEl = document.getElementById('estado');
-  if (estadoEl) estadoEl.textContent = '⏹️ Trading automático detenido.';
-  // Opcional: Detener streaming de precios si aplica
-  // clearInterval(streamingPreciosInterval); // Si tienes uno separado
-}
-// Asegúrate de exponerla globalmente si el controlador la llama
-window.detenerTradingAutomatico = detenerTradingAutomatico;
-
 // ✅ ACTUALIZAR LÍNEAS DE PRECIOS — Para PE/TP/SL (Ahora considera LONG/SHORT y ajusta escala del gráfico)
 function actualizarLineasPrecios(entrada, tpPct, slPct, leverage) {
   // Asegurarse de que las líneas y el gráfico existan
@@ -1646,6 +1776,13 @@ async function actualizarPosicionesAbiertas() {
   try {
     const res = await fetch(`/api/binance/futures/positions?_t=${Date.now()}`);
     const data = await res.json();
+    
+    // ✅ ¡AÑADE ESTA LÍNEA! → Si no es array, hazlo array vacío
+    if (!Array.isArray(data)) {
+      console.warn('⚠️ Respuesta de /positions no es un array. Usando array vacío.');
+      return []; // o [] para que no falle
+    }
+        
     const table = document.getElementById('operaciones-abiertas');
     if (!table) return;
     if (!table.querySelector('tbody')) {
@@ -1690,523 +1827,794 @@ async function actualizarPosicionesAbiertas() {
 
 // === SEMÁFORO MEJORADO (ACTUALIZADO) ===
 // Añadimos un parámetro opcional 'tradingActivo' para reflejar el estado del autotrading
-function actualizarSemaforo({ adx = 0, confianza = 0, preciosLen = 0, modo = 'volatil', alcista = false, bajista = false, tradingActivo = true } = {}) {
-  // Solo evalúa las condiciones si el trading automático está activo
-  if (tradingActivo) {
-    const adxOk = adx > 20;
-    const predOk = confianza > 0.65;
-    const datosOk = preciosLen >= 55;
-    let modoOk = false;
-    if (modo === 'volatil') modoOk = true;
-    else if (modo === 'alcista') modoOk = alcista;
-    else if (modo === 'bajista') modoOk = bajista;
 
-    const adxEl = document.getElementById('cond-adx');
-    const modoEl = document.getElementById('cond-modo');
-    const predEl = document.getElementById('cond-pred');
-    const datosEl = document.getElementById('cond-datos');
-    const msgEl = document.getElementById('semaforo-msg');
+function actualizarSemaforo({ adx = 0,emaActual=0,rsiActual=50,atrActual=0.001, precioActual=0, confianza = 0, preciosLen = 0, modo = 'volatil', alcista = false, bajista = false, tradingActivo = true }) {
+  const luzADX = document.getElementById('cond-adx');
+  const luzModo = document.getElementById('cond-modo');
+  const luzPred = document.getElementById('cond-pred');
+  const luzDatos = document.getElementById('cond-datos');
+  const msgEl = document.getElementById('semaforo-msg');
 
-    if (adxEl) adxEl.style.backgroundColor = adxOk ? '#26a69a' : '#ef5350';
-    if (modoEl) modoEl.style.backgroundColor = modoOk ? '#26a69a' : '#ef5350';
-    if (predEl) predEl.style.backgroundColor = predOk ? '#26a69a' : '#ef5350';
-    if (datosEl) datosEl.style.backgroundColor = datosOk ? '#26a69a' : '#ef5350';
+  // ✅ Evaluar condiciones
+  const adxOk = adx > 20;
+  const datosOk = preciosLen >= 100;
+  const predOk = confianza >= 0.55;
+  let modoOk = false;
+  if (modo === 'alcista') modoOk = alcista;
+  else if (modo === 'bajista') modoOk = bajista;
+  else if (modo === 'volatil') modoOk = true;
 
-    if (msgEl) {
-      if (adxOk && modoOk && predOk && datosOk) {
-        msgEl.textContent = '✅ Listo para operar';
-        msgEl.style.color = '#26a69a';
-      } else {
-        msgEl.textContent = '❌ Condiciones no cumplidas';
-        msgEl.style.color = '#ef5350';
-      }
-    }
-  } else {
-    // Si el trading automático está desactivado, mostrar un estado diferente
-    const adxEl = document.getElementById('cond-adx');
-    const modoEl = document.getElementById('cond-modo');
-    const predEl = document.getElementById('cond-pred');
-    const datosEl = document.getElementById('cond-datos');
-    const msgEl = document.getElementById('semaforo-msg');
+  // ✅ Actualizar luces (siempre)
+  if (luzADX) luzADX.style.backgroundColor = adxOk ? '#4CAF50' : '#ef5350';
+  if (luzModo) luzModo.style.backgroundColor = modoOk ? '#4CAF50' : '#ef5350';
+  if (luzPred) luzPred.style.backgroundColor = predOk ? '#4CAF50' : '#ef5350';
+  if (luzDatos) luzDatos.style.backgroundColor = datosOk ? '#4CAF50' : '#ef5350';
 
-    // Opcional: Dejar los indicadores técnicos como estaban, o ponerlos en un estado neutro
-    // Por ejemplo, dejar los colores técnicos actuales, pero cambiar el mensaje:
-    // (Esto requiere leer los valores actuales o guardarlos, lo cual complica)
-    // Para simplificar, se pueden dejar los colores anteriores si es aceptable,
-    // o reiniciarlos a un estado neutro como gris.
-    // Por ahora, dejamos los colores técnicos anteriores (o como estaban en la última actualización)
-    // y solo cambiamos el mensaje principal.
-
-    // Cambia solo el mensaje principal para indicar que está detenido
+  // ✅ Mensaje principal
+  if (!tradingActivo) {
     if (msgEl) {
       msgEl.textContent = '⏸️ Trading automático detenido';
-      msgEl.style.color = '#ffa726'; // Naranja para indicar pausa
+      msgEl.style.color = '#FF9800';
     }
-    // Si deseas que los indicadores técnicos también reflejen el estado "pausado",
-    // puedes descomentar y adaptar las siguientes líneas:
-    /*
-    if (adxEl) adxEl.style.backgroundColor = '#999'; // Gris
-    if (modoEl) modoEl.style.backgroundColor = '#999';
-    if (predEl) predEl.style.backgroundColor = '#999';
-    if (datosEl) datosEl.style.backgroundColor = '#999';
-    */
   }
+  
+  else {
+    const listo = adxOk && datosOk && predOk && modoOk;
+    if (msgEl) {
+      msgEl.textContent = listo ? '✅ Listo para operar' : '❌ Condiciones no cumplidas';
+      msgEl.style.color = listo ? '#26a69a' : '#ef5350';
+    }
+  }
+  
+   //Actualiza UI con valores y condiciones-diego
+
+  const confianzaEl = document.getElementById('confianza-valor');
+if (confianzaEl) confianzaEl.textContent = `${Math.round(confianza * 100)}%`;
+
+const modoEl = document.getElementById('modo-valor');
+if (modoEl) modoEl.textContent = modo.toUpperCase();
+
+const datosEl = document.getElementById('datos-valor');
+if (datosEl) datosEl.textContent = preciosLen;
+
+const adxEl = document.getElementById('adx1-valor');
+if (adxEl) adxEl.textContent = adx.toFixed(1);
+
+
+ const emaEl = document.getElementById('ema-valor');
+if (emaEl) emaEl.textContent = emaActual.toFixed(1);
+
+const rsiEl = document.getElementById('rsi-valor');
+if (rsiEl) rsiEl.textContent = rsiActual.toFixed(1);
+
+const atrEl = document.getElementById('atr-valor');
+if (atrEl) atrEl.textContent = atrActual.toFixed(1);
+
+const precioEl = document.getElementById('precio-actual');
+if (precioEl) precioEl.textContent = precioActual.toFixed(1)
+
 }
-// === STREAMING ===
+
 // === STREAMING (ACTUALIZADO - Con logs y manejo de ordenEnCurso corregido) ===
 async function iniciarStreaming() {
-  if (!AUTENTICADO) return;
+  if (streamingActivo) {
+    console.log("⚠️ Streaming ya activo. Ignorando nueva llamada.");
+    return;
+  }
+  console.log('🚀 INICIANDO STREAMING...');
 
-  // [Agregado] Prevenir múltiples intervalos si ya está corriendo
-  if (streamingInterval) {
-      console.log("⚠️ iniciarStreaming: Bucle ya está activo. Deténgalo primero.");
-      return; // Opcional: Puedes detener el anterior automáticamente aquí si lo prefieres
+  if (!modelo) {
+    alert('⚠️ Primero entrena el modelo antes de iniciar el streaming.');
+    streamingActivo = false;
+    return;
   }
 
-  if (!modelo) { alert('Entrena el modelo primero'); return; }
-  simboloActual = document.getElementById('simbolo').value.toUpperCase();
+  if (!AUTENTICADO) {
+    alert('🔒 Acceso denegado. Entrena el modelo primero.');
+    streamingActivo = false;
+    return;
+  }
 
-  // [Agregado] Log de inicio
-  console.log(`[Streaming] Iniciando bucle de streaming para ${simboloActual}...`);
+  streamingActivo = true; // ✅ Marcar como activo
+   
+  console.log('🚀 INICIANDO STREAMING...');
 
+  if (!modelo) {
+    alert('⚠️ Primero entrena el modelo antes de iniciar el streaming.');
+    return;
+  }
+
+  if (!AUTENTICADO) {
+    alert('🔒 Acceso denegado. Entrena el modelo primero.');
+    return;
+  }
+
+  console.log('✅ Modelos y autenticación verificados. Iniciando WebSocket...');
+
+  // ✅ 1. Actualizar UI: indicar que se está iniciando
+  const estadoEl = document.getElementById('estado-streaming');
+  if (estadoEl) {
+    estadoEl.textContent = '⏳ Conectando con Binance... (espera hasta 5 minutos)';
+    estadoEl.style.color = '#FF9800';
+    estadoEl.style.fontWeight = 'bold';
+  }
+
+  const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@kline_1m');
+
+  ws.onopen = () => {
+    console.log('🟢 ¡CONEXIÓN EXITOSA! WebSocket abierto.');
+    if (estadoEl) {
+      estadoEl.textContent = '📡 Conectado. Esperando vela cerrada (1m)...';
+      estadoEl.style.color = '#2196F3';
+    }
+  };
+
+  ws.onerror = (error) => {
+    console.error('🔴 ERROR EN LA CONEXIÓN:', error);
+    if (estadoEl) {
+      estadoEl.textContent = '🔴 Error de conexión. Reintentando...';
+      estadoEl.style.color = '#ef5350';
+    }
+  };
+
+  ws.onclose = () => {
+    console.log('🟡 WebSocket cerrado. Limpiando estado...');
+  streamingActivo = false;
+  velasCerradas = 0; // ← ¡Para forzar recuento desde cero!
+
+  const estadoEl = document.getElementById('estado-streaming');
+  if (estadoEl) {
+    estadoEl.textContent = '🟡 Conexión perdida. Reintentando en 5s...';
+    estadoEl.style.color = '#FF9800';
+  }
+  setTimeout(() => {
+    console.log('🔄 Intentando reconectar...');
+    iniciarStreaming(); // ← ¡Se reinicia con streamingActivo protegido!
+  }, 5000);
+        
+   
+    console.log('🟡 WebSocket cerrado. Reintentando en 5s...');
+    if (estadoEl) {
+      estadoEl.textContent = '🟡 Conexión perdida. Reintentando en 5s...';
+      estadoEl.style.color = '#FF9800';
+    }
+    setTimeout(iniciarStreaming, 5000);
+  };
+
+/// === WEBSOCKET: MANEJO DE DATOS EN TIEMPO REAL (CORREGIDO - V2 - Mayor Dropout) ===
+// Asegúrate de que 'historialVelas', 'modelo', 'autoTrading', 'ordenEnCurso', 'simboloActual', etc. estén definidas globalmente.
+// Asegúrate de que 'crearModelo', 'predecir', 'actualizarSemaforo', 'cerrarPosicion', 'abrirPosicionReal', 'actualizarGrafico', 'inicializarGrafico' estén disponibles globalmente.
+// Asegúrate de que 'calcularRSI', 'calcularEMA', 'calcularMACD', 'calcularBandasBollinger', 'calcularATR', 'calcularADX', 'calcularOBV' estén disponibles globalmente.
+
+ws.onmessage = async (event) => {
   try {
-    let klines = await obtenerDatos(simboloActual, '1m', 60);
-    precios = klines.map(k => k.close);
-    ultimoPrecio = klines[klines.length - 1].close;
-    dataSeries.setData(klines);
-    if (!symbolInfo) await fetchSymbolInfo(simboloActual);
+    // console.log("🔹 [DEBUG] ws.onmessage iniciado");
+    const data = JSON.parse(event.data);
+    const kline = data.k;
 
-    // ✅ Recuperar capital desde localStorage
-    const savedCapital = parseFloat(localStorage.getItem('capitalActual'));
-    const savedHistorial = JSON.parse(localStorage.getItem('historialOperaciones') || '[]');
-    if (savedHistorial.length > 0 && !isNaN(savedCapital)) {
-      operaciones = savedHistorial;
-      capitalActual = savedCapital;
-      capitalInicial = parseFloat(localStorage.getItem('capitalInicial')) || 1000;
-      actualizarPanelFinanciero();
-      renderizarHistorial();
+    // ✅ Actualizar UI del estado con la vela recibida
+    const estadoEl = document.getElementById('estado');
+    if (estadoEl) {
+      estadoEl.textContent = `🕒 Recibida vela: ${new Date(kline.t).toLocaleTimeString()} | Cerrada: ${kline.x ? '✅ Sí' : '⏳ No'}`;
+      estadoEl.style.color = kline.x ? '#4CAF50' : '#FF9800';
     }
 
-    streamingInterval = setInterval(async () => {
-      // ✅ VERIFICAR BANDERA DE ORDEN EN CURSO ANTES DE TODO
-      if (ordenEnCurso) {
-        console.log("⚠️ Operación en curso, esperando a que termine...");
-        return; // Salir de esta iteración si hay una orden en curso
+    // ✅ Actualizar gráfico incluso si está en curso (como en el primer archivo)
+    if (!window.chart) {
+      inicializarGrafico();
+    }
+    actualizarGrafico(kline); // ← recibe kline directo del stream (con .t en ms, .o, .h, etc.)
+
+    // ❌ Ignorar si la vela NO está cerrada (solo procesar cuando x=true)
+    if (!kline.x) {
+      console.log(`⏳ Vela en curso: ${new Date(kline.t).toLocaleTimeString()}`);
+      return;
+    }
+
+    // ❌ Validar datos mínimos
+    if (!kline.o || !kline.h || !kline.l || !kline.c || !kline.v) {
+      console.error("❌ Vela incompleta recibida:", kline);
+      return;
+    }
+
+    // ✅ Agregar vela cerrada al historial (con formato requerido por los indicadores)
+    const lastKlineTime = historialVelas.length > 0 ? historialVelas[historialVelas.length - 1].time : 0;
+    const newTimeSec = Math.floor(kline.t / 1000);
+    if (newTimeSec > lastKlineTime) {
+      historialVelas.push({
+        time: newTimeSec,
+        open: parseFloat(kline.o),
+        high: parseFloat(kline.h),
+        low: parseFloat(kline.l),
+        close: parseFloat(kline.c),
+        volume: parseFloat(kline.v)
+      });
+      if (historialVelas.length > 10000) {
+        historialVelas = historialVelas.slice(-10000);
+      }
+      console.log(`✅ Vela cerrada añadida al historial (formato nuevo). Total velas: ${historialVelas.length}. Time: ${newTimeSec}`);
+    } else {
+      console.warn(`⚠️ Vela duplicada o desordenada recibida (time: ${newTimeSec}), Última en historial: ${lastKlineTime}`);
+      return;
+    }
+
+
+
+
+    // ✅ Incrementar contador de velas cerradas
+    velasCerradas++; // <-- [CORRECCIÓN] Incrementar aquí, después de agregar correctamente
+    console.log(`📊 Velas cerradas acumuladas: ${velasCerradas}/100`);
+
+    // === ACTUALIZAR GRÁFICO ===
+
+
+    // === PROCESAR DATOS PARA PREDICCIÓN Y TRADING (cuando hay 100 velas cerradas) ===
+    if (velasCerradas >= 100) { // <-- Asegura que haya al menos 100 velas cerradas para procesar
+      console.log('✅ 100 velas recibidas. Procesando datos para IA...');
+
+      // [DIAGNÓSTICO] Verificar longitud de historialVelas
+      console.log(`[DIAGNÓSTICO WS] historialVelas.length: ${historialVelas.length}`);
+      
+      
+      
+      
+      if (historialVelas.length < 100) {
+          console.error("[DIAGNÓSTICO WS] historialVelas tiene menos de 100 elementos.");
+          return; // Salir si no hay suficientes datos
       }
 
+      // ✅ Obtener últimos 100 precios y volúmenes (de historialVelas con estructura {time, open, high, low, close, volume})
+      const ultimas100 = historialVelas.slice(-100);
+      // [DIAGNÓSTICO] Verificar que slice funciona y hay 100 elementos
+      console.log(`[DIAGNÓSTICO WS] ultimas100.length: ${ultimas100.length}`);
+      console.log(`[DIAGNÓSTICO WS] Primera vela de ultimas100 (close, volume):`, { close: ultimas100[0].close, volume: ultimas100[0].volume });
+      console.log(`[DIAGNÓSTICO WS] Última vela de ultimas100 (close, volume):`, { close: ultimas100[ultimas100.length - 1].close, volume: ultimas100[ultimas100.length - 1].volume });
+
+      const closes = ultimas100.map(k => k.close); // k.close, no k.c
+      const volumes = ultimas100.map(k => k.volume); // k.volume, no k.v
+
+      // [DIAGNÓSTICO] Verificar si hay NaN en los arrays de precios/volúmenes
+      console.log(`[DIAGNÓSTICO WS] Closes contiene NaN: ${closes.some(isNaN)}`);
+      console.log(`[DIAGNÓSTICO WS] Volumes contiene NaN: ${volumes.some(isNaN)}`);
+      console.log(`[DIAGNÓSTICO WS] Closes (últimos 5):`, closes.slice(-5));
+      console.log(`[DIAGNÓSTICO WS] Volumes (últimos 5):`, volumes.slice(-5));
+
+      // [DIAGNÓSTICO] Verificar que ultimoPrecio sea un número válido
+      const ultimoPrecio = closes[closes.length - 1];
+      console.log(`[DIAGNÓSTICO WS] ultimoPrecio calculado: ${ultimoPrecio} (typeof: ${typeof ultimoPrecio}, isNaN: ${isNaN(ultimoPrecio)})`);
+
+      // ✅ Calcular indicadores técnicos (últimos valores de los arrays)
+      // [DIAGNÓSTICO] Calcular todos los indicadores y verificar sus longitudes y valores
+      console.log("[DIAGNÓSTICO WS] Iniciando cálculo de indicadores...");
+      const rsi = calcularRSI(closes, 14);
+      const ema20 = calcularEMA(closes, 20);
+      const ema50 = calcularEMA(closes, 50);
+      const { macdLine: macdValues, signalLine: signalValues } = calcularMACD(closes, 12, 26, 9);
+      const { superior: bbSuperior, inferior: bbInferior } = calcularBandasBollinger(closes, 20, 2);
+      const atrValues = calcularATR(ultimas100, 14); // Usar las últimas 100 velas del historial (con estructura correcta)
+      const adxValues = calcularADX(ultimas100, 14); // Usar las últimas 100 velas del historial (con estructura correcta)
+      const obvValues = calcularOBV(ultimas100); // Usar las últimas 100 velas del historial (con estructura correcta)
+      console.log("[DIAGNÓSTICO WS] Cálculo de indicadores finalizado.");
+
+      // [DIAGNÓSTICO] Verificar longitudes y tipos de los arrays de indicadores
+      console.log(`[DIAGNÓSTICO WS] Longitudes - RSI: ${rsi?.length}, EMA20: ${ema20?.length}, EMA50: ${ema50?.length}, MACD: ${macdValues?.length}, Signal: ${signalValues?.length}, BB: ${bbSuperior?.length}, ATR: ${atrValues?.length}, ADX: ${adxValues?.length}, OBV: ${obvValues?.length}`);
+      // console.log(`[DIAGNÓSTICO WS] Tipos - RSI: ${typeof rsi}, EMA20: ${typeof ema20}, MACD: ${typeof macdValues}, BB: ${typeof bbSuperior}, ATR: ${typeof atrValues}, ADX: ${typeof adxValues}, OBV: ${typeof obvValues}`);
+
+      // [DIAGNÓSTICO] Verificar que los arrays no sean null/undefined o vacíos
+      if (!Array.isArray(rsi) || rsi.length === 0) { console.error("[DIAGNÓSTICO WS] RSI no es un array o está vacío:", rsi); return; }
+      if (!Array.isArray(ema20) || ema20.length === 0) { console.error("[DIAGNÓSTICO WS] EMA20 no es un array o está vacío:", ema20); return; }
+      if (!Array.isArray(ema50) || ema50.length === 0) { console.error("[DIAGNÓSTICO WS] EMA50 no es un array o está vacío:", ema50); return; }
+      if (!Array.isArray(macdValues) || macdValues.length === 0) { console.error("[DIAGNÓSTICO WS] MACD no es un array o está vacío:", macdValues); return; }
+      if (!Array.isArray(signalValues) || signalValues.length === 0) { console.error("[DIAGNÓSTICO WS] Signal no es un array o está vacío:", signalValues); return; }
+      if (!Array.isArray(bbSuperior) || bbSuperior.length === 0) { console.error("[DIAGNÓSTICO WS] BB Superior no es un array o está vacío:", bbSuperior); return; }
+      if (!Array.isArray(bbInferior) || bbInferior.length === 0) { console.error("[DIAGNÓSTICO WS] BB Inferior no es un array o está vacío:", bbInferior); return; }
+      if (!Array.isArray(atrValues) || atrValues.length === 0) { console.error("[DIAGNÓSTICO WS] ATR no es un array o está vacío:", atrValues); return; }
+      if (!Array.isArray(adxValues) || adxValues.length === 0) { console.error("[DIAGNÓSTICO WS] ADX no es un array o está vacío:", adxValues); return; }
+      if (!Array.isArray(obvValues) || obvValues.length === 0) { console.error("[DIAGNÓSTICO WS] OBV no es un array o está vacío:", obvValues); return; }
+
+      // Calcular desfases correctos basados en la lógica de las funciones de cálculo
+      // RSI: rsi[0] <-> closes[13] -> desfase 13 (índice 0 de rsi es para closes[13])
+      // EMA20: ema[0] <-> closes[19] -> desfase 19 (índice 0 de ema es para closes[19])
+      // EMA50: ema[0] <-> closes[49] -> desfase 49 (índice 0 de ema es para closes[49])
+      // MACD: macdLine[0] <-> closes[33] -> desfase 33 (índice 0 de macdLine es para closes[33])
+      // BB: superior[0] <-> closes[19] -> desfase 19 (índice 0 de bbSuperior es para closes[19])
+      // ATR: atr[0] <-> klines[13] -> desfase 13 (índice 0 de atr es para klines[13])
+      // ADX: adx[0] <-> klines[27] -> desfase 27 (índice 0 de adx es para klines[27])
+      // OBV: obv[0] <-> klines[0] -> desfase 0 (índice 0 de obv es para klines[0])
+
+      const desfaseRsi = 13;
+      const desfaseEma = 19; // Usamos EMA20 para la comparación alcista/bajista
+      const desfaseMacd = 33;
+      const desfaseBb = 19;
+      const desfaseAtr = 13;
+      const desfaseAdx = 27; // <-- CORREGIDO: calcularADX empieza en klines[27]
+      const desfaseObv = 0;
+
+      // El índice i debe ser >= max(desfaseRsi, desfaseEma, desfaseMacd, desfaseBb, desfaseAtr, desfaseAdx, desfaseObv, 10_para_ventana_precios)
+      // Usamos el índice más alto de 'ultimas100', que es 99 (porque son 100 velas, de 0 a 99)
+      const i = 99; // Índice de la última vela en 'ultimas100'
+
+      // [DIAGNÓSTICO] Verificar índices antes de acceder a arrays
+      console.log(`[DIAGNÓSTICO WS] Accediendo arrays en i=99 con desfases: RSI[${i-desfaseRsi}], EMA[${i-desfaseEma}], MACD[${i-desfaseMacd}], BB[${i-desfaseBb}], ATR[${i-desfaseAtr}], ADX[${i-desfaseAdx}], OBV[${i-desfaseObv}]`);
+      if ((i - desfaseRsi) < 0 || (i - desfaseRsi) >= rsi.length) { console.error(`[DIAGNÓSTICO WS] Índice RSI ${i - desfaseRsi} fuera de rango (${rsi.length}) para i=${i}`); return; }
+      if ((i - desfaseEma) < 0 || (i - desfaseEma) >= ema20.length) { console.error(`[DIAGNÓSTICO WS] Índice EMA ${i - desfaseEma} fuera de rango (${ema20.length}) para i=${i}`); return; }
+      if ((i - desfaseMacd) < 0 || (i - desfaseMacd) >= macdValues.length) { console.error(`[DIAGNÓSTICO WS] Índice MACD ${i - desfaseMacd} fuera de rango (${macdValues.length}) para i=${i}`); return; }
+      if ((i - desfaseBb) < 0 || (i - desfaseBb) >= bbSuperior.length) { console.error(`[DIAGNÓSTICO WS] Índice BB ${i - desfaseBb} fuera de rango (${bbSuperior.length}) para i=${i}`); return; }
+      if ((i - desfaseAtr) < 0 || (i - desfaseAtr) >= atrValues.length) { console.error(`[DIAGNÓSTICO WS] Índice ATR ${i - desfaseAtr} fuera de rango (${atrValues.length}) para i=${i}`); return; }
+      if ((i - desfaseAdx) < 0 || (i - desfaseAdx) >= adxValues.length) { console.error(`[DIAGNÓSTICO WS] Índice ADX ${i - desfaseAdx} fuera de rango (${adxValues.length}) para i=${i}`); return; }
+      if ((i - desfaseObv) < 0 || (i - desfaseObv) >= obvValues.length) { console.error(`[DIAGNÓSTICO WS] Índice OBV ${i - desfaseObv} fuera de rango (${obvValues.length}) para i=${i}`); return; }
+
+      // [CORRECCIÓN] Asignar valores con fallback solo si son NaN o undefined
+      // Usamos los índices calculados con los desfases correctos
+      const rsiActual = (rsi[i - desfaseRsi] != null && !isNaN(rsi[i - desfaseRsi])) ? rsi[i - desfaseRsi] : 50;
+      const e20 = (ema20[i - desfaseEma] != null && !isNaN(ema20[i - desfaseEma])) ? ema20[i - desfaseEma] : ultimoPrecio;
+      const e50 = (ema50[i - desfaseEma] != null && !isNaN(ema50[i - desfaseEma])) ? ema50[i - desfaseEma] : ultimoPrecio; // Usamos el mismo desfase para EMA
+      const macdActual = (macdValues[i - desfaseMacd] != null && !isNaN(macdValues[i - desfaseMacd])) ? macdValues[i - desfaseMacd] : 0;
+      const signalActual = (signalValues[i - desfaseMacd] != null && !isNaN(signalValues[i - desfaseMacd])) ? signalValues[i - desfaseMacd] : 0;
+      const bbSup = (bbSuperior[i - desfaseBb] != null && !isNaN(bbSuperior[i - desfaseBb])) ? bbSuperior[i - desfaseBb] : ultimoPrecio; // Usamos el desfase de EMA porque BB también empieza en 19
+      const bbInf = (bbInferior[i - desfaseBb] != null && !isNaN(bbInferior[i - desfaseBb])) ? bbInferior[i - desfaseBb] : ultimoPrecio; // Usamos el desfase de EMA porque BB también empieza en 19
+      const atrGlobal = (atrValues[i - desfaseAtr] != null && !isNaN(atrValues[i - desfaseAtr])) ? atrValues[i - desfaseAtr] : 0;
+      const adxActual = (adxValues[i - desfaseAdx] != null && !isNaN(adxValues[i - desfaseAdx])) ? adxValues[i - desfaseAdx] : 0;
+      const obvActual = (obvValues[i - desfaseObv] != null && !isNaN(obvValues[i - desfaseObv])) ? obvValues[i - desfaseObv] : 0;
+
+      const alcista = e20 > e50;
+      const bajista = e20 < e50;
+
+      console.log(`[DIAGNÓSTICO WS] Valores finales - RSI: ${rsiActual}, EMA20: ${e20}, EMA50: ${e50}, alcista: ${alcista}, bajista: ${bajista}, MACD: ${macdActual}, Signal: ${signalActual}, BB_Sup: ${bbSup}, BB_Inf: ${bbInf}, ATR: ${atrGlobal}, ADX: ${adxActual}, OBV: ${obvActual}`);
+
+      // [DIAGNÓSTICO] Calcular posición y ancho BB para la predicción
+      const anchoBB = bbSup - bbInf;
+      const posicionBB = anchoBB > 0 ? (ultimoPrecio - bbInf) / anchoBB : 0.5;
+      const anchoBBRelativo = anchoBB / ultimoPrecio;
+      const atrRelativo = atrGlobal / ultimoPrecio;
+      const obvNormalizado = obvActual / 1e9;
+
+      // [DIAGNÓSTICO] Calcular cambios para la predicción
+      const ultimosPrecios = closes.slice(-10);
+      const ultimosVolumenes = volumes.slice(-10);
+      const cambios = ultimosPrecios.map((p, idx) => idx === 0 ? 0 : (p - ultimosPrecios[idx - 1]) / ultimosPrecios[idx - 1]);
+
+      // [DIAGNÓSTICO] Construir array de features como lo hace prepararDatosParaIA
+      const featuresParaPrediccion = [
+          ...cambios, // 10
+          ultimosVolumenes.reduce((a, b) => a + b, 0) / 10 / 1e6, // 1
+          rsiActual / 100, // 2
+          ultimoPrecio > e20 ? 1 : 0, // 3
+          rsiActual > 70 ? 1 : 0, // 4
+          rsiActual < 30 ? 1 : 0, // 5
+          macdActual / 1000, // 6
+          signalActual / 1000, // 7
+          (macdActual - signalActual) / 1000, // 8
+          posicionBB, // 9
+          anchoBBRelativo, // 10
+          atrRelativo, // 11
+          obvNormalizado, // 12
+          0 / 1e6 // 13. openInterest simulado como 0
+          // Total: 10 + 13 = 23
+      ];
+
+      // [DIAGNÓSTICO] Verificar longitud y contenido de features ANTES de llamar a predecir
+      console.log(`[DIAGNÓSTICO WS] featuresParaPrediccion.length: ${featuresParaPrediccion.length}`);
+      console.log(`[DIAGNÓSTICO WS] featuresParaPrediccion (primeros 5):`, featuresParaPrediccion.slice(0, 5));
+      console.log(`[DIAGNÓSTICO WS] featuresParaPrediccion (últimos 5):`, featuresParaPrediccion.slice(-5));
+
+      if (featuresParaPrediccion.length !== 23) {
+          console.error(`[DIAGNÓSTICO WS] featuresParaPrediccion.length no es 23. Es: ${featuresParaPrediccion.length}`);
+          return; // Salir si las features no tienen la longitud esperada
+      }
+
+      // ✅ Hacer predicción
+      let prediccionRaw = null;
       try {
-        const ticker = await (await fetch(`/api/binance/ticker?symbol=${simboloActual}`)).json();
-        ultimoPrecio = parseFloat(ticker.price);
-        const ahora = Math.floor(Date.now() / 1000);
-        const ultimaVela = klines[klines.length - 1];
-        if (ahora - ultimaVela.time >= 60) {
-          klines.push({ time: ahora, open: ultimaVela.close, high: Math.max(ultimaVela.close, ultimoPrecio), low: Math.min(ultimaVela.close, ultimoPrecio), close: ultimoPrecio, volume: 0 });
-          precios.push(ultimoPrecio);
-          // [CORRECCIÓN] Asegurar que el tiempo para la actualización del gráfico sea el mismo que el de la vela
-          dataSeries.update({ time: ahora, open: ultimaVela.close, high: Math.max(ultimaVela.close, ultimoPrecio), low: Math.min(ultimaVela.close, ultimoPrecio), close: ultimoPrecio, volume: 0 });
-        } else {
-          klines[klines.length - 1] = { ...ultimaVela, high: Math.max(ultimaVela.high, ultimoPrecio), low: Math.min(ultimaVela.low, ultimoPrecio), close: ultimoPrecio };
-          // [CORRECCIÓN] Asegurar que el tiempo para la actualización del gráfico sea el mismo que el de la vela
-          dataSeries.update({ ...klines[klines.length - 1] });
-        }
-
-        // ... (código para calcular indicadores: rsi, ema, macd, bb, atr, adx, obv, etc.) ...
-        // (Asumiendo que todas estas variables se calculan aquí)
-        const closes = klines.slice(-100).map(k => k.close);
-        const rsi = calcularRSI(closes, 14);
-        const ema20 = calcularEMA(closes, 20);
-        const ema50 = calcularEMA(closes, 50);
-        const { macdLine, signalLine } = calcularMACD(closes, 12, 26, 9);
-        const { media: bbMedia, superior: bbSuperior, inferior: bbInferior } = calcularBandasBollinger(closes, 20, 2);
-        const atrArr = calcularATR(klines.slice(-100), 14);
-        const adxArr = calcularADX(klines.slice(-100), 14);
-        const obv = calcularOBV(klines.slice(-100));
-        const rsiActual = rsi[rsi.length - 1] || 50;
-        const e20 = ema20.length > 0 ? ema20[ema20.length - 1] : ultimoPrecio;
-        const e50 = ema50.length > 0 ? ema50[ema50.length - 1] : ultimoPrecio;
-        const alcista = e20 > e50;
-        const bajista = e20 < e50;
-        const macdActual = macdLine[macdLine.length - 1] || 0;
-        const signalActual = signalLine[signalLine.length - 1] || 0;
-        const bbInf = bbInferior[bbInferior.length - 1] || ultimoPrecio;
-        const bbSup = bbSuperior[bbSuperior.length - 1] || ultimoPrecio;
-        const anchoBB = bbSup - bbInf;
-        const posicionBB = anchoBB > 0 ? (ultimoPrecio - bbInf) / anchoBB : 0.5;
-        const atrGlobal = atrArr.length > 0 ? atrArr[atrArr.length - 1] : 0;
-        const adxActual = adxArr.length > 0 ? adxArr[adxArr.length - 1] : 0;
-        const obvActual = obv[obv.length - 1] || 0;
-
-        // Actualizar UI de ADX y ATR
-        const adxE = document.getElementById('adx-valor');
-        const atrE = document.getElementById('atr-valor');
-        if (adxE) adxE.textContent = adxActual.toFixed(1);
-        if (atrE) atrE.textContent = `ATR: ${atrGlobal.toFixed(2)}`;
-
-        // Calcular predicción
-        let prediccionRaw = null, confianza = 0;
-        if (precios.length >= 30) {
-          const openInterest = await obtenerOpenInterest(simboloActual);
           prediccionRaw = await predecir(
-            precios.slice(-10),
-            klines.slice(-10).map(k => k.volume),
-            rsiActual,
-            e20,
-            macdActual,
-            signalActual,
-            posicionBB,
-            anchoBB,
-            atrGlobal,
-            obvActual,
-            ultimoPrecio,
-            openInterest
+              ultimosPrecios,      // 1. Array de 10 precios
+              ultimosVolumenes,    // 2. Array de 10 volúmenes
+              rsiActual,           // 3. RSI actual (CORREGIDO)
+              e20,                 // 4. EMA20 actual (CORREGIDO)
+              macdActual,          // 5. MACD actual (CORREGIDO)
+              signalActual,        // 6. Signal actual (CORREGIDO)
+              posicionBB,          // 7. Posición en BB (CORREGIDO)
+              anchoBB,             // 8. Ancho de BB (CORREGIDO)
+              atrGlobal,           // 9. ATR actual (CORREGIDO)
+              obvActual,           // 10. OBV actual (CORREGIDO)
+              ultimoPrecio,        // 11. Precio actual
+              0                    // 12. Open Interest (simulado como 0)
           );
-          if (prediccionRaw != null && !isNaN(prediccionRaw)) {
-            // [CORRECCIÓN] Cálculo de confianza basado en distancia a 0.5
-            confianza = Math.abs(prediccionRaw - 0.5) * 2;
-            const dir = prediccionRaw > 0.5 ? 'SUBIDA' : 'BAJADA';
-            const porc = Math.round(confianza * 100);
-            document.getElementById('prediccion-direccion').innerHTML = `${dir === 'SUBIDA' ? '🟢' : '🔴'} ${dir}`;
-            document.getElementById('prediccion-porcentaje').textContent = `${porc}%`;
-            const prog = document.getElementById('prediccion-progreso');
-            if (prog) {
-              prog.style.width = `${porc}%`;
-              prog.style.backgroundColor = porc > 55 ? (dir === 'SUBIDA' ? '#26a69a' : '#ef5350') : '#666';
-            }
-          } else {
-            document.getElementById('prediccion-direccion').textContent = '—';
-            document.getElementById('prediccion-porcentaje').textContent = '—';
-            const prog = document.getElementById('prediccion-progreso');
-            if (prog) prog.style.width = '0%';
-          }
-        }
+           // Agregado por diego
+          window.prediccionRaw = prediccionRaw; // ← Ahora sí podrás verlo en consola
 
-        // === ACTUALIZAR SEMÁFORO (considerando autoTrading) ===
-        // Asegúrate de que estas variables (adxActual, confianza, alcista, bajista, etc.)
-        // estén definidas en este punto del código dentro del setInterval.
-        const modo = document.getElementById('modo-mercado')?.value || 'volatil';
-        // PASAMOS EL ESTADO DE autoTrading PARA QUE EL SEMÁFORO LO REFLEJE
-        actualizarSemaforo({
-          adx: adxActual,
-          confianza: confianza,
-          preciosLen: precios.length,
-          modo: modo,
-          alcista: alcista,
-          bajista: bajista,
-          tradingActivo: autoTrading // <-- PASAMOS EL ESTADO DE autoTrading
-        });
-        // === FIN ACTUALIZAR SEMÁFORO ===
-
-        // === PROTECCIÓN CONTRA FLASH EVENTS (>5% en 10s) ===
-        if (precios.length >= 6) {
-          const cambio10s = ((ultimoPrecio - precios[precios.length - 6]) / precios[precios.length - 6]) * 100;
-          if (Math.abs(cambio10s) > 5.0) {
-            console.warn(`🚨 Flash event detectado: ${cambio10s.toFixed(2)}% en 10s`);
-            document.getElementById('estado').textContent = `⚠️ Flash event (${cambio10s.toFixed(1)}%) → Auto-cierre seguro`;
-            // Cerrar TODAS las posiciones abiertas inmediatamente
-            const posiciones = await (await fetch('/api/binance/futures/positions')).json();
-            for (const pos of posiciones) {
-              if (Math.abs(parseFloat(pos.positionAmt)) > 0.0001) {
-                // [CORRECCIÓN] Manejar ordenEnCurso en flash events
-                // ACTIVAR BANDERA ANTES DE CERRAR
-                ordenEnCurso = true;
-                cerrarPosicion(pos.symbol, pos.positionSide, 'Flash Event')
-                  .finally(() => {
-                     // DESACTIVAR BANDERA DESPUÉS DE CERRAR (éxito o error)
-                     ordenEnCurso = false;
-                  });
-              }
-            }
-            return; // Salir de esta iteración
-          }
-        }
-
-        // === CONTROL DE TRADING AUTOMÁTICO (APERTURA Y CIERRE BASADO EN SEÑALES) ===
-        // Esta línea detiene la lógica de apertura/cierre automático basado en señales
-        if (!autoTrading) {
-            // El bucle sigue corriendo, actualizando precios, indicadores, semáforo, etc.
-            // Pero no intentará abrir ni cerrar posiciones automáticamente basadas en señales de IA.
-            // Continúa hasta la actualización del semáforo y el catch.
-        } else {
-            // === TRADING AUTOMÁTICO === (Lógica de cierre y apertura basada en señales)
-            // [Corrección] Obtener posiciones con manejo de errores más robusto
-            let posiciones;
-            try {
-              const posResponse = await fetch('/api/binance/futures/positions');
-              if (!posResponse.ok) {
-                console.error('❌ Error HTTP obteniendo posiciones:', posResponse.status, posResponse.statusText);
-                document.getElementById('estado').textContent = `⚠️ Error HTTP: ${posResponse.status}`;
-                return; // Salir de esta iteración si falla la API (4xx/5xx)
-              }
-              posiciones = await posResponse.json(); // Intentar parsear JSON
-            } catch (fetchOrJsonError) {
-              // Captura errores de red (fetch) o de parsing JSON
-              console.error('❌ Error obteniendo o parseando posiciones:', fetchOrJsonError);
-              document.getElementById('estado').textContent = `⚠️ Error de red o formato`;
-              return; // Salir de esta iteración si falla el fetch o json()
-            }
-
-            // Verificar que la respuesta sea un array después del parsing
-            if (!Array.isArray(posiciones)) {
-               console.error('❌ Formato inesperado de posiciones (no es un array):', posiciones);
-               document.getElementById('estado').textContent = `⚠️ Error: Formato de posiciones inválido`;
-               return; // Salir de esta iteración si la respuesta no es un array
-            }
-
-            // [CORRECCIÓN] Asignar la posición específica para el símbolo actual
-            const posicionActual = posiciones.find(p => p.symbol === simboloActual && Math.abs(parseFloat(p.positionAmt)) > 0.0001);
-
-            // [Agregado] Inicializar estado global para posiciones si no existe
-            if (typeof window.estadoPosiciones === 'undefined') window.estadoPosiciones = {};
-
-            // [Agregado] Inicializar estado persistente para esta posición si es la primera vez que la vemos en esta iteración
-            if (posicionActual) {
-                const symbolSideKey = `${posicionActual.symbol}_${posicionActual.positionSide}`;
-                if (!window.estadoPosiciones[symbolSideKey]) {
-                    window.estadoPosiciones[symbolSideKey] = { tp1Cerrado: false, slTrailing: false };
-                }
-            }
-
-            // ✅ Solo evaluar cierre si ya se calculó la predicción y hay posición
-            if (precios.length >= 30 && prediccionRaw != null && posicionActual) { // <-- Asegurar que posicionActual no sea null aquí también
-              // [CORRECCIÓN] Asignar variables desde posicionActual
-              const size = parseFloat(posicionActual.positionAmt);
-              const entryPrice = parseFloat(posicionActual.entryPrice);
-              const markPrice = parseFloat(posicionActual.markPrice);
-              const leverage = parseFloat(posicionActual.leverage);
-              const esLong = size > 0;
-              const esShort = size < 0;
-
-              if (!size || !entryPrice || isNaN(entryPrice) || isNaN(markPrice) || leverage <= 0) {
-                console.warn('⚠️ Datos de posición inválidos. Saltando evaluación.');
-                return; // Salir si los datos son inválidos
-              }
-
-              // [Agregado] Obtener estado persistente
-              const symbolSideKey = `${posicionActual.symbol}_${posicionActual.positionSide}`;
-              let estadoLocal = window.estadoPosiciones[symbolSideKey] || { tp1Cerrado: false, slTrailing: false };
-
-              // 🔵 ROE y TP/SL dinámicos (misma lógica de antes)
-              let tpPctEquity = 3.0, slPctEquity = 1.5;
-              const modoTPSL = document.getElementById('tpsl-mode')?.value || 'dinamico';
-              if (modoTPSL === 'manual') {
-                tpPctEquity = Math.max(0.5, parseFloat(document.getElementById('takeProfit')?.value) || 3.0);
-                slPctEquity = Math.max(0.5, parseFloat(document.getElementById('stopLoss')?.value) || 1.5);
-              } else {
-                try {
-                  const k5m = await obtenerDatos(simboloActual, '5m', 50);
-                  if (k5m.length >= 20) {
-                    const a = calcularATR(k5m, 14);
-                    const atrVal = a[a.length - 1] || 0;
-                    tpPctEquity = Math.max(0.8, (atrVal * 6 / entryPrice) * leverage * 100);
-                    slPctEquity = Math.max(0.5, (atrVal * 3 / entryPrice) * leverage * 100);
-                  }
-                } catch (e) {
-                  console.warn('⚠️ Error calculando ATR para TP/SL:', e.message);
-                  tpPctEquity = 3.0; // Fallback
-                  slPctEquity = 1.5; // Fallback
-                }
-              }
-              tpPctEquity = Math.max(0.5, tpPctEquity);
-              slPctEquity = Math.max(0.5, slPctEquity);
-
-              const roePct = ((markPrice - entryPrice) / entryPrice) * leverage * (esLong ? 1 : -1) * 100;
-
-              // 🟢 TP1 (50%): activa en ROE = 50% del TP total
-              const tp1Threshold = tpPctEquity * 0.5;
-              // [Corrección] Verificar estado persistente ANTES de intentar TP1
-              if (roePct >= tp1Threshold && !estadoLocal.tp1Cerrado) {
-                const sizeParcial = Math.abs(size) * 0.5;
-                // [Corrección] Marcar como TP1 ejecutado en estado persistente ANTES de llamar a cerrarParcial
-                estadoLocal.tp1Cerrado = true;
-                window.estadoPosiciones[symbolSideKey] = estadoLocal; // [Corrección] Guardar estado persistente
-
-                // ACTIVAR BANDERA ANTES DE CERRAR PARCIAL
-                ordenEnCurso = true;
-                cerrarParcial(simboloActual, posicionActual.positionSide, sizeParcial, `TP1 (50%)`)
-                  .finally(() => {
-                     // DESACTIVAR BANDERA DESPUÉS DE CERRAR PARCIAL (éxito o error)
-                     ordenEnCurso = false;
-                  });
-              }
-
-              // 🔵 Trailing SL: tras ROE ≥ 1.0%, mover SL a break-even + 0.3% (en equity) - Aplicar si activado
-              // [Corrección] Usar estado persistente para trailing
-              if (roePct >= 1.0 && estadoLocal.slTrailing) { // <-- Usar estado persistente
-                slPctEquity = 0.3; // 0.3% de margen
-              }
-
-              // 🔴 SL, TP2 o IA
-              let cerrar = false, motivo = 'Manual';
-              if (roePct <= -slPctEquity) {
-                cerrar = true;
-                motivo = `SL alcanzado (${slPctEquity.toFixed(1)}%)`;
-              } else if (roePct >= tpPctEquity) {
-                cerrar = true;
-                motivo = `TP2 (50%)`;
-              } else {
-                // ✅ Cierre por IA + 50% SL (SOLO SI AMBAS CONDICIONES SE CUMPLEN)
-                const debeCerrarPorIA = prediccionRaw != null &&
-                  confianza >= 0.53 && // Ajustar confianza si es necesario
-                  roePct < 0 &&
-                  Math.abs(roePct) > (slPctEquity * 0.5) && // 50% del SL
-                  ((esLong && prediccionRaw <= 0.35) || (esShort && prediccionRaw >= 0.65)); // Ajustar umbrales IA si es necesario
-                if (debeCerrarPorIA) {
-                  cerrar = true;
-                  motivo = `IA cambio + PnL=${roePct.toFixed(2)}%`;
-                }
-              }
-
-              if (cerrar) {
-                  // ACTIVAR BANDERA ANTES DE CERRAR TOTAL
-                  ordenEnCurso = true;
-                  cerrarPosicion(simboloActual, posicionActual.positionSide, motivo)
-                    .finally(() => {
-                       // DESACTIVAR BANDERA DESPUÉS DE CERRAR TOTAL (éxito o error)
-                       ordenEnCurso = false;
-                       // [Corrección] Limpiar estado persistente si se cierra totalmente
-                       delete window.estadoPosiciones[symbolSideKey];
-                    });
-              }
-
-              // ✅ Actualizar líneas de PE/TP/SL (solo si hay posición abierta)
-              // [CORRECCIÓN] Usar el side de la posicionActual o window.sideActual para el gráfico
-              // Asumiendo que sideActual se actualiza en abrirPosicionReal y se limpia en cerrarPosicion
-              if (window.sideActual) {
-                  actualizarLineasPrecios(entryPrice, tpPctEquity, slPctEquity, leverage);
-              }
-            } // Fin del if (precios.length >= 30 && prediccionRaw != null && posicionActual)
-
-            // 🔹 Abrir nuevas posiciones (fuera del bloque de cierre, como antes)
-            // [Corrección] Asegurar que !posicionActual sea verdadero ANTES de intentar abrir
-            // [Corrección] Asegurar que ordenEnCurso sea falso antes de intentar abrir (ya está chequeado arriba)
-            if (prediccionRaw != null && confianza >= 0.55 && precios.length >= 55 && adxActual > 20) { // <-- Añadido !ordenEnCurso (ya está chequeado arriba, por lo tanto, !ordenEnCurso es true aquí)
-              const side = prediccionRaw > 0.5 ? 'BUY' : 'SELL';
-              let operar = false;
-              const modo = document.getElementById('modo-mercado')?.value || 'volatil';
-              // Asumiendo que alcista y bajista se calculan antes de este if
-              // const alcista = e20 > e50;
-              // const bajista = e20 < e50;
-              // (Asegúrate de que alcista y bajista estén definidos aquí)
-              if (modo === 'alcista' && side === 'BUY' && alcista) operar = true;
-              else if (modo === 'bajista' && side === 'SELL' && bajista) operar = true;
-              else if (modo === 'volatil' && ((side === 'BUY' && alcista) || (side === 'SELL' && bajista))) operar = true;
-
-              // [Corrección] Verificar !posicionActual aquí también (la obtenida de posiciones.find)
-              if (operar && !posicionActual) { // <-- Condición clave
-                 // ACTIVAR BANDERA ANTES DE ABRIR POSICIÓN
-                 ordenEnCurso = true;
-                 abrirPosicionReal(side)
-                   .finally(() => {
-                      // DESACTIVAR BANDERA DESPUÉS DE ABRIR POSICIÓN (éxito o error)
-                      ordenEnCurso = false;
-                   });
-              } else if (operar && posicionActual) {
-                 // [Corrección] Log para depuración si se intenta abrir con posición existente
-                 // console.log(`[DEBUG] Condición de apertura cumplida, PERO posicionActual EXISTE:`, posicionActual);
-                 // Opcional: Actualizar estado UI
-                 // document.getElementById('estado').textContent = `⚠️ Señal de apertura, pero posición abierta para ${simboloActual}`;
-              }
-            }
-        } // Fin del bloque else (cuando autoTrading es true)
-
-        // === ACTUALIZAR SEMÁFORO AL FINAL DEL BLOQUE TRY (independientemente de autoTrading) ===
-        // Asegúrate de que estas variables (adxActual, confianza, alcista, bajista, etc.)
-        // estén definidas en este punto del código dentro del setInterval.
-        // const modo = document.getElementById('modo-mercado')?.value || 'volatil'; // Ya se define arriba
-        // Ya se llama a actualizarSemaforo arriba con el parámetro tradingActivo
-        // actualizarSemaforo({ ... }); // <-- Esta línea está duplicada y fuera del bloque condicional correcto
-        // === FIN ACTUALIZAR SEMÁFORO ===
-        // === FIN ACTUALIZAR SEMÁFORO ===
-
-      } catch (err) {
-        console.error('🔴 Streaming error:', err);
-        document.getElementById('estado').textContent = `⚠️ ${err.message}`;
-        // ASEGURAR QUE LA BANDERA SE DESACTIVE EN CASO DE ERROR EN EL BLOQUE PRINCIPAL
-        // [CORRECCIÓN] Asegurar que ordenEnCurso se reactive si hay un error general aquí
-        // Si un error ocurre dentro del try *principal* del setInterval, ordenEnCurso podría quedar en true si se seteó antes del error.
-        // Sin embargo, el error haría que la iteración termine, y en la siguiente iteración, la verificación `if (ordenEnCurso)` al inicio la detectaría.
-        // Esta línea es redundante aquí si la verificación está al inicio y si .finally() se usa correctamente en operaciones.
-        // ordenEnCurso = false; // <-- COMENTADO: No es necesaria aquí si se manejan bien los finally()
+          console.log(`[DIAGNÓSTICO WS] Predicción recibida de predecir(): ${prediccionRaw} (typeof: ${typeof prediccionRaw}, isNaN: ${isNaN(prediccionRaw)})`);
+      } catch (errorPredict) {
+          console.error('[DIAGNÓSTICO WS] Error al llamar a predecir():', errorPredict);
+          prediccionRaw = 0.5; // Fallback seguro
       }
-    }, 10000); // Intervalo de 10 segundos
 
-    // [Agregado] Log de confirmación de inicio del bucle
-    console.log(`✅ Bucle de streaming iniciado para ${simboloActual}. autoTrading = true.`);
+      // [DIAGNÓSTICO] Calcular confianza y dirección ANTES de actualizar UI
+      let confianza = 0;
+      let dir = '—';
+      if (prediccionRaw != null && !isNaN(prediccionRaw)) {
+          confianza = Math.abs(prediccionRaw - 0.5) * 2;
+          dir = prediccionRaw > 0.5 ? 'SUBIDA' : 'BAJADA';
+          console.log(`[DIAGNÓSTICO WS] PrediccionRaw: ${prediccionRaw}, Confianza: ${confianza}, Dirección: ${dir}`);
+          // ... (resto del código para actualizar UI de predicción y semáforo) ...
+           } else {
+          console.warn('[DIAGNÓSTICO WS] prediccionRaw es null, undefined o NaN. No se actualizará la UI de predicción.');
+          // Opcional: Actualizar UI con mensaje de error o '—'
+          // document.getElementById('prediccion-direccion').textContent = '—';
+          // document.getElementById('prediccion-porcentaje').textContent = '—';
+          // const progEl = document.getElementById('prediccion-progreso');
+          // if (progEl) progEl.style.width = '0%';
+          }
 
-    autoTrading = true; // Asegurar que la bandera global de autoTrading esté en true al iniciar
+      // ✅ Actualizar UI de predicción (solo si prediccionRaw es válida)
+       // Agregado po diego
+
+       // ✅ Filtro: solo mostrar si hay cierta confianza
+         // if (confianza < 0.55) { // ← Umbral profesional
+         //    document.getElementById('prediccion-porcentaje').textContent = '—';
+         // const prog = document.getElementById('prediccion-progreso');
+        //  if (prog) {
+         //     prog.style.width = '0%';
+          //  prog.style.backgroundColor = '#666'; // gris
+        //     }
+         //        return; // No seguir si no hay suficiente confianza
+       //    }
+
+
+      
+      if (prediccionRaw != null && !isNaN(prediccionRaw)) {
+          const dirEl = document.getElementById('prediccion-direccion'); 
+          const porcEl = document.getElementById('prediccion-porcentaje');
+          const progEl = document.getElementById('prediccion-progreso');
+          if (dirEl) dirEl.innerHTML = `${dir === 'SUBIDA' ? '🟢' : '🔴'} ${dir}`;
+          if (porcEl) porcEl.textContent = `${Math.round(confianza * 100)}%`;
+          if (progEl) {
+            progEl.style.width = `${Math.round(confianza * 100)}%`;
+            progEl.style.backgroundColor = confianza > 0.55 ? (dir === 'SUBIDA' ? '#26a69a' : '#ef5350') : '#666';
+          }
+      }
+
+      // === ACTUALIZAR SEMÁFORO ===
+      // Asegúrate de que estas variables (adxActual, confianza, alcista, bajista, etc.)
+      // estén definidas en este punto del código dentro del ws.onmessage.
+      //emaActual=0,rsiActual=50,atrActual=0.001, precioActual=0,
+      const modo = document.getElementById('modo-mercado')?.value || 'volatil';
+      actualizarSemaforo({
+        adx: adxActual,
+        emaActual: e50,
+        rsiActual: rsiActual,
+        atrActual: atrGlobal,
+        precioActual: ultimoPrecio,
+        confianza: confianza, // Pasamos la confianza calculada en este bloque
+        preciosLen: historialVelas.length, // La longitud del array de precios
+        modo: modo,
+        alcista: alcista,
+        bajista: bajista,
+        tradingActivo: autoTrading // <-- PASAMOS EL ESTADO DE autoTrading
+      });
+      // Lee el estado actual del checkbox HTML y actualiza la variable autoTrading local en cada iteración del WebSocket.
+        autoTrading = document.getElementById('autoTrading')?.checked ?? false;
+      
+        if (!autoTrading) {
+          // El bucle sigue corriendo, actualizando precios, indicadores, semáforo, etc.
+          // Pero no intentará abrir ni cerrar posiciones automáticamente basadas en señales de IA.
+          // Continúa hasta el final del try.
+      } else {
+
+        
+        // === TRADING AUTOMÁTICO ACTIVO === (Lógica de cierre y apertura basada en señales)
+
+      // [CORRECCIÓN] Limitar la frecuencia de la solicitud de posiciones para evitar ban de IP
+      // Usamos una variable global para almacenar el timestamp de la última solicitud
+      if (typeof window.ultimoCheckPosiciones === 'undefined') {
+          window.ultimoCheckPosiciones = 0;
+      }
+
+      const ahoraMs = Date.now();
+      const tiempoMinimoEntreChecks = 10000; // 10 segundos en milisegundos (ajusta según sea necesario)
+
+      // Solo obtener posiciones si han pasado al menos 'tiempoMinimoEntreChecks' ms desde la última vez
+      if (ahoraMs - window.ultimoCheckPosiciones >= tiempoMinimoEntreChecks) {
+          window.ultimoCheckPosiciones = ahoraMs; // Actualizar timestamp
+
+          // [Corrección] Obtener posiciones con manejo de errores más robusto
+          let posiciones;
+          try {
+            const posResponse = await fetch('/api/binance/futures/positions?_t=' + Date.now()); // <-- Solicita con timestamp para evitar cacheo
+            if (!posResponse.ok) {
+              console.error('❌ Error HTTP obteniendo posiciones:', posResponse.status, posResponse.statusText);
+              document.getElementById('estado').textContent = `⚠️ Error HTTP: ${posResponse.status}`;
+              return; // Salir de esta iteración si falla la API (4xx/5xx)
+            }
+            posiciones = await posResponse.json(); // Intentar parsear JSON
+          } catch (fetchOrJsonError) {
+            // Captura errores de red (fetch) o de parsing JSON
+            console.error('❌ Error obteniendo o parseando posiciones:', fetchOrJsonError);
+            document.getElementById('estado').textContent = `⚠️ Error de red o formato`;
+            return; // Salir de esta iteración si falla el fetch o json()
+          }
+
+          // Verificar que la respuesta sea un array después del parsing
+          if (!Array.isArray(posiciones)) {
+             console.error('❌ Formato inesperado de posiciones (no es un array):', posiciones);
+             document.getElementById('estado').textContent = `⚠️ Error: Formato de posiciones inválido`;
+             return; // Salir de esta iteración si la respuesta no es un array
+          }
+
+          // [CORRECCIÓN] Asignar la posición específica para el símbolo actual
+          const posicionActual = posiciones.find(p => p.symbol === simboloActual && Math.abs(parseFloat(p.positionAmt || 0)) > 0.0001);
+
+          // [Agregado] Inicializar estado global para posiciones si no existe
+          if (typeof window.estadoPosiciones === 'undefined') window.estadoPosiciones = {};
+
+          // [Agregado] Inicializar estado persistente para esta posición si es la primera vez que la vemos en esta iteración
+          if (posicionActual) {
+              const symbolSideKey = `${posicionActual.symbol}_${posicionActual.positionSide}`;
+              if (!window.estadoPosiciones[symbolSideKey]) {
+                  window.estadoPosiciones[symbolSideKey] = { tp1Cerrado: false, slTrailing: false };
+              }
+          }
+
+          // ✅ Solo evaluar cierre si ya se calculó la predicción y hay posición
+          if (historialVelas.length >= 30 && prediccionRaw != null && posicionActual) { // <-- Asegurar que posicionActual no sea null aquí también
+            // ... (resto del código de evaluación de cierre: ROE, TP1, SL, TP2, IA, actualizarLineasPrecios) ...
+            // [Tu código de lógica de cierre va aquí, usando posicionActual]
+            // ...
+          } // Fin del if (historialVelas.length >= 30 && prediccionRaw != null && posicionActual)
+
+          // 🔹 Abrir nuevas posiciones (fuera del bloque de cierre, como antes)
+          // [CORRECCIÓN] Asegurar que !posicionActual sea verdadero ANTES de intentar abrir
+          // [CORRECCIÓN] Asegurar que ordenEnCurso sea falso antes de intentar abrir (ya está chequeado al inicio del intervalo general, si se usa .finally() correctamente)
+          if (prediccionRaw != null && confianza >= 0.55 && historialVelas.length >= 55 && adxActual > 20) { // <-- Añadido !ordenEnCurso (implícito si la lógica de cierre lo maneja bien con finally)
+            const side = prediccionRaw > 0.5 ? 'BUY' : 'SELL';
+            let operar = false;
+            const modo = document.getElementById('modo-mercado')?.value || 'volatil';
+            // Asumiendo que alcista y bajista se calculan antes de este if
+            // const alcista = e20 > e50;
+            // const bajista = e20 < e50;
+            // (Asegúrate de que alcista y bajista estén definidos aquí)
+            if (modo === 'alcista' && side === 'BUY' && alcista) operar = true;
+            else if (modo === 'bajista' && side === 'SELL' && bajista) operar = true;
+            else if (modo === 'volatil' && ((side === 'BUY' && alcista) || (side === 'SELL' && bajista))) operar = true;
+
+            // [Corrección] Verificar !posicionActual aquí también (la obtenida de posiciones.find)
+            if (operar && !posicionActual) { // <-- Condición clave
+               // ACTIVAR BANDERA ANTES DE ABRIR POSICIÓN
+               ordenEnCurso = true;
+               abrirPosicionReal(side)
+                 .finally(() => {
+                    // DESACTIVAR BANDERA DESPUÉS DE ABRIR POSICIÓN (éxito o error)
+                    ordenEnCurso = false;
+                 });
+            } else if (operar && posicionActual) {
+               // [Corrección] Log para depuración si se intenta abrir con posición existente
+               // console.log(`[DEBUG] Condición de apertura cumplida, PERO posicionActual EXISTE:`, posicionActual);
+               // Opcional: Actualizar estado UI
+               // document.getElementById('estado').textContent = `⚠️ Señal de apertura, pero posición abierta para ${simboloActual}`;
+            }
+          }
+      } else {
+          // Opcional: Si no se checkean posiciones, puedes omitir la lógica de trading en esta iteración
+          // o puedes usar una copia de 'posicionActual' de la última vez que se obtuvo.
+          // Para simplificar, solo omitimos la lógica de trading si no ha pasado suficiente tiempo.
+          console.log(`[DEBUG WS] No ha pasado suficiente tiempo para volver a checkear posiciones. Último check: ${new Date(window.ultimoCheckPosiciones).toLocaleTimeString()}, Ahora: ${new Date(ahoraMs).toLocaleTimeString()}`);
+          // Continuar con otras actualizaciones (gráficos, indicadores, predicción) pero no con trading automático basado en posiciones
+          //    // Lógica de cierre basada en la posición previa y la nueva predicción
+          // }
+          return; // <-- Salir de esta iteración del ws.onmessage si no se actualizan posiciones
+      }
+
+                // ✅ Mostrar TP/SL actual en el panel (manual o dinámico)
+            let tpPct, slPct;
+            const modoTPSL = document.getElementById('tpsl-mode')?.value || 'dinamico';
+           if (modoTPSL === 'manual') {
+            tpPct = parseFloat(document.getElementById('takeProfit')?.value) || 3.0;
+          slPct = parseFloat(document.getElementById('stopLoss')?.value) || 1.5;
+          } else {
+          tpPct = (atrGlobal * 6 / ultimoPrecio) * 100;
+         slPct = (atrGlobal * 3 / ultimoPrecio) * 100;
+          }
+          const tpEl = document.getElementById('tp-dinamico');
+         const slEl = document.getElementById('sl-dinamico');
+         if (tpEl) tpEl.textContent = `TP: ${tpPct.toFixed(2)}%`;
+          if (slEl) slEl.textContent = `SL: ${slPct.toFixed(2)}%`;
+
+          // Verificar que la respuesta sea un array después del parsing
+          if (!Array.isArray(posiciones)) {
+             console.error('❌ Formato inesperado de posiciones (no es un array):', posiciones);
+             document.getElementById('estado').textContent = `⚠️ Error: Formato de posiciones inválido`;
+             return; // Salir de esta iteración si la respuesta no es un array
+          }
+
+          // [CORRECCIÓN] Asignar la posición específica para el símbolo actual
+          const posicionActual = posiciones.find(p => p.symbol === simboloActual && Math.abs(parseFloat(p.positionAmt || 0)) > 0.0001);
+
+          // [Agregado] Inicializar estado global para posiciones si no existe
+          if (typeof window.estadoPosiciones === 'undefined') window.estadoPosiciones = {};
+
+          // [Agregado] Inicializar estado persistente para esta posición si es la primera vez que la vemos en esta iteración
+          if (posicionActual) {
+              const symbolSideKey = `${posicionActual.symbol}_${posicionActual.positionSide}`;
+              if (!window.estadoPosiciones[symbolSideKey]) {
+                  window.estadoPosiciones[symbolSideKey] = { tp1Cerrado: false, slTrailing: false };
+              }
+          }
+
+          // ✅ Solo evaluar cierre si ya se calculó la predicción y hay posición
+          if (historialVelas.length >= 30 && prediccionRaw != null && posicionActual) { // <-- Asegurar que posicionActual no sea null aquí también
+            const size = parseFloat(posicionActual.positionAmt);
+            const entryPrice = parseFloat(posicionActual.entryPrice);
+            const markPrice = parseFloat(posicionActual.markPrice);
+            const leverage = parseFloat(posicionActual.leverage);
+            const esLong = size > 0;
+            const esShort = size < 0;
+
+            if (!size || !entryPrice || isNaN(entryPrice) || isNaN(markPrice) || leverage <= 0) {
+              console.warn('⚠️ Datos de posición inválidos. Saltando evaluación.');
+              return; // Salir si los datos son inválidos
+            }
+
+            // [Agregado] Obtener estado persistente
+            const symbolSideKey = `${posicionActual.symbol}_${posicionActual.positionSide}`;
+            let estadoLocal = window.estadoPosiciones[symbolSideKey] || { tp1Cerrado: false, slTrailing: false };
+
+            // 🔵 ROE y TP/SL dinámicos (misma lógica de antes)
+            let tpPctEquity = 3.0, slPctEquity = 1.5;
+            const modoTPSL = document.getElementById('tpsl-mode')?.value || 'dinamico';
+            if (modoTPSL === 'manual') {
+              tpPctEquity = Math.max(0.5, parseFloat(document.getElementById('takeProfit')?.value) || 3.0);
+              slPctEquity = Math.max(0.5, parseFloat(document.getElementById('stopLoss')?.value) || 1.5);
+            } else {
+              try {
+                const k5m = await obtenerDatos(simboloActual, '5m', 50);
+                if (k5m.length >= 20) {
+                  const a = calcularATR(k5m, 14);
+                  const atrVal = a[a.length - 1] || 0;
+                  tpPctEquity = Math.max(0.8, (atrVal * 6 / entryPrice) * leverage * 100);
+                  slPctEquity = Math.max(0.5, (atrVal * 3 / entryPrice) * leverage * 100);
+                }
+              } catch (e) {
+                console.warn('⚠️ Error calculando ATR para TP/SL:', e.message);
+                tpPctEquity = 3.0; // Fallback
+                slPctEquity = 1.5; // Fallback
+              }
+            }
+            tpPctEquity = Math.max(0.5, tpPctEquity);
+            slPctEquity = Math.max(0.5, slPctEquity);
+
+            const roePct = ((markPrice - entryPrice) / entryPrice) * leverage * (esLong ? 1 : -1) * 100;
+
+            // 🟢 TP1 (50%): activa en ROE = 50% del TP total
+            const tp1Threshold = tpPctEquity * 0.5;
+            // [Corrección] Verificar estado persistente ANTES de intentar TP1
+            if (roePct >= tp1Threshold && !estadoLocal.tp1Cerrado) {
+              const sizeParcial = Math.abs(size) * 0.5;
+              // [Corrección] Marcar como TP1 ejecutado en estado persistente ANTES de llamar a cerrarParcial
+              estadoLocal.tp1Cerrado = true;
+              window.estadoPosiciones[symbolSideKey] = estadoLocal; // [Corrección] Guardar estado persistente
+
+              // ACTIVAR BANDERA ANTES DE CERRAR PARCIAL
+              ordenEnCurso = true;
+              cerrarParcial(simboloActual, posicionActual.positionSide, sizeParcial, `TP1 (50%)`)
+                .finally(() => {
+                   // DESACTIVAR BANDERA DESPUÉS DE CERRAR PARCIAL (éxito o error)
+                   ordenEnCurso = false;
+                });
+            }
+
+            // 🔵 Trailing SL: tras ROE ≥ 1.0%, mover SL a break-even + 0.3% (en equity) - Aplicar si activado
+            // [Corrección] Usar estado persistente para trailing
+            if (roePct >= 1.0 && estadoLocal.slTrailing) { // <-- Usar estado persistente
+              slPctEquity = 0.3; // 0.3% de margen
+            }
+
+            // 🔴 SL, TP2 o IA
+            let cerrar = false, motivo = 'Manual';
+            if (roePct <= -slPctEquity) {
+              cerrar = true;
+              motivo = `SL alcanzado (${slPctEquity.toFixed(1)}%)`;
+            } else if (roePct >= tpPctEquity) {
+              cerrar = true;
+              motivo = `TP2 (50%)`;
+            } else {
+              // ✅ Cierre por IA + 50% SL (SOLO SI AMBAS CONDICIONES SE CUMPLEN)
+              // La lógica actual cierra LONG si IA predice BAJADA (< 0.35) y SHORT si IA predice SUBIDA (> 0.65)
+              const debeCerrarPorIA = prediccionRaw != null && // 1. Verificar que prediccionRaw no sea null
+                confianza >= 0.55 && // 2. Confianza mínima (ajustable)
+                roePct < 0 && // 3. La posición actual tiene pérdidas (ROE negativo)
+                Math.abs(roePct) > (slPctEquity * 0.5) && // 4. La pérdida es mayor al 50% del SL original
+                ((esLong && prediccionRaw <= 0.35) || (esShort && prediccionRaw >= 0.65)); // 5. La IA predice cambio de dirección (opuesta a la posición actual)
+
+              if (debeCerrarPorIA) { // <-- Condición clave para cierre por IA
+                cerrar = true; // <-- Activar bandera de cierre
+                motivo = `IA cambio + PnL=${roePct.toFixed(2)}%`; // <-- Asignar motivo
+              }
+            }
+
+            if (cerrar) { // <-- Esta es la condición que decide si se cierra
+                // ACTIVAR BANDERA ANTES DE CERRAR TOTAL
+                ordenEnCurso = true;
+                cerrarPosicion(simboloActual, posicionActual.positionSide, motivo) // <-- Llamada a la función de cierre total
+                  .finally(() => {
+                     // DESACTIVAR BANDERA DESPUÉS DE CERRAR TOTAL (éxito o error)
+                     ordenEnCurso = false;
+                     // [Corrección] Limpiar estado persistente si se cierra totalmente
+                     delete window.estadoPosiciones[symbolSideKey];
+                  });
+            }
+
+            // ✅ Actualizar líneas de PE/TP/SL (solo si hay posición abierta)
+            actualizarLineasPrecios(entryPrice, tpPctEquity, slPctEquity, leverage);
+          } // Fin del if (historialVelas.length >= 30 && prediccionRaw != null && posicionActual)
+
+          // 🔹 Abrir nuevas posiciones (fuera del bloque de cierre, como antes)
+          // [Corrección] Asegurar que !posicionActual sea verdadero ANTES de intentar abrir
+          // [Corrección] Asegurar que ordenEnCurso sea falso antes de intentar abrir (ya está chequeado al inicio del intervalo general, si se usara un setInterval general)
+          // [CORRECCIÓN IMPORTANTE] Asegurar que prediccionRaw no sea null y confianza sea >= 0.65
+          if (prediccionRaw != null && confianza >= 0.55 && historialVelas.length >= 55 && adxActual > 20 && !ordenEnCurso) { // <-- Añadido !ordenEnCurso
+            const side = prediccionRaw > 0.5 ? 'BUY' : 'SELL';
+            let operar = false;
+            const modo = document.getElementById('modo-mercado')?.value || 'volatil';
+            // Asumiendo que alcista y bajista se calculan antes de este if
+            // const alcista = e20 > e50;
+            // const bajista = e20 < e50;
+            // (Asegúrate de que alcista y bajista estén definidos aquí)
+            if (modo === 'alcista' && side === 'BUY' && alcista) operar = true;
+            else if (modo === 'bajista' && side === 'SELL' && bajista) operar = true;
+            else if (modo === 'volatil' && ((side === 'BUY' && alcista) || (side === 'SELL' && bajista))) operar = true;
+
+            // [Corrección] Verificar !posicionActual aquí también (la obtenida de posiciones.find)
+            if (operar && !posicionActual) { // <-- Condición clave
+               // ACTIVAR BANDERA ANTES DE ABRIR POSICIÓN
+               ordenEnCurso = true;
+               abrirPosicionReal(side)
+                 .finally(() => {
+                    // DESACTIVAR BANDERA DESPUÉS DE ABRIR POSICIÓN (éxito o error)
+                    ordenEnCurso = false;
+                 });
+            } else if (operar && posicionActual) {
+               // [Corrección] Log para depuración si se intenta abrir con posición existente
+               console.log(`[DEBUG] Condición de apertura cumplida, PERO posicionActual EXISTE:`, posicionActual);
+               // Opcional: Actualizar estado UI
+               // document.getElementById('estado').textContent = `⚠️ Señal de apertura, pero posición abierta para ${simboloActual}`;
+            }
+          }
+      } // Fin del bloque else (cuando autoTrading es true)
+
+
+
+    } 
+    
+    else {
+      // === MOSTRAR PROGRESO SI AÚN NO SE ALCANZA EL LÍMITE ===
+      const estadoEl = document.getElementById('estado');
+      if (estadoEl) {
+        estadoEl.textContent = `📊 Recibidas ${velasCerradas}/100 velas. Esperando...`;
+        estadoEl.style.color = '#666';
+      }
+      console.log(`[DEBUG] Recibidas ${velasCerradas}/100 velas. Esperando más datos para procesar.`);
+    }
+
   } catch (err) {
-    console.error('Error en iniciarStreaming:', err);
-    document.getElementById('estado').textContent = `❌ Error iniciando streaming: ${err.message}`;
-    // [Agregado] Asegurar que el intervalo se limpie si falla la inicialización
-    if (streamingInterval) {
-      clearInterval(streamingInterval);
-      streamingInterval = null;
-      console.log("❌ Bucle de streaming limpiado tras error en inicio.");
+    console.error("❌ ERROR EN ws.onmessage:", err);
+    const estadoEl = document.getElementById('estado');
+    if (estadoEl) {
+        estadoEl.textContent = `❌ Error WebSocket: ${err.message}`;
+        estadoEl.style.color = '#ef5350'; // Color rojo para error
     }
   }
+};
+
 }
-// === FUNCIONES DE CONTROL DEL SISTEMA ===
-
-// === FUNCIONES DE CONTROL DEL SISTEMA ===
-
-// Asegúrate de que detenerTradingAutomatico solo desactive la bandera, no detenga el intervalo
-// === FUNCIONES DE CONTROL DEL SISTEMA (ACTUALIZADO - Con log de confirmación de detención de bandera) ===
-
-// Asegúrate de que detenerTradingAutomatico solo desactive la bandera, no detenga el intervalo
-function detenerTradingAutomatico() {
-  console.log("Deteniendo trading automático (solo señales) por controlador externo o manualmente.");
-  autoTrading = false; // <-- Desactivar SOLO la bandera de trading automático
-
-  // Opcional: Actualizar UI del botón de trading automático (checkbox en este caso)
-  const checkboxAutoTrading = document.getElementById('autoTrading'); // Ajusta el ID si es diferente
-  if (checkboxAutoTrading) {
-    checkboxAutoTrading.checked = false; // Desmarca el checkbox
-  }
-
-  // Opcional: Actualizar texto de estado
-  const estadoEl = document.getElementById('estado');
-  if (estadoEl) estadoEl.textContent = '⏹️ Trading automático detenido (seguimiento activo).';
-
-  // [Agregado] Log de confirmación de detención de bandera
-  console.log("✅ Bandera de trading automático desactivada. Streaming sigue corriendo.");
-
-  // NO HACEMOS clearInterval(streamingInterval);
-  // El setInterval sigue corriendo, pero la lógica de trading no se ejecuta si autoTrading es false.
-}
-// Asegúrate de exponerla globalmente si el controlador la llama
-// Esta línea probablemente ya exista en tu script.js, pero es crucial:
-// window.detenerTradingAutomatico = detenerTradingAutomatico;
-
-// Asegúrate de exponerla globalmente si el controlador la llama
-// Esta línea probablemente ya exista en tu script.js, pero es crucial:
-// window.detenerTradingAutomatico = detenerTradingAutomatico;
-// Asegúrate de exponerla globalmente si el controlador la llama
-window.detenerTradingAutomatico = detenerTradingAutomatico;
-
-// Asegúrate de que iniciarStreaming también actualice autoTrading
-// async function iniciarStreaming() {
-//   // ... (inicio como antes) ...
-//   autoTrading = true; // <-- Añadir esta línea
-//   // ... (resto del código) ...
-// }
-// Asegúrate de que donde llamas a iniciarStreaming, autoTrading esté en true.
-// Por ejemplo, en el botón de UI que activa el streaming, antes de llamar a iniciarStreaming, hacer autoTrading = true;
-
-// [Agregado] Función detenerStreaming para usar en detenerTradingAutomatico
-async function detenerStreaming() {
-  if (!AUTENTICADO) return;
-  if (streamingInterval) {
-      clearInterval(streamingInterval);
-      streamingInterval = null;
-      console.log("✅ Bucle de streaming detenido.");
-  } else {
-      console.log("ℹ️ Bucle de streaming no estaba activo.");
-  }
-  // Limpiar bandera por si acaso
-  //ordenEnCurso = false;
-  // Opcional: Actualizar UI
-  const estadoEl = document.getElementById('estado');
-  if (estadoEl) estadoEl.textContent = '⏹️ Streaming detenido.';
+//Y llámala después de 100 velas.
+function verificarEstadoPrediccion() {
+  const timer = setInterval(() => {
+    if (historialVelas.length >= 100 && !prediccionActiva) {
+      console.log('✅ Sistema listo. Reactivando predicción...');
+      // Fuerza una nueva predicción manualmente
+      clearInterval(timer);
+    }
+  }, 10000); // Cada 10 segundos
 }
 
 
@@ -2217,8 +2625,8 @@ async function recargarTestnet() {
     capitalActual = capitalInicial = 1000;
     operaciones = [];
     localStorage.removeItem('historialOperaciones');
-    localStorage.removeItem('capitalActual');
-    localStorage.removeItem('capitalInicial');
+    localStorage.setItem('capitalActual', 1000);
+    localStorage.setItem('capitalInicial', 1000);
     actualizarPanelFinanciero();
     renderizarHistorial();
     await actualizarCapitalTestnet();
@@ -2248,8 +2656,7 @@ async function operacionPrueba() {
   }
 }
 
-
-
+// ✅ BACKTESTING CON IA REAL — Versión final corregida
 async function ejecutarBacktesting() {
   const msgEl = document.getElementById('backtesting-msg');
   if (!msgEl) return;
@@ -2304,7 +2711,7 @@ async function ejecutarBacktesting() {
       const obvActual = obvArr.length > 0 ? obvArr[obvArr.length - 1] : 0;
 
       // ✅ PREDICCIÓN REAL CON MODELO (si está disponible)
-      let prediccionRaw = 0.55;
+      let prediccionRaw = 0.5;
       if (usarIA && closes.length >= 30) {
         try {
           const pred = await predecir(
@@ -2437,6 +2844,7 @@ async function ejecutarBacktesting() {
     msgEl.style.color = '#ef5350';
   }
 }
+
 // ✅ EXPORTAR BACKTEST — Corregido: tolerante a datos faltantes
 function exportarBacktest() {
   const rawData = localStorage.getItem('backtest-last');
@@ -2444,7 +2852,6 @@ function exportarBacktest() {
     alert('❌ No hay backtest guardado. Ejecuta primero la simulación.');
     return;
   }
-  
   let backtest;
   try {
     backtest = JSON.parse(rawData);
@@ -2452,12 +2859,10 @@ function exportarBacktest() {
     alert('❌ Datos corruptos. Ejecuta nuevamente el backtesting.');
     return;
   }
-  
   if (!backtest.operaciones || backtest.operaciones.length === 0) {
     alert('❌ No hay operaciones en el backtest.');
     return;
   }
-  
   const headers = ['Entrada', 'Salida', 'PnL', 'Motivo', 'ROE (%)'];
   const rows = backtest.operaciones.map(o => [
     o.entrada?.toFixed(2) || '—',
@@ -2466,23 +2871,28 @@ function exportarBacktest() {
     o.motivo || '—',
     o.roe?.toFixed(2) || '0.00'
   ]);
-  
   const csvContent = [headers, ...rows]
     .map(row => row.map(cell => `"${cell}"`).join(','))
     .join('\n');
-  
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `backtest_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `backtest_${new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  
   console.log('✅ Backtest exportado:', backtest);
 }
+
+// Helper para backtesting
+function predRawValida(modo, p, alcista, bajista) {
+  return (modo === 'volatil' && ((p > 0.5 && alcista) || (p <= 0.5 && bajista)));
+}
+
+
+
 
 // ✅ FORZAR CIERRE POR IA — Solo para pruebas
 async function forzarCierreIA() {
@@ -2502,81 +2912,29 @@ async function forzarCierreIA() {
   }
 }
 
-// === INICIALIZACIÓN SEGURA ===
-document.addEventListener('DOMContentLoaded', () => {
-  // ✅ Re-registrar backtesting (por si hay duplicados previos)
-  window.ejecutarBacktesting = ejecutarBacktesting;
-  
-  // 1. Cargar historial y capital desde localStorage
-  const hist = JSON.parse(localStorage.getItem('historialOperaciones') || '[]');
-  const savedCapital = parseFloat(localStorage.getItem('capitalActual'));
-  const savedInicial = parseFloat(localStorage.getItem('capitalInicial'));
-  
-  
-   // Asegúrate de que el botón exista antes de intentar agregar el listener
-  const btnEntrenar = document.getElementById('btnEntrenar');
-  if (btnEntrenar) {
-    btnEntrenar.addEventListener('click', async () => {
-      // Llamar a la función entrenarRed actualizada
-      await entrenarRed();
-    });
-  } else {
-    console.warn("⚠️ Botón de entrenamiento (id='btnEntrenar') no encontrado en el HTML.");
+
+
+// === FUNCIONES DE CONTROL DEL SISTEMA (ACTUALIZADO - Con log de confirmación de detención de bandera) ===
+
+// Asegúrate de que detenerTradingAutomatico solo desactive la bandera, no detenga el WebSocket ni el setInterval de ws.onmessage
+function detenerTradingAutomatico() {
+  console.log("Deteniendo trading automático (solo señales) por controlador externo o manualmente.");
+  autoTrading = false; // <-- Desactivar SOLO la bandera de trading automático
+
+  // Opcional: Actualizar UI del botón de trading automático (checkbox en este caso)
+  const checkboxAutoTrading = document.getElementById('autoTrading'); // Ajusta el ID si es diferente
+  if (checkboxAutoTrading) {
+    checkboxAutoTrading.checked = false; // Desmarca el checkbox
   }
-    
-  
-  if (hist.length > 0 && !isNaN(savedCapital)) {
-    operaciones = hist;
-    capitalActual = savedCapital;
-    capitalInicial = !isNaN(savedInicial) ? savedInicial : 1000;
-  } else {
-    capitalActual = capitalInicial = 1000;
-  }
-  
-  // 2. Registrar funciones globales
-  window.entrenarRed = entrenarRed;
-  window.iniciarStreaming = iniciarStreaming;
-  window.detenerStreaming = detenerStreaming;
-  window.operacionPrueba = operacionPrueba;
-  window.cerrarPosicion = cerrarPosicion;
-  window.recargarTestnet = recargarTestnet;
-  window.ejecutarBacktesting = ejecutarBacktesting;
-  window.exportarBacktest = exportarBacktest;
-  window.forzarCierreIA = forzarCierreIA;
-  
-  // 3. Eventos
-  const btnReiniciar = document.getElementById('btn-reiniciar');
-  if (btnReiniciar) {
-    btnReiniciar.onclick = () => {
-      capitalActual = capitalInicial = 1000;
-      operaciones = [];
-      actualizarPanelFinanciero();
-      renderizarHistorial();
-      localStorage.removeItem('historialOperaciones');
-      localStorage.removeItem('capitalActual');
-      localStorage.removeItem('capitalInicial');
-    };
-  }
-  
-  const btnExportar = document.getElementById('btn-exportar');
-  if (btnExportar) {
-    btnExportar.onclick = exportarBacktest;
-  }
-  
-  // 4. Listener TP/SL
-  const tpslModeSelect = document.getElementById('tpsl-mode');
-  if (tpslModeSelect) {
-    tpslModeSelect.addEventListener('change', function() {
-      const showManual = this.value === 'manual';
-      const g1 = document.getElementById('tpsl-manual-group');
-      const g2 = document.getElementById('tpsl-manual-group2');
-      if (g1) g1.style.display = showManual ? 'block' : 'none';
-      if (g2) g2.style.display = showManual ? 'block' : 'none';
-    });
-  }
-  
-  // 5. Actualizaciones periódicas
-  setInterval(actualizarPosicionesAbiertas, 10000);
-  setInterval(actualizarCapitalTestnet, 60000);
-  fetchSymbolInfo(simboloActual).catch(console.warn);
-});
+
+  // Opcional: Actualizar texto de estado
+  const estadoEl = document.getElementById('estado');
+  if (estadoEl) estadoEl.textContent = '⏹️ Trading automático detenido (seguimiento activo).';
+
+  // [Agregado] Log de confirmación de detención de bandera
+  console.log("✅ Bandera de trading automático desactivada. WebSocket sigue corriendo.");
+
+  // NO HACEMOS ws.close() ni clearInterval(streamingInterval);
+  // El WebSocket y su onmessage siguen corriendo, actualizando precios, gráfico, indicadores, etc.
+  // pero la lógica de trading automático (abrir/cerrar posiciones basadas en IA) no se ejecuta si autoTrading es false.
+}

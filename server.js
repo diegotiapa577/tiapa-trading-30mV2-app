@@ -42,31 +42,40 @@ async function getServerTime() {
   return data.serverTime;
 }
 
-// 📈 Klines → ahora usa MAINNET (pública, sin claves, estable)
+
+// 📈 Klines (Mainnet) - CORREGIDO para usar fetch importado
 app.get("/api/binance/klines", async (req, res) => {
   const { symbol = "BTCUSDT", interval = "1m", limit = 100 } = req.query;
   const url = `${BINANCE_FUTURES_URL}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
   try {
+    // Usar fetch importado
     const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status} - ${response.statusText} al obtener klines de Mainnet`);
+    }
     const data = await response.json();
     res.json(data);
   } catch (err) {
-    console.error("Error en /klines (Mainnet):", err.message);
-    res.status(500).json({ error: "Error al obtener klines desde Mainnet" });
+    console.error("Error en /api/binance/klines (Mainnet):", err.message);
+    res.status(500).json({ error: `Error al obtener klines desde Mainnet: ${err.message}` });
   }
 });
 
-// 💰 Ticker → ahora usa MAINNET (pública, sin claves, estable)
+// 💰 Ticker (Mainnet) - CORREGIDO para usar fetch importado
 app.get("/api/binance/ticker", async (req, res) => {
   const { symbol = "BTCUSDT" } = req.query;
   const url = `${BINANCE_FUTURES_URL}/fapi/v1/ticker/price?symbol=${symbol}`;
   try {
+    // Usar fetch importado
     const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status} - ${response.statusText} al obtener ticker de Mainnet`);
+    }
     const data = await response.json();
     res.json(data);
   } catch (err) {
-    console.error("Error en /ticker (Mainnet):", err.message);
-    res.status(500).json({ error: "Error al obtener precio desde Mainnet" });
+    console.error("Error en /api/binance/ticker (Mainnet):", err.message);
+    res.status(500).json({ error: `Error al obtener ticker desde Mainnet: ${err.message}` });
   }
 });
 
@@ -110,21 +119,25 @@ app.get("/api/binance/futures/open-interest", async (req, res) => {
   }
 });
 
-// ✅ Cuenta
+// ✅ Cuenta (Testnet) - CORREGIDO para usar fetch importado
 app.get("/api/binance/futures/account", async (req, res) => {
   if (!API_KEY || !API_SECRET) return res.status(500).json({ error: "Claves no configuradas" });
   try {
-    const timestamp = await getServerTime(); // ✅ CORREGIDO
+    const timestamp = await getServerTime(); // Esta función también debería usar fetch importado si llama a Binance
     const recvWindow = 60000;
     const params = { timestamp, recvWindow };
     const signature = signParams(params);
     const url = `${BINANCE_FUTURES_URL}/fapi/v2/account?${new URLSearchParams(params)}&signature=${signature}`;
+    // Usar fetch importado
     const response = await fetch(url, { headers: { "X-MBX-APIKEY": API_KEY } });
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status} - ${response.statusText} al obtener cuenta`);
+    }
     const data = await response.json();
     res.json(data);
   } catch (error) {
-    console.error("Error en /account:", error);
-    res.status(500).json({ error: "No se pudo obtener la cuenta" });
+    console.error("Error en /api/binance/futures/account (Testnet):", error);
+    res.status(500).json({ error: `No se pudo obtener la cuenta: ${error.message}` });
   }
 });
 
@@ -143,7 +156,7 @@ app.get("/api/binance/futures/positions", async (req, res) => {
     res.json(data.filter(p => Math.abs(parseFloat(p.positionAmt)) > 0.0001));
   } catch (error) {
     console.error("Error en /positions:", error.message);
-    res.status(500).json({ error: error.message });
+   res.status(500).json([]); // ← ¡Devuelve un array vacío si hay error!
   }
 });
 
