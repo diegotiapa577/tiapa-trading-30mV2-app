@@ -47,62 +47,6 @@
       min-height: 100vh;
     }
 
-    /* Modal de autenticación */
-    #auth-modal {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: #000000c0;
-      z-index: 9999;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    #auth-modal .auth-box {
-      background: #1a1a1a;
-      padding: 30px;
-      border-radius: 12px;
-      text-align: center;
-      max-width: 400px;
-      width: 90%;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    }
-
-    #auth-modal h3 {
-      color: white;
-      margin-bottom: 20px;
-    }
-
-    #auth-modal input {
-      width: 100%;
-      padding: 12px;
-      margin-bottom: 15px;
-      border: 1px solid #333;
-      background: #2d2d2d;
-      color: white;
-      border-radius: 8px;
-      font-size: 1em;
-    }
-
-    #auth-modal button {
-      width: 100%;
-      padding: 12px;
-      background: #26a69a;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    #auth-msg {
-      color: #ef5350;
-      margin-top: 10px;
-      font-size: 0.9em;
-    }
 
     /* Resto de estilos (igual que indexV4.txt) */
     header {
@@ -582,20 +526,13 @@
   </style>
 
 </head>
-<body>
-  <!-- 🔐 Modal de autenticación -->
-  <div id="auth-modal">
-    <div class="auth-box">
-      <h3>🔐 Acceso Restringido</h3>
-      <input type="password" id="clave-acceso" placeholder="Ingresa la clave secreta">
-      <button onclick="verificarClave()">
-        <i class="fas fa-unlock"></i> Acceder
-      </button>
-      <p id="auth-msg"></p>
-    </div>
-  </div>
 
-  <div class="container" id="main-container" style="display:none;">
+
+
+<body>
+
+
+ R<div class="container" id="main-container" style="display:none;">
     <!-- Sidebar -->
     <aside class="sidebar">
       <!--  <div class="status-bar">Esperando...</div> -->
@@ -608,27 +545,6 @@
         <label for="montoCompra">Monto Compra (USDT)</label>
         <input type="number" id="montoCompra" value="240" step="1" min="100">
       </div>
-                 <!-- Añadir esto dentro del <body> de tu HTML, por ejemplo, dentro de un div de controles generales -->
-       
-             <!-- <div id="controles-ejecucion" style="margin-top: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
-              <h4>Controles de Ejecución Automática</h4>
-              <label for="objetivo-ops-exitosas">Objetivo Operaciones Exitosas:</label>
-              <input type="number" id="objetivo-ops-exitosas" min="0" value="2" step="1" style="width: 60px; margin-right: 10px;">
-
-              <label for="limite-ops-totales">Límite Operaciones Totales:</label>
-               <input type="number" id="limite-ops-totales" min="0" value="5" step="1" style="width: 60px; margin-right: 10px;">
-
-         <label for="stop-loss-capital">Stop Loss Capital (USDT):</label>
-                 <input type="number" id="stop-loss-capital" min="0" value="50" step="0.01" style="width: 80px; margin-right: 10px;" placeholder="0 para desactivar">
-
-             <label for="stop-loss-drawdown">Stop Loss Drawdown (%):</label>
-               <input type="number" id="stop-loss-drawdown" min="0" value="5" step="0.1" style="width: 80px;" placeholder="0 para desactivar">
-              <span style="font-size: 0.8em; color: #666;">(Negativo)</span>
-
-               Opcional: Botón para activar/desactivar el controlador 
-             <button id="toggle-controlador" style="margin-left: 10px;">Activar Control</button>
-          </div> -->
-
              <!-- (El resto de tu HTML) -->
       <div class="control-group">
         <label for="tpsl-mode">TP/SL</label>
@@ -749,14 +665,6 @@
         <div class="stat-value" id="sl-dinamico">—</div>
       </div>
 
-               <div class="stat-card">
-               <div class="stat-title">ATR</div>
-               <div class="stat-value" id="atr-valor">—</div>
-               </div>
-               <div class="stat-card">
-               <div class="stat-title">ADX</div>
-               <div class="stat-value" id="adx-valor">—</div>
-               </div>
 
 <!-- Selector de intervalo -->
 <label>Intervalo:</label>
@@ -813,13 +721,59 @@
       <button class="btn btn-outline" onclick="exportarBacktest()">
         <i class="fas fa-file-export"></i> Exportar Backtest
       </button>
+
+
+    <!-- Solo visible si role === 'admin' -->
+
+<script>
+// Al inicio del script, después de DOMContentLoaded
+//document.addEventListener('DOMContentLoaded', () => {
+//  const role = getRoleFromToken(); // tu función para obtener el rol
+  
+  // ✅ Solo el admin ve el botón de entrenamiento
+ // const btnEntrenar = document.querySelector('button[onclick="entrenarRed()"]');
+ // if (btnEntrenar && role !== 'admin') {
+ //   btnEntrenar.remove(); // o btnEntrenar.style.display = 'none';
+ // }
+//});
+</script>
+<script>
+
+
+  // ✅ Define la función ANTES de usarla
+  function getRoleFromToken() {
+    const token = localStorage.getItem('authToken');
+    if (!token) return null;
+
+    try {
+      const payloadBase64 = token.split('.')[1];
+      // Manejo seguro de Base64Url
+      const base64 = payloadBase64.replace(/-/g, '+').replace(/_/g, '/');
+      const payloadJson = atob(base64);
+      const payload = JSON.parse(payloadJson);
+      return payload.role || null;
+    } catch (err) {
+      console.warn('No se pudo decodificar el token:', err);
+      return null;
+    }
+  }
+
+  // Ahora sí puedes usarla
+  document.addEventListener('DOMContentLoaded', () => {
+    const userRole = getRoleFromToken();
+    if (userRole === 'admin') {
+      const adminControls = document.getElementById('admin-controls');
+      if (adminControls) adminControls.style.display = 'block';
+    }
+  });
+</script>
     </aside>
     <!-- Main Content -->
     <main class="main-content">
       <header>
         <div class="logo">
            <!--<i class="fas fa-robot"></i>-->
-             Trading Predictivo T  IA  PA 🔐
+             Trading Predictivo T  IA   PA 🔐
         </div>
       </header>
       <div class="controls-row">
@@ -834,8 +788,6 @@
 
       <div id="semaforo" class="semaforo">
           <h4>🚦 Semáforo de Trading</h4>
-         
-
           <div>Tendencia (ADX):   
             <span id="cond-adx" class="luz"></span> 
             <span id="adx1-valor">—</span>
@@ -845,7 +797,7 @@
            <span id="modo-valor">—</span>
            </div>
 
-            <div>Confianza IA: 
+          <div>Confianza IA: 
             <span id="cond-pred" class="luz"></span> 
            <span id="confianza-valor">—</span>
           </div>
@@ -856,8 +808,6 @@
            </div>
           <p id="semaforo-msg" style="margin-top: 10px;">⏳ Inicializando...</p>
        </div>
-
-
        <!--<div class="sidebar">
         Indicador de estado de conexión 
        <div style="margin-top: 10px; padding: 8px; background: #1a1a1a; border-radius: 6px; font-size: 12px;">
@@ -879,57 +829,255 @@
                   </div>
                   <div>ATR:             
                  <div id="atr-valor">—</div>
-                  </div> 
-              </div>
-          </div>
-        <div class="prediction-section fade-in">
-        <div class="prediction-header">
-          <i class="fas fa-microchip"></i>
-          Predicción IA
-        </div>
-        <div class="pred-direccion" id="prediccion-direccion">—</div>
-        <div class="pred-porcentaje" id="prediccion-porcentaje">0%</div>
-        <div class="pred-bar-container">
-          <div id="prediccion-progreso" class="pred-progress"></div>
-        </div>
-      </div>
+                  </div>
+                  </div>
+                  </div>
+                  
+                  <div class="prediction-section fade-in">
+                    <div class="prediction-header">
+                      <i class="fas fa-microchip"></i>
+                      Predicción IA
+                    </div>
+                    <div class="pred-direccion" id="prediccion-direccion">—</div>
+                    <div class="pred-porcentaje" id="prediccion-porcentaje">0%</div>
+                    <div class="pred-bar-container">
+                      <div id="prediccion-progreso" class="pred-progress"></div>
+                    </div>
+                  </div>
+               <!-- Panel de Estadísticas de IA -->
+              
+               <div id="panel-estadisticas-ia" style="margin-top: 20px; padding: 12px; background: #1e1e1e; border-radius: 8px; display: none;">
+                 <div>
+                 📊 Estadísticas de IA<br>
+                     Objetivo: 20 predicciones<br>
+                     Progreso: <span id="progreso-predicciones">0</span>/20<br>
+                     Aciertos: <span id="aciertos-predicciones">0</span><br>
+                     Precisión actual: <span id="precision-actual">—</span>
+                  </div>                 
+                  <div style="margin-top: 10px;">
+                   <button id="btn-exportar-ia" style="padding: 6px 12px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                     📥 Exportar a CSV
+                   </button>
+                    <div id="resumen-final" style="margin-top: 12px; font-weight: bold; color: #4caf50; display: none;"></div>
+                   <button id="btn-reiniciar-ia" style="padding: 6px 12px; margin-left: 8px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                     🔄 Reiniciar
+                  </button> 
+                 </div>
+               </div>
+                  <div class="table-container">
+                    <h3 style="padding: 15px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border);">
+                      Posiciones Abiertas (Testnet)</h3>
+                    <table id="operaciones-abiertas">
+                      <thead>
+                        <tr>
+                          <th>Símbolo</th>
+                          <th>Tipo</th>
+                          <th>Precio</th>
+                          <th>ROE</th>
+                         <th>PnL</th>
+                        <th>Acción</th>
+                        </tr>
+                        </thead>
+                        <tbody></tbody>
+                         </table>
+                  </div>
 
-      <div class="table-container">
-        <h3 style="padding: 15px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border);">
-          Posiciones Abiertas (Testnet)</h3>
-        <table id="operaciones-abiertas">
-          <thead>
-            <tr>
-              <th>Símbolo</th>
-              <th>Tipo</th>
-              <th>Precio</th>
-              <th>ROE</th>
-              <th>PnL</th>
-              <th>Acción</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="table-container">
-        <h3 style="padding: 15px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border);">
-          Últimas 10 Órdenes</h3>
-        <table id="historial">
-          <thead>
-            <tr>
-              <th>Entrada</th>
-              <th>Salida</th>
-              <th>Precio Entrada</th>
-              <th>Precio Salida</th>
-              <th>Ganancia</th>
-              <th>Resultado</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </main>
-  </div>
-  <script src="script.js"></script>
+              <div class="table-container">
+                <h3 style="padding: 15px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border);">
+                  Últimas 10 Órdenes</h3>
+                <table id="historial">
+                  <thead>
+                    <tr>
+                      <th>Entrada</th>
+                      <th>Salida</th>
+                      <th>Precio Entrada</th>
+                      <th>Precio Salida</th>
+                      <th>Ganancia</th>
+                      <th>Resultado</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+
+               
+             <!-- Gestión de Usuarios -->
+<div class="section-title">
+  <i class="fas fa-users"></i> Gestión de Usuarios
+</div>
+<div class="table-container">
+  <table id="tabla-usuarios">
+    <thead>
+      <tr>
+        <th>Código</th>
+        <th>Rol</th>
+        <th>Activo</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody id="cuerpo-usuarios">
+      <!-- Los usuarios se cargarán aquí -->
+    </tbody>
+  </table>
+  <button class="btn btn-primary" style="margin-top: 10px;" onclick="crearNuevoUsuario()">
+    <i class="fas fa-plus"></i> Añadir Usuario
+  </button>
+</div>
+
+              
+              </main>
+              </div>
+              <script>
+                (function () {
+                  function initTPSL() {
+                    const select = document.getElementById('tpsl-mode');
+                    const tpGroup = document.getElementById('tpsl-manual-group');
+                    const slGroup = document.getElementById('tpsl-manual-group2');
+
+                    if (!select || !tpGroup || !slGroup) return false;
+
+                    const update = () => {
+                      const show = select.value === 'manual';
+                      tpGroup.style.display = show ? 'block' : 'none';
+                      slGroup.style.display = show ? 'block' : 'none';
+                    };
+
+                  // Aplicar estado actual
+                 update();
+
+                 // Vincular evento (remover previos para evitar duplicados)
+                     select.removeEventListener('change', update);
+                select.addEventListener('change', update);
+
+               return true;
+                }
+
+              // Intentar iniciar al cargar
+                if (document.readyState === 'loading') {
+               document.addEventListener('DOMContentLoaded', initTPSL);
+              } else {
+               initTPSL();
+                 }
+
+             // ¡Y también ejecutarlo ahora, por si ya está cargado!
+            setTimeout(initTPSL, 100);
+            })();
+            </script>
+             <!-- <script>
+// Cargar usuarios al iniciar
+async function cargarUsuarios() {
+  try {
+    const res = await fetch('/api/admin/users', {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+    });
+    const usuarios = await res.json();
+
+    const cuerpo = document.getElementById('cuerpo-usuarios');
+    cuerpo.innerHTML = '';
+
+    usuarios.forEach(u => {
+      const fila = document.createElement('tr');
+      fila.innerHTML = `
+        <td>${u.id}</td>
+        <td>${u.role}</td>
+        <td>${u.isActive ? '✅ Sí' : '❌ No'}</td>
+        <td>
+          <button class="btn btn-outline" onclick="editarUsuario('${u.id}')">Editar</button>
+          <button class="btn btn-outline btn-danger" onclick="eliminarUsuario('${u.id}')">Eliminar</button>
+        </td>
+      `;
+      cuerpo.appendChild(fila);
+    });
+  } catch (err) {
+    console.error('Error al cargar usuarios:', err);
+  }
+}
+
+// Llamar al cargar el panel
+//document.addEventListener('DOMContentLoaded', () => {
+  // ... otras inicializaciones ...
+ // if (getRoleFromToken() === 'admin') {
+  //  cargarUsuarios();
+ // }
+//});
+
+// Funciones de acción (puedes implementarlas después)
+function crearNuevoUsuario() { alert('Crear usuario'); }
+function editarUsuario(id) { alert('Editar: ' + id); }
+function eliminarUsuario(id) { alert('Eliminar: ' + id); }
+</script> -->
+
+
+<!--<script> 
+  // ✅ Verificación segura de autenticación
+  async function inicializarPanel() {
+    const token = localStorage.getItem('authToken');
+    
+    // Si no hay token, redirigir al login
+    if (!token) {
+      window.location.href = '/admin-login.html';
+      return;
+    }
+
+    // Verificar si el token es válido consultando al backend
+    try {
+      const res = await fetch('/api/binance/futures/account', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        throw new Error('Token inválido o expirado');
+      }
+
+      // ✅ Token válido: mostrar el panel y crear el gráfico
+      document.getElementById('main-container').style.display = 'grid';
+      
+      // Inicializar gráfico (si aún no está creado)
+      if (typeof crearGrafico === 'function' && !window.chart) {
+        crearGrafico();
+      }
+
+      // Iniciar WebSocket (si tienes una función para eso)
+      if (typeof iniciarStreaming === 'function') {
+        iniciarStreaming();
+      }
+
+    } catch (err) {
+      console.warn('Token inválido:', err.message);
+       if (err.message.includes('API Keys no configuradas')) {
+       alert('⚠️ Su cuenta no tiene claves de Binance configuradas. Contacte al administrador.');
+       }
+       
+      localStorage.removeItem('authToken');
+      window.location.href = '/admin-login.html';
+    }
+  }
+
+  // Ejecutar al cargar la página
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', inicializarPanel);
+  } else {
+    inicializarPanel();
+  }
+</script> -->
+
+                   <script>
+                  // Primero verificar autenticación
+                 if (!localStorage.getItem('authToken')) {
+                window.location.href = '/admin-login.html';
+                } else {
+            // Mostrar panel
+                document.getElementById('main-container').style.display = 'grid';
+                    
+           // 👇 Llamar a initChart() al cargar
+              document.addEventListener('DOMContentLoaded', () => {
+            initChart(); // ← esta es tu función
+             });
+             }
+          </script>
+
+
+<script src="script.js"></script>
+
 </body>
 </html>

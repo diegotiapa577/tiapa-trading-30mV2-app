@@ -1,34 +1,3 @@
-
-    // 🔐 CLAVE SECRETA — Cámbiala en producción
-const CLAVE_SECRETA = '11';
-let AUTENTICADO = false;
-
-// ✅ Verificar clave (debe estar al inicio)
-function verificarClave() {
-  const input = document.getElementById('clave-acceso');
-  const msg = document.getElementById('auth-msg')
-  if (input.value === CLAVE_SECRETA) {
-    AUTENTICADO = true;
-    document.getElementById('auth-modal').style.display = 'none';
-    const main = document.getElementById('main-container');
-    main.style.display = 'grid';
-    // ✅ Llamar retryInitChart tras hacer visible el contenedor (garantiza offset > 0)
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        retryInitChart();
-      });
-    });
-  } else {
-    msg.textContent = '❌ Clave incorrecta.';
-    input.value = '';
-    input.focus();
-  }
-}
-
-// === VARIABLES GLOBALES ===
-// === ESTADO DEL STREAMING (MANTENIDO EN TIEMPO REAL) ===
-
-// Array para almacenar las últimas 10 velas cerradas (para predicción)
 let ws = null; // ← Declárala aquí
 const MAX_VELAS_HISTORICAS = 10;
 let historialVelas = []; // ← Guarda las velas cerradas completas
@@ -52,18 +21,6 @@ let posicionBB = 0.5;
 let anchoBB = 0;
 let atrActual = 0.001;
 let adxActual = 0; // ← ¡Declárala aquí!
-
-// ✅ PRUEBA TEMPORAL: Forzamos atrActual con el valor de la UI
-//setInterval(() => {
- // const atrUI = document.getElementById('atr-valor');
-  //if (atrUI && atrUI.textContent !== '—') {
-   // const valor = parseFloat(atrUI.textContent.replace('ATR: ', ''));
-   // if (!isNaN(valor)) {
-    //  atrActual = valor; // ← ¡AQUÍ ESTÁ LA MAGIA!
-    //  console.log('🔄 [DIAGNÓSTICO] atrActual forzado desde UI:', atrActual);
-   // }
- // }
-//}, 1000); // Se ejecuta cada 1 segundo
 let obvActual = 0;
 let precioActual = 0;
 let openInterest = 0;
@@ -71,9 +28,112 @@ let streamingActivo = false; // ← Evita múltiples conexiones
 // ✅ Para contar velas cerradas
 let velasCerradas = 0;
 
+// ✅ Inicializar sistema de estadísticas de IA
+window.prediccionesPendientes = window.prediccionesPendientes || [];
+
 // ✅ Estado de autoTrading (global)
 window.autoTrading = false;
-window.tradingActivo= false;
+window.tradingActivo = false;
+  if (!window.configEstadisticasIA) {
+    window.configEstadisticasIA = {
+      objetivo: 20,
+      registros: [],
+      total: 0,
+      aciertos: 0
+    };
+  }
+
+// ===== CONTROL DE REFRESCO AUTOMÁTICO DE POSICIONES (UI) =====
+let intervaloActualizacionPosiciones = null;
+
+// Configuración de estadísticas
+//window.configEstadisticasIA = {
+ // objetivo: 20, // ← ¡cambia este número si quieres otro objetivo!
+ // registros: [],
+ // total: 0,
+ // aciertos: 0
+//};
+
+// ✅ Sincronización MÍNIMA del checkbox autoTrading
+document.addEventListener('DOMContentLoaded', () => {
+   const btn = document.getElementById('btn-reiniciar-ia');
+  if (btn) {
+    btn.addEventListener('click', reiniciarEstadisticasIA);
+  }
+  
+    const switchAuto = document.getElementById('autoTrading');
+  if (switchAuto) {
+    // Actualizar variable global cuando cambie el checkbox
+    switchAuto.addEventListener('change', () => {
+      window.autoTrading = switchAuto.checked;
+      // También actualizar tu variable local si es diferente
+      // (asegúrate de que ws.onmessage use window.autoTrading)
+    });
+    
+    window.configEstadisticasIA = {
+    objetivo: parseInt(document.getElementById('objetivo-predicciones')?.textContent) || 20,
+    total: 0,
+    aciertos: 0,
+    registros: []
+  };
+  window.prediccionesPendientes = [];
+
+    // Establecer estado inicial
+    window.autoTrading = switchAuto.checked;
+  }
+});
+
+
+// Mostrar el panel desde el inicio
+document.getElementById('panel-estadisticas-ia').style.display = 'block';
+  //document.getElementById('objetivo-predicciones').textContent = window.configEstadisticasIA.objetivo;
+//document.getElementById('total-objetivo').textContent = window.configEstadisticasIA.objetivo;
+// Al iniciar
+// Al inicio de script.js (después de DOMContentLoaded)
+if (!window.configEstadisticasIA) {
+  // Intentar cargar desde localStorage
+  const saved = localStorage.getItem('estadisticasIA');
+  if (saved) {
+    try {
+      window.configEstadisticasIA = JSON.parse(saved);
+    } catch (e) {
+      window.configEstadisticasIA = null;
+    }
+  }
+
+  // Si no hay datos válidos, usar configuración por defecto
+}
+ 
+//const saved1 = localStorage.getItem('historialOperaciones');
+//if (saved1) {
+ // window.configoperaciones = JSON.parse(saved1);
+//}
+
+// Actualizar UI
+
+
+// ✅ Función para decodificar el JWT y obtener el rol
+
+
+function iniciarRefrescoPosiciones() {
+  if (intervaloActualizacionPosiciones) return; // Ya activo
+  console.log('[UI] Iniciando refresco automático de posiciones');
+  intervaloActualizacionPosiciones = setInterval(async () => {
+    try {
+      await actualizarPosicionesAbiertas();
+    } catch (err) {
+      console.warn('⚠️ Error en refresco automático:', err.message);
+    }
+  }, 2000); // Cada 2 segundos
+}
+
+function detenerRefrescoPosiciones() {
+  if (intervaloActualizacionPosiciones) {
+    console.log('[UI] Deteniendo refresco automático de posiciones');
+    clearInterval(intervaloActualizacionPosiciones);
+    intervaloActualizacionPosiciones = null;
+  }
+}
 
 
 function calcularRSI(precios, periodo = 14) {
@@ -156,6 +216,33 @@ function calcularATR(klines, periodo = 14) {
 // que cuando se actualicen, también se actualice el valor en window.capitalActual
 // por ejemplo, en actualizarPanelFinanciero() o donde se modifique capitalActual.
 // === UTILIDADES ===
+ //nuevo auticacion sale
+
+  // Función helper (reemplaza tu fetchConAuth o crea una nueva)
+function fetchConAuth(url, options = {}) {
+  const token = localStorage.getItem('authToken');
+  if (!token) {
+    // Redirigir a login
+    localStorage.clear();
+    window.location.href = '/admin-login.html';
+    return Promise.reject('No autenticado');
+  }
+
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'Authorization': `Bearer ${token}`
+    }
+  });
+}
+// nuevo autenticacion llega
+
+
+
+
+
+
 async function fetchSymbolInfo(symbol = 'BTCUSDT') {
   if (symbolInfo) return symbolInfo;
   try {
@@ -442,7 +529,7 @@ async function obtenerDatosHistoricos(symbol, interval, totalLimit) {
 
 
 // === ENTRENAMIENTO: PREPARAR DATOS CON ETIQUETAS (V7 — Balanced, ATR-normalizado, 3 velas) ===
- const VELAS_FUTURAS = 5; 
+ const VELAS_FUTURAS = 3; 
 function prepararDatosConEtiquetas(klines) {
  // const featuresList = [];
   //const labelsList = [];
@@ -741,10 +828,10 @@ function prepararDatosParaIA(klines, openInterest = 0) {
 // los concatena, baraja los datos mezclados, crea el modelo con Dropout y lo entrena.
 // === ENTRENAMIENTO: MULTI-SÍMBOLO (3+), 15m, 15k velas, portable ===
 async function entrenarRed() {
-  if (!AUTENTICADO) {
-    alert('🔒 Acceso denegado. Ingresa la clave primero.');
-    return;
-  }
+  //if (!AUTENTICADO) {
+   // alert('🔒 Acceso denegado. Ingresa la clave primero.');
+   // return;
+ // }
 
   // Definir símbolos a usar para entrenamiento
   const SIMBOLOS_ENTRENAMIENTO = ['BTCUSDT'];
@@ -932,6 +1019,98 @@ async function entrenarRed() {
 }
 window._entrenarRed = entrenarRed;
 
+
+async function predecirprueba(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, macdActual, signalActual, posicionBB, anchoBB, atrActual, obvActual, precioActual, openInterest = 0) {
+  if (!modelo) {
+    console.warn('[PRED] Modelo no cargado');
+    return null;
+  }
+
+  // Validación mínima
+  if (ultimosPrecios.length < 10 || ultimosVolumenes.length < 10) {
+    console.warn('[PRED] Datos insuficientes para predecir');
+    return null;
+  }
+
+  const ultimos10 = ultimosPrecios.slice(-10);
+  const cambios = ultimos10.map((p, idx) => idx === 0 ? 0 : (p - ultimos10[idx - 1]) / ultimos10[idx - 1]);
+
+  const volumenPromedio = ultimosVolumenes.slice(-10).reduce((a, b) => a + b, 0) / 10 / 1e6;
+  const rsiNorm = rsiActual / 100;
+  const precioSobreEMA = precioActual > emaActual ? 1 : 0;
+  const rsiSobreComprado = rsiActual > 70 ? 1 : 0;
+  const rsiSobreVendido = rsiActual < 30 ? 1 : 0;
+  const macdNorm = macdActual / 1000;
+  const signalNorm = (signalActual || 0) / 1000;
+  const histogramaNorm = (macdActual - signalActual) / 1000;
+  const anchoBBRel = anchoBB / precioActual;
+  const atrRel = atrActual / precioActual;
+  const obvNorm = obvActual / 1e9;
+  const oiNorm = openInterest / 1e6;
+
+  const features = [
+    ...cambios,
+    volumenPromedio,
+    rsiNorm,
+    precioSobreEMA,
+    rsiSobreComprado,
+    rsiSobreVendido,
+    macdNorm,
+    signalNorm,
+    histogramaNorm,
+    posicionBB,
+    anchoBBRel,
+    atrRel,
+    obvNorm,
+    oiNorm
+  ];
+
+  // 🔍 DIAGNÓSTICO: imprimir features con etiquetas
+  if (features.length === 23) {
+    console.table({
+      'cambio_p0': cambios[0],
+      'cambio_p1': cambios[1],
+      'cambio_p2': cambios[2],
+      'cambio_p3': cambios[3],
+      'cambio_p4': cambios[4],
+      'cambio_p5': cambios[5],
+      'cambio_p6': cambios[6],
+      'cambio_p7': cambios[7],
+      'cambio_p8': cambios[8],
+      'cambio_p9': cambios[9],
+      'volumen_prom_10': volumenPromedio,
+      'rsi_norm': rsiNorm,
+      'precio_sobre_ema': precioSobreEMA,
+      'rsi_sobrecomprado': rsiSobreComprado,
+      'rsi_sobrevendido': rsiSobreVendido,
+      'macd_norm': macdNorm,
+      'signal_norm': signalNorm,
+      'histograma_norm': histogramaNorm,
+      'posicion_bb': posicionBB,
+      'ancho_bb_rel': anchoBBRel,
+      'atr_rel': atrRel,
+      'obv_norm': obvNorm,
+      'open_interest_norm': oiNorm
+    });
+
+    // Hacer la predicción
+    const input = tf.tensor2d([features]);
+    const pred = modelo.predict(input);
+    const valor = await pred.data();
+
+    input.dispose();
+    pred.dispose();
+
+    console.log(`✅ Predicción RAW: ${valor[0].toFixed(4)} | Confianza: ${(valor[0] > 0.5 ? valor[0] : 1 - valor[0]).toFixed(4)}`);
+    return valor[0];
+  } else {
+    console.error(`❌ [PRED] Número incorrecto de features: ${features.length}`, features);
+    return null;
+  }
+}
+
+
+
 async function predecir(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, macdActual, signalActual, posicionBB, anchoBB, atrActual, obvActual, precioActual, openInterest = 0) {
   if (!modelo) return null;
 
@@ -970,7 +1149,116 @@ async function predecir(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, 
   return valor[0]; // ← ¡SOLO DEVUELVE EL VALOR! NADA MÁS.
 }
 
-// === PANEL FINANCIERO ===
+
+function registrarResultadoIA(prediccion, resultado) {
+  const { prediccionRaw, confianza, direccion, precioInicio, timestamp } = prediccion;
+  const { acierto, retorno, precioFuturo } = resultado;
+
+  // Guardar registro completo
+  const registro = {
+    id: window.configEstadisticasIA.total + 1,
+    timestamp: new Date(timestamp).toLocaleString(),
+    precioInicio,
+    precioFuturo,
+    retorno: (retorno * 100).toFixed(2),
+    prediccionRaw: prediccionRaw.toFixed(4),
+    confianza: (confianza * 100).toFixed(1),
+    direccionPredicha: direccion,
+    direccionReal: retorno > 0 ? 'SUBIDA' : 'BAJADA',
+    resultado: acierto ? 'ACIERTO' : 'FALLO'
+  };
+
+  window.configEstadisticasIA.registros.push(registro);
+  window.configEstadisticasIA.total++;
+  if (acierto) window.configEstadisticasIA.aciertos++;
+
+  // Actualizar UI
+// Actualizar UI
+  document.getElementById('progreso-predicciones').textContent = window.configEstadisticasIA.total;
+  document.getElementById('aciertos-predicciones').textContent = window.configEstadisticasIA.aciertos; // ← NUEVO
+  const precision = (window.configEstadisticasIA.aciertos / window.configEstadisticasIA.total * 100).toFixed(1);
+  document.getElementById('precision-actual').textContent = `${precision}%`; console.log(`Progureso -Prediccion : progreso-predicciones`);
+  console.log(`Prediccion-Actual : precision-actual`);
+
+
+  // ¿Alcanzó el objetivo?
+  if (window.configEstadisticasIA.total >= window.configEstadisticasIA.objetivo) {
+    const resumen = `🎯 ¡Objetivo alcanzado! Precisión final: ${precision}% (${window.configEstadisticasIA.aciertos}/${window.configEstadisticasIA.total})`;
+    document.getElementById('resumen-final').textContent = resumen;
+    document.getElementById('resumen-final').style.display = 'block';
+    document.getElementById('btn-exportar-ia').style.display = 'inline-block';
+  }
+}
+
+function exportarEstadisticasIA() {
+  if (window.configEstadisticasIA.registros.length === 0) {
+    alert('No hay datos para exportar.');
+    return;
+  }
+
+  // Encabezados
+  const headers = [
+    'ID', 'Fecha', 'Precio Inicio', 'Precio Futuro', 'Retorno (%)',
+    'Predicción RAW', 'Confianza (%)', 'Dirección Predicha',
+    'Dirección Real', 'Resultado'
+  ];
+
+  // Filas
+  const filas = window.configEstadisticasIA.registros.map(r => [
+    r.id, r.timestamp, r.precioInicio, r.precioFuturo, r.retorno,
+    r.prediccionRaw, r.confianza, r.direccionPredicha,
+    r.direccionReal, r.resultado
+  ]);
+
+  // Convertir a CSV
+  let csv = headers.join(',') + '\n';
+  csv += filas.map(fila => 
+    fila.map(campo => `"${campo}"`).join(',')
+  ).join('\n');
+
+  // Descargar
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `estadisticas_ia_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function reiniciarEstadisticasIA() {
+  // ✅ Valor por defecto si no hay configuración previa
+  const objetivoActual = window.configEstadisticasIA?.objetivo || 20;
+
+  window.configEstadisticasIA = {
+    objetivo: objetivoActual,
+    registros: [],
+    total: 0,
+    aciertos: 0
+  };
+
+  // Actualizar UI
+  document.getElementById('progreso-predicciones').textContent = '0';
+  document.getElementById('precision-actual').textContent = '—';
+  document.getElementById('aciertos-predicciones').textContent = '—';
+  document.getElementById('resumen-final').style.display = 'none';
+
+  // Opcional: limpiar localStorage si lo usas
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem('estadisticasIA');
+  }
+
+  console.log('📊 Estadísticas de IA reiniciadas.');
+}
+
+//document.getElementById('btn-reiniciar-ia').addEventListener('click', reiniciarEstadisticasIA);
+
+// Vincular botón
+document.getElementById('btn-exportar-ia').addEventListener('click', exportarEstadisticasIA);
+
+// === PANEL FINANCIERO ===modificada
 function actualizarPanelFinanciero() {
   if (operaciones.length === 0) {
     document.getElementById('pf').textContent = '—';
@@ -981,8 +1269,9 @@ function actualizarPanelFinanciero() {
   }
   
   // 🔹 Ganancias y pérdidas
+  // 🔹 Clasificación de operaciones
   const wins = operaciones.filter(o => o.ganancia > 0);
-  const losses = operaciones.filter(o => o.ganancia < 0);
+  const losses = operaciones.filter(o => o.ganancia <= 0); // incluye 0
   const totalWin = wins.reduce((s, o) => s + o.ganancia, 0);
   const totalLoss = Math.abs(losses.reduce((s, o) => s + o.ganancia, 0));
   const winRate = operaciones.length > 0 ? wins.length / operaciones.length : 0;
@@ -1000,37 +1289,44 @@ function actualizarPanelFinanciero() {
   expEl.style.color = expectancy >= 0 ? '#26a69a' : '#ef5350';
   
   // 🔹 ROI y retorno diario (estimado)
-  const roi = ((capitalActual - capitalInicial) / capitalInicial) * 100;
+  const capitalInicial = 1000; // o desde input/constante
+  const gananciaTotal = operaciones.reduce((sum, op) => sum + op.ganancia, 0);
+  const roi = (gananciaTotal / capitalInicial) * 100;
+
   document.getElementById('roi').textContent = `${roi.toFixed(2)}%`;
   document.getElementById('ganancias').textContent = `$${totalWin.toFixed(2)}`;
   document.getElementById('perdidas').textContent = `-$${totalLoss.toFixed(2)}`;
   
+
+
   // 🔹 Sharpe Ratio (simple: ROI anualizado / desv ROE)
+  // 🔹 ROE real por operación (usando leverage guardado)
   const roes = operaciones.map(o => {
-    const size = Math.abs(o.montoInvertido / ((o.entrada + o.salida) / 2));
-    const leverage = parseFloat(document.getElementById('apalancamiento')?.value) || 4;
-    return ((o.salida - o.entrada) / o.entrada) * leverage * (o.entrada < o.salida ? 1 : -1) * 100;
+    const leverage = o.leverage || 1;
+    const retorno = (o.salida - o.entrada) / o.entrada;
+    return retorno * leverage * 100;
   });
   
-  if (roes.length > 1) {
+
+
+
+  // 🔹 Sharpe (por operación)
+  if (roes.length >= 5) {
     const mean = roes.reduce((a, b) => a + b, 0) / roes.length;
     const variance = roes.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / roes.length;
     const std = Math.sqrt(variance);
     
-    // ✅ SHARPE RATIO CORREGIDO (solo si hay ≥5 operaciones y std > 0.01)
-    let sharpe = '—';
-    if (roes.length >= 5 && std > 0.01) {
-      // ROI promedio por operación (no anualizado artificialmente)
-      const roiPromedio = roes.reduce((a, b) => a + b, 0) / roes.length;
-      sharpe = (roiPromedio / std).toFixed(2);
-      // Límite razonable para evitar valores absurdos
-      if (parseFloat(sharpe) > 10) sharpe = '10+';
+    if (std > 0.01) {
+      const sharpe = (mean / std).toFixed(2);
+      document.getElementById('sharpe').textContent = parseFloat(sharpe) > 10 ? '10+' : sharpe;
+    } else {
+      document.getElementById('sharpe').textContent = '—';
     }
-    document.getElementById('sharpe').textContent = sharpe;
   } else {
     document.getElementById('sharpe').textContent = '—';
   }
   
+
   // 🔹 Max Drawdown (estimado desde historial)
   let peak = capitalInicial;
   let maxDD = 0;
@@ -1249,9 +1545,11 @@ function registrarOperacionReal(symbol, side, entrada, salida, cantidad, pnl, mo
 }
 // === CAPITAL TESTNET ===
 async function actualizarCapitalTestnet() {
-  if (!AUTENTICADO) return;
+  //if (!AUTENTICADO) return;
   try {
-    const res = await fetch('/api/binance/futures/account');
+    const token = localStorage.getItem('authToken');
+     const res = await fetchConAuth('/api/binance/futures/account', {
+    });
     const data = await res.json();
     let saldoUSDT = 0;
     if (data.availableBalance) saldoUSDT = parseFloat(data.availableBalance);
@@ -1449,7 +1747,7 @@ function ocultarLineasPrecios() {
 
 // === ÓRDENES ===
 async function abrirPosicionReal(side) {
-  if (!AUTENTICADO) return;
+  //if (!AUTENTICADO) return;
   try {
     const ticker = await (await fetch(`/api/binance/ticker?symbol=${simboloActual}`)).json();
     const precio = parseFloat(ticker.price);
@@ -1469,7 +1767,7 @@ async function abrirPosicionReal(side) {
       takeProfit = Math.max(0.5, parseFloat(document.getElementById('takeProfit').value) || 3.0); // ← de 1.5 → 3.0
       stopLoss = Math.max(0.5, parseFloat(document.getElementById('stopLoss').value) || 1.5);  // ← de 0.5 → 1.5
     } else {
-      const k5m = await obtenerDatos(simboloActual, '5m', 50);
+      const k5m = await obtenerDatos(simboloActual, '1m', 50);
       const atrArr = k5m.length >= 20 ? calcularATR(k5m, 14) : [];
       const atrVal = atrArr.length > 0 ? atrArr[atrArr.length - 1] : 0;
       takeProfit = Math.max(0.8, (atrVal * 6 / precio) * 100);
@@ -1477,16 +1775,20 @@ async function abrirPosicionReal(side) {
     }
     
    // 1. Cambiar apalancamiento
+   const token = localStorage.getItem('authToken');
 const leverageRes = await fetch('/api/binance/futures/leverage', {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+    headers: {
+    'Authorization': `Bearer ${token}`, // ← ¡Obligatorio!
+    'Content-Type': 'application/json'
+  },
   body: JSON.stringify({ symbol: simboloActual, leverage: lev })
 });
 if (!leverageRes.ok) {
   const leverageErr = await leverageRes.json();
   console.error('⚠️ Error cambiando apalancamiento:', leverageErr);
   // Opcional: lanzar error y detener la apertura
-  throw new Error(`Error cambiando apalancamiento: ${leverageErr.msg || 'Desconocido'}`);
+  throw new Error(`Error cambiando apalancamiento: ${leverageErrr.msg || 'Desconocido'}`);
 } else {
     console.log('✅ Apalancamiento cambiado a:', lev);
 }
@@ -1494,7 +1796,10 @@ if (!leverageRes.ok) {
 // 2. Abrir la posición
 const res = await fetch('/api/binance/futures/order', {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+    headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}` // ← ¡Agregado!
+  },
   body: JSON.stringify({ symbol: simboloActual, side, quantity: qty.toString() /*, leverage: lev */ }) // <-- 'leverage' ya no va aquí
 });
     if (!res.ok) {
@@ -1509,10 +1814,8 @@ const res = await fetch('/api/binance/futures/order', {
     
     const resultado = await res.json();
 // ... (manejo de resultado) ...
-      console.log(`🟢 Orden ${side} abierta | TP: ${takeProfit.toFixed(2)}% | SL: ${stopLoss.toFixed(2)}%`);
-     document.getElementById('estado').textContent = `✅ ${side} ${qty} ${simboloActual}`;
+     
    // ✅ Guardar TP/SL por símbolo para cierre consistente
-   tpSlConfig[simboloActual] = { tpPct: takeProfit, slPct: stopLoss, modo: tpslMode };
 
   // [Agregado] Actualizar sideActual global para el gráfico
   // Convertimos 'BUY'/'SELL' a 'LONG'/'SHORT'
@@ -1522,6 +1825,9 @@ const res = await fetch('/api/binance/futures/order', {
 
 // ...
   await actualizarPosicionesAbiertas();
+
+  // 👇 AGREGA ESTO:
+iniciarRefrescoPosiciones(); // Activa el refresco visual cada 2s
   
   } catch (err) {
    // console.error('🔴 abrirPosicionReal error:', err);
@@ -1542,7 +1848,8 @@ let tpSlConfig = {}; // { BTCUSDT: { tpPct, slPct, modo } }
 // ✅ CERRAR PARCIAL — Corregido: calcula PnL neta real y fees reales, SIN DUPLICAR APLACAMIENTO, pasa leverage
 async function cerrarParcial(symbol, positionSide, sizeParcial, motivo) {
   try {
-    const posResponse = await fetch('/api/binance/futures/positions');
+    const posResponse = await fetchConAuth('/api/binance/futures/positions');
+
     const posiciones = await posResponse.json();
     const posicion = posiciones.find(p => p.symbol === symbol && p.positionSide === positionSide);
     if (!posicion || Math.abs(parseFloat(posicion.positionAmt || 0)) < 0.0001) {
@@ -1553,16 +1860,12 @@ async function cerrarParcial(symbol, positionSide, sizeParcial, motivo) {
     const sideActual = positionAmt > 0 ? 'LONG' : 'SHORT';
     const leverage = parseFloat(posicion.leverage) || 1; // <-- Aseguramos usar el leverage real de la posicion
 
-    
-
-
-
-
 
     // ✅ 1. Enviar orden parcial
-    const closeRes = await fetch('/api/binance/futures/close-position', {
-      method: 'POST',
+    const closeRes = await fetchConAuth('/api/binance/futures/close-position', {
+     method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+
       body: JSON.stringify({
         symbol,
         positionSide,
@@ -1643,8 +1946,9 @@ async function cerrarParcial(symbol, positionSide, sizeParcial, motivo) {
 
 async function cerrarPosicion(symbol, positionSide = 'BOTH', motivo = 'Manual') {
   try {
+       const token = localStorage.getItem('authToken');
     // 1. Obtener posiciones actuales
-    const posResponse = await fetch('/api/binance/futures/positions');
+    const posResponse = await fetchConAuth('/api/binance/futures/positions');
     const posiciones = await posResponse.json();
     const posicion = Array.isArray(posiciones)
       ? posiciones.find(p => p.symbol === symbol && p.positionSide === positionSide)
@@ -1663,10 +1967,11 @@ async function cerrarPosicion(symbol, positionSide = 'BOTH', motivo = 'Manual') 
     const leverage = parseFloat(posicion.leverage) || 1; // <-- Aseguramos usar el leverage real de la posicion
 
     // 4. Cerrar en Binance
-    const closeRes = await fetch('/api/binance/futures/close-position', {
+    const closeRes = await fetchConAuth('/api/binance/futures/close-position', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ symbol, positionSide })
+
     });
     const resultado = await closeRes.json();
 
@@ -1732,10 +2037,28 @@ async function cerrarPosicion(symbol, positionSide = 'BOTH', motivo = 'Manual') 
     // 11. Actualizar UI
     await actualizarPosicionesAbiertas();
 
+    // 👇 AGREGA ESTO
+    // Opcional: detener refresco si ya no hay posiciones
+    // Pero para ser seguro, llamamos a una versión que verifica
+    setTimeout(() => {
+      // Pequeño retraso para asegurar que la posición ya se cerró en Binance
+      actualizarPosicionesAbiertas().then(() => {
+        // Si después de actualizar no hay posiciones, detenemos
+        const posiciones = document.querySelectorAll('#operaciones-abiertas tbody tr');
+        const hayPosiciones = posiciones.length > 0 &&
+          !posiciones[0].textContent.includes('Sin posiciones abiertas');
+        if (!hayPosiciones) {
+          detenerRefrescoPosiciones();
+        }
+      }).catch(() => {
+        detenerRefrescoPosiciones(); // Si falla, detenemos por seguridad
+      });
+    }, 500);
+
     //[Agregado] Limpiar sideActual global si ya no hay posiciones abiertas para este símbolo
     // Obtenemos las posiciones actuales de la API
     try {
-  const posiciones = await (await fetch('/api/binance/futures/positions')).json();
+  const posiciones = await (await fetchConAuth('/api/binance/futures/positions')).json();
   // Buscamos si hay ALGUNA posición abierta para simboloActual (no solo la del mismo side, todas)
   const hayPosicionSimbolo = posiciones.some(p => p.symbol === symbol && Math.abs(parseFloat(p.positionAmt)) > 0.0001);
 
@@ -1774,7 +2097,7 @@ async function cerrarPosicion(symbol, positionSide = 'BOTH', motivo = 'Manual') 
 // ✅ ACTUALIZAR POSICIONES — Seguro
 async function actualizarPosicionesAbiertas() {
   try {
-    const res = await fetch(`/api/binance/futures/positions?_t=${Date.now()}`);
+    const res = await fetchConAuth(`/api/binance/futures/positions?_t=${Date.now()}`);
     const data = await res.json();
     
     // ✅ ¡AÑADE ESTA LÍNEA! → Si no es array, hazlo array vacío
@@ -1816,6 +2139,12 @@ async function actualizarPosicionesAbiertas() {
       emptyRow.innerHTML = `<td colspan="6" style="text-align:center;color:#666;">Sin posiciones abiertas</td>`;
       tbody.appendChild(emptyRow);
     }
+    // Al final de try, después de renderizar la tabla
+    if (posicionesAbiertas.length === 0) {
+      detenerRefrescoPosiciones(); // 👈 Detiene si no hay posiciones
+    }
+
+
   } catch (err) {
     console.error('🔴 Error actualizando posiciones:', err);
     const tbody = document.querySelector('#operaciones-abiertas tbody');
@@ -1837,8 +2166,8 @@ function actualizarSemaforo({ adx = 0,emaActual=0,rsiActual=50,atrActual=0.001, 
 
   // ✅ Evaluar condiciones
   const adxOk = adx > 20;
-  const datosOk = preciosLen >= 100;
-  const predOk = confianza >= 0.55;
+  const datosOk = preciosLen >= 55;
+  const predOk = confianza >= 0.65;
   let modoOk = false;
   if (modo === 'alcista') modoOk = alcista;
   else if (modo === 'bajista') modoOk = bajista;
@@ -1895,25 +2224,97 @@ if (precioEl) precioEl.textContent = precioActual.toFixed(1)
 
 }
 
+function iniciarSupervivencia() {
+  if (!window.modoSupervivencia) return;
+  
+  // Verificar órdenes cada 10 segundos
+  verificarOrdenesSupervivencia();
+  
+  // Programar próxima verificación
+  setTimeout(iniciarSupervivencia, 10000);
+}
+
+async function verificarOrdenesSupervivencia() {
+  try {
+    const token = localStorage.getItem('authToken');
+    if (!token) return;
+    
+    // Obtener posiciones actuales
+    const posRes = await fetchConAuth('/api/binance/futures/positions', {
+      
+    });
+    
+    if (!res.ok) return;
+    const posiciones = await res.json();
+    
+    // Para cada posición abierta, aplicar lógica de cierre
+    for (const pos of posiciones) {
+      if (Math.abs(parseFloat(pos.positionAmt || 0)) <= 0.0001) continue;
+      
+      // Simular condiciones de cierre (TP/SL/IA)
+      await evaluarCierreSupervivencia(pos);
+    }
+    
+    // Actualizar UI
+    actualizarPosicionesAbiertas();
+  } catch (err) {
+    console.error('Error en modo supervivencia:', err);
+  }
+}
+
+async function evaluarCierreSupervivencia(pos) {
+  const symbol = pos.symbol;
+  const size = parseFloat(pos.positionAmt);
+  const entryPrice = parseFloat(pos.entryPrice);
+  const markPrice = parseFloat(pos.markPrice);
+  const side = size > 0 ? 'LONG' : 'SHORT';
+  
+  // Obtener configuración de TP/SL actual
+  const tpSl = tpSlConfig[symbol] || { tpPct: 3.0, slPct: 1.5 };
+  
+  // Calcular ROE
+  const leverage = parseFloat(pos.leverage);
+  const roePct = ((markPrice - entryPrice) / entryPrice) * leverage * (side === 'LONG' ? 1 : -1) * 100;
+  
+  // Verificar TP/SL
+  if (roePct >= tpSl.tpPct) {
+    console.log(`[SUPERVIVENCIA] TP alcanzado para ${symbol}. Cerrando...`);
+    await cerrarPosicion(symbol, pos.positionSide, 'TP (Supervivencia)');
+  } else if (roePct <= -tpSl.slPct) {
+    console.log(`[SUPERVIVENCIA] SL alcanzado para ${symbol}. Cerrando...`);
+    await cerrarPosicion(symbol, pos.positionSide, 'SL (Supervivencia)');
+  }
+  
+  // Opcional: cierre por IA (requiere último precio)
+  // Podrías obtener velas recientes vía REST y ejecutar predicción
+
+
+}
+
+
 // === STREAMING (ACTUALIZADO - Con logs y manejo de ordenEnCurso corregido) ===
 async function iniciarStreaming() {
-  if (streamingActivo) {
-    console.log("⚠️ Streaming ya activo. Ignorando nueva llamada.");
-    return;
-  }
-  console.log('🚀 INICIANDO STREAMING...');
-
+ 
   if (!modelo) {
     alert('⚠️ Primero entrena el modelo antes de iniciar el streaming.');
     streamingActivo = false;
     return;
   }
 
-  if (!AUTENTICADO) {
-    alert('🔒 Acceso denegado. Entrena el modelo primero.');
-    streamingActivo = false;
+
+  if (streamingActivo) {
+    console.log("⚠️ Streaming ya activo. Ignorando nueva llamada.");
     return;
   }
+  console.log('🚀 INICIANDO STREAMING...');
+
+
+
+  //if (!AUTENTICADO) {
+   // alert('🔒 Acceso denegado. Entrena el modelo primero.');
+   // streamingActivo = false;
+   // return;
+ // }
 
   streamingActivo = true; // ✅ Marcar como activo
    
@@ -1924,10 +2325,10 @@ async function iniciarStreaming() {
     return;
   }
 
-  if (!AUTENTICADO) {
-    alert('🔒 Acceso denegado. Entrena el modelo primero.');
-    return;
-  }
+  //if (!AUTENTICADO) {
+   // alert('🔒 Acceso denegado. Entrena el modelo primero.');
+   // return;
+ // }
 
   console.log('✅ Modelos y autenticación verificados. Iniciando WebSocket...');
 
@@ -1942,7 +2343,10 @@ async function iniciarStreaming() {
   const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@kline_1m');
 
   ws.onopen = () => {
+   
     console.log('🟢 ¡CONEXIÓN EXITOSA! WebSocket abierto.');
+    window.modoSupervivencia = false; // Detener modo supervivencia
+
     if (estadoEl) {
       estadoEl.textContent = '📡 Conectado. Esperando vela cerrada (1m)...';
       estadoEl.style.color = '#2196F3';
@@ -1957,29 +2361,48 @@ async function iniciarStreaming() {
     }
   };
 
-  ws.onclose = () => {
-    console.log('🟡 WebSocket cerrado. Limpiando estado...');
+ws.onclose = async () => {
+  console.log('🟡 WebSocket cerrado. Verificando posiciones abiertas...');
   streamingActivo = false;
-  velasCerradas = 0; // ← ¡Para forzar recuento desde cero!
 
+  try {
+    // 1. Obtener posiciones actuales desde Binance
+    const posResponse = await fetchConAuth('/api/binance/futures/positions');
+    const posiciones = await posResponse.json();
+    const posicionesAbiertas = posiciones.filter(p => Math.abs(parseFloat(p.positionAmt)) > 0.0001);
+
+    if (posicionesAbiertas.length > 0) {
+      console.log(`⚠️ ${posicionesAbiertas.length} posición(es) abierta(s). Cerrando antes de reconectar...`);
+      
+      // 2. Cerrar cada posición
+      for (const pos of posicionesAbiertas) {
+        await cerrarPosicion(
+          pos.symbol, 
+          pos.positionSide || 'BOTH', 
+          'WebSocket cerrado' // motivo
+        );
+        console.log(`✅ Posición ${pos.symbol} cerrada por desconexión.`);
+      }
+    } else {
+      console.log('✅ No hay posiciones abiertas. Seguro para reconectar.');
+    }
+
+  } catch (err) {
+    console.error('❌ Error al cerrar posiciones en onclose:', err);
+  }
+
+  // 3. Actualizar estado y reconectar
   const estadoEl = document.getElementById('estado-streaming');
   if (estadoEl) {
     estadoEl.textContent = '🟡 Conexión perdida. Reintentando en 5s...';
     estadoEl.style.color = '#FF9800';
   }
+
   setTimeout(() => {
     console.log('🔄 Intentando reconectar...');
-    iniciarStreaming(); // ← ¡Se reinicia con streamingActivo protegido!
+    iniciarStreaming();
   }, 5000);
-        
-   
-    console.log('🟡 WebSocket cerrado. Reintentando en 5s...');
-    if (estadoEl) {
-      estadoEl.textContent = '🟡 Conexión perdida. Reintentando en 5s...';
-      estadoEl.style.color = '#FF9800';
-    }
-    setTimeout(iniciarStreaming, 5000);
-  };
+};
 
 /// === WEBSOCKET: MANEJO DE DATOS EN TIEMPO REAL (CORREGIDO - V2 - Mayor Dropout) ===
 // Asegúrate de que 'historialVelas', 'modelo', 'autoTrading', 'ordenEnCurso', 'simboloActual', etc. estén definidas globalmente.
@@ -2044,27 +2467,27 @@ ws.onmessage = async (event) => {
     // ✅ Incrementar contador de velas cerradas
     velasCerradas++; // <-- [CORRECCIÓN] Incrementar aquí, después de agregar correctamente
     console.log(`📊 Velas cerradas acumuladas: ${velasCerradas}/100`);
-
+    //
     // === ACTUALIZAR GRÁFICO ===
 
-
+     //cambio diego
     // === PROCESAR DATOS PARA PREDICCIÓN Y TRADING (cuando hay 100 velas cerradas) ===
-    if (velasCerradas >= 100) { // <-- Asegura que haya al menos 100 velas cerradas para procesar
+    if (velasCerradas >= 55) { // <-- Asegura que haya al menos 100 velas cerradas para procesar
       console.log('✅ 100 velas recibidas. Procesando datos para IA...');
 
       // [DIAGNÓSTICO] Verificar longitud de historialVelas
       console.log(`[DIAGNÓSTICO WS] historialVelas.length: ${historialVelas.length}`);
       
       
+      //cambio diego
       
-      
-      if (historialVelas.length < 100) {
+      if (historialVelas.length < 55) {
           console.error("[DIAGNÓSTICO WS] historialVelas tiene menos de 100 elementos.");
           return; // Salir si no hay suficientes datos
       }
-
+       // cambio diego
       // ✅ Obtener últimos 100 precios y volúmenes (de historialVelas con estructura {time, open, high, low, close, volume})
-      const ultimas100 = historialVelas.slice(-100);
+      const ultimas100 = historialVelas.slice(-55);
       // [DIAGNÓSTICO] Verificar que slice funciona y hay 100 elementos
       console.log(`[DIAGNÓSTICO WS] ultimas100.length: ${ultimas100.length}`);
       console.log(`[DIAGNÓSTICO WS] Primera vela de ultimas100 (close, volume):`, { close: ultimas100[0].close, volume: ultimas100[0].volume });
@@ -2129,10 +2552,10 @@ ws.onmessage = async (event) => {
       const desfaseAtr = 13;
       const desfaseAdx = 27; // <-- CORREGIDO: calcularADX empieza en klines[27]
       const desfaseObv = 0;
-
+       //cambio diego
       // El índice i debe ser >= max(desfaseRsi, desfaseEma, desfaseMacd, desfaseBb, desfaseAtr, desfaseAdx, desfaseObv, 10_para_ventana_precios)
       // Usamos el índice más alto de 'ultimas100', que es 99 (porque son 100 velas, de 0 a 99)
-      const i = 99; // Índice de la última vela en 'ultimas100'
+      const i = 54; // Índice de la última vela en 'ultimas100'
 
       // [DIAGNÓSTICO] Verificar índices antes de acceder a arrays
       console.log(`[DIAGNÓSTICO WS] Accediendo arrays en i=99 con desfases: RSI[${i-desfaseRsi}], EMA[${i-desfaseEma}], MACD[${i-desfaseMacd}], BB[${i-desfaseBb}], ATR[${i-desfaseAtr}], ADX[${i-desfaseAdx}], OBV[${i-desfaseObv}]`);
@@ -2222,6 +2645,7 @@ ws.onmessage = async (event) => {
           );
            // Agregado por diego
           window.prediccionRaw = prediccionRaw; // ← Ahora sí podrás verlo en consola
+          
 
           console.log(`[DIAGNÓSTICO WS] Predicción recibida de predecir(): ${prediccionRaw} (typeof: ${typeof prediccionRaw}, isNaN: ${isNaN(prediccionRaw)})`);
       } catch (errorPredict) {
@@ -2233,7 +2657,7 @@ ws.onmessage = async (event) => {
       let confianza = 0;
       let dir = '—';
       if (prediccionRaw != null && !isNaN(prediccionRaw)) {
-          confianza = Math.abs(prediccionRaw - 0.5) * 2;
+          confianza = Math.max(prediccionRaw, 1 - prediccionRaw);
           dir = prediccionRaw > 0.5 ? 'SUBIDA' : 'BAJADA';
           console.log(`[DIAGNÓSTICO WS] PrediccionRaw: ${prediccionRaw}, Confianza: ${confianza}, Dirección: ${dir}`);
           // ... (resto del código para actualizar UI de predicción y semáforo) ...
@@ -2251,17 +2675,14 @@ ws.onmessage = async (event) => {
 
        // ✅ Filtro: solo mostrar si hay cierta confianza
          // if (confianza < 0.55) { // ← Umbral profesional
-         //    document.getElementById('prediccion-porcentaje').textContent = '—';
-         // const prog = document.getElementById('prediccion-progreso');
-        //  if (prog) {
-         //     prog.style.width = '0%';
-          //  prog.style.backgroundColor = '#666'; // gris
-        //     }
-         //        return; // No seguir si no hay suficiente confianza
-       //    }
-
-
-      
+          //  document.getElementById('prediccion-porcentaje').textContent = '—';
+          //const prog = document.getElementById('prediccion-progreso');
+         //if (prog) {
+         //    prog.style.width = '0%';
+         //   prog.style.backgroundColor = '#666'; // gris
+         //    }
+         //       return; // No seguir si no hay suficiente confianza
+        // }
       if (prediccionRaw != null && !isNaN(prediccionRaw)) {
           const dirEl = document.getElementById('prediccion-direccion'); 
           const porcEl = document.getElementById('prediccion-porcentaje');
@@ -2270,14 +2691,35 @@ ws.onmessage = async (event) => {
           if (porcEl) porcEl.textContent = `${Math.round(confianza * 100)}%`;
           if (progEl) {
             progEl.style.width = `${Math.round(confianza * 100)}%`;
-            progEl.style.backgroundColor = confianza > 0.55 ? (dir === 'SUBIDA' ? '#26a69a' : '#ef5350') : '#666';
+            progEl.style.backgroundColor = confianza > 0.65 ? (dir === 'SUBIDA' ? '#26a69a' : '#ef5350') : '#666';
           }
       }
 
-      // === ACTUALIZAR SEMÁFORO ===
-      // Asegúrate de que estas variables (adxActual, confianza, alcista, bajista, etc.)
-      // estén definidas en este punto del código dentro del ws.onmessage.
-      //emaActual=0,rsiActual=50,atrActual=0.001, precioActual=0,
+        const direccion = prediccionRaw > 0.5 ? 'SUBIDA' : 'BAJADA';
+        const VELAS_FUTURAS = 3; // ajusta según tu modelo
+        const confianzaMinima = 0.65; // 65%
+        if (confianza >= confianzaMinima || confianza <= (1 - confianzaMinima)) {
+         console.log(`🧠 Predicción fuerte: ${direccion} (${(confianza * 100).toFixed(1)}%)`);
+
+        const nuevaPrediccion = {
+          prediccionRaw,
+          confianza,
+          direccion,
+          precioInicio: ultimoPrecio,
+          timestamp: Date.now(),
+          velaVerificacion: historialVelas.length - 1 + VELAS_FUTURAS,
+          resultado: null
+        };
+
+        if (!window.prediccionesPendientes) window.prediccionesPendientes = [];
+        window.prediccionesPendientes.push(nuevaPrediccion);
+        console.log("🔍 Predicción registrada. Total pendientes:", window.prediccionesPendientes.length);
+
+      } else {
+            console.log(`🔇 Predicción débil (${(confianza * 100).toFixed(1)}%). Ignorada.`);
+
+      }
+      // 👇 REGISTRAR EN ESTADÍSTICAS
       const modo = document.getElementById('modo-mercado')?.value || 'volatil';
       actualizarSemaforo({
         adx: adxActual,
@@ -2294,151 +2736,87 @@ ws.onmessage = async (event) => {
       });
       // Lee el estado actual del checkbox HTML y actualiza la variable autoTrading local en cada iteración del WebSocket.
         autoTrading = document.getElementById('autoTrading')?.checked ?? false;
-      
+
+
         if (!autoTrading) {
           // El bucle sigue corriendo, actualizando precios, indicadores, semáforo, etc.
           // Pero no intentará abrir ni cerrar posiciones automáticamente basadas en señales de IA.
           // Continúa hasta el final del try.
-      } else {
+      } 
+      
+        else {
 
-        
-        // === TRADING AUTOMÁTICO ACTIVO === (Lógica de cierre y apertura basada en señales)
-
-      // [CORRECCIÓN] Limitar la frecuencia de la solicitud de posiciones para evitar ban de IP
-      // Usamos una variable global para almacenar el timestamp de la última solicitud
-      if (typeof window.ultimoCheckPosiciones === 'undefined') {
-          window.ultimoCheckPosiciones = 0;
-      }
-
-      const ahoraMs = Date.now();
-      const tiempoMinimoEntreChecks = 10000; // 10 segundos en milisegundos (ajusta según sea necesario)
-
-      // Solo obtener posiciones si han pasado al menos 'tiempoMinimoEntreChecks' ms desde la última vez
-      if (ahoraMs - window.ultimoCheckPosiciones >= tiempoMinimoEntreChecks) {
-          window.ultimoCheckPosiciones = ahoraMs; // Actualizar timestamp
-
-          // [Corrección] Obtener posiciones con manejo de errores más robusto
-          let posiciones;
-          try {
-            const posResponse = await fetch('/api/binance/futures/positions?_t=' + Date.now()); // <-- Solicita con timestamp para evitar cacheo
-            if (!posResponse.ok) {
-              console.error('❌ Error HTTP obteniendo posiciones:', posResponse.status, posResponse.statusText);
-              document.getElementById('estado').textContent = `⚠️ Error HTTP: ${posResponse.status}`;
-              return; // Salir de esta iteración si falla la API (4xx/5xx)
-            }
-            posiciones = await posResponse.json(); // Intentar parsear JSON
-          } catch (fetchOrJsonError) {
-            // Captura errores de red (fetch) o de parsing JSON
-            console.error('❌ Error obteniendo o parseando posiciones:', fetchOrJsonError);
-            document.getElementById('estado').textContent = `⚠️ Error de red o formato`;
-            return; // Salir de esta iteración si falla el fetch o json()
+          if (typeof window.ultimoCheckPosiciones === 'undefined') {
+            window.ultimoCheckPosiciones = 0;
           }
 
-          // Verificar que la respuesta sea un array después del parsing
-          if (!Array.isArray(posiciones)) {
-             console.error('❌ Formato inesperado de posiciones (no es un array):', posiciones);
-             document.getElementById('estado').textContent = `⚠️ Error: Formato de posiciones inválido`;
-             return; // Salir de esta iteración si la respuesta no es un array
+          const ahoraMs = Date.now();
+          const tiempoMinimoEntreChecks = 10000; // 10 segundos en milisegundos (ajusta según sea necesario)
+
+          let posiciones = null;
+
+
+          if (ahoraMs - window.ultimoCheckPosiciones >= tiempoMinimoEntreChecks) {
+            window.ultimoCheckPosiciones = ahoraMs; // Actualizar timestamp
+
+
+            try {
+              const posResponse = await fetchConAuth('/api/binance/futures/positions?_t=' + Date.now()); // <-- Solicita con timestamp para evitar cacheo
+              if (!posResponse.ok) {
+                console.error('❌ Error HTTP obteniendo posiciones:', posResponse.status, posResponse.statusText);
+                document.getElementById('estado').textContent = `⚠️ Error HTTP: ${posResponse.status}`;
+                return; // Salir de esta iteración si falla la API (4xx/5xx)
+              }
+              posiciones = await posResponse.json(); // Intentar parsear JSON
+            } catch (fetchOrJsonError) {
+              // Captura errores de red (fetch) o de parsing JSON
+              console.error('❌ Error obteniendo o parseando posiciones:', fetchOrJsonError);
+              document.getElementById('estado').textContent = `⚠️ Error de red o formato`;
+              return; // Salir de esta iteración si falla el fetch o json()
+            }
+
+
+
+            // Verificar que la respuesta sea un array después del parsing
+            if (!Array.isArray(posiciones)) {
+              console.error('❌ Formato inesperado de posiciones (no es un array):', posiciones);
+              document.getElementById('estado').textContent = `⚠️ Error: Formato de posiciones inválido`;
+              return; // Salir de esta iteración si la respuesta no es un array
+            }
+
+          }
+
+
+          // Si no se obtuvieron nuevas posiciones (por el límite de tiempo), salir sin hacer trading
+          if (posiciones === null) {
+            console.log(`[DEBUG WS] No ha pasado suficiente tiempo para volver a checkear posiciones. Último check: ${new Date(window.ultimoCheckPosiciones).toLocaleTimeString()}, Ahora: ${new Date(ahoraMs).toLocaleTimeString()}`);
+            // Actualizar TP/SL en UI (solo visual, sin trading)
+
+            return;
           }
 
           // [CORRECCIÓN] Asignar la posición específica para el símbolo actual
           const posicionActual = posiciones.find(p => p.symbol === simboloActual && Math.abs(parseFloat(p.positionAmt || 0)) > 0.0001);
 
-          // [Agregado] Inicializar estado global para posiciones si no existe
-          if (typeof window.estadoPosiciones === 'undefined') window.estadoPosiciones = {};
-
-          // [Agregado] Inicializar estado persistente para esta posición si es la primera vez que la vemos en esta iteración
-          if (posicionActual) {
-              const symbolSideKey = `${posicionActual.symbol}_${posicionActual.positionSide}`;
-              if (!window.estadoPosiciones[symbolSideKey]) {
-                  window.estadoPosiciones[symbolSideKey] = { tp1Cerrado: false, slTrailing: false };
-              }
+          // Inicializar estado persistente de posiciones si no existe
+          if (typeof window.estadoPosiciones === 'undefined') {
+            window.estadoPosiciones = {};
           }
 
-          // ✅ Solo evaluar cierre si ya se calculó la predicción y hay posición
-          if (historialVelas.length >= 30 && prediccionRaw != null && posicionActual) { // <-- Asegurar que posicionActual no sea null aquí también
-            // ... (resto del código de evaluación de cierre: ROE, TP1, SL, TP2, IA, actualizarLineasPrecios) ...
-            // [Tu código de lógica de cierre va aquí, usando posicionActual]
-            // ...
-          } // Fin del if (historialVelas.length >= 30 && prediccionRaw != null && posicionActual)
 
-          // 🔹 Abrir nuevas posiciones (fuera del bloque de cierre, como antes)
-          // [CORRECCIÓN] Asegurar que !posicionActual sea verdadero ANTES de intentar abrir
-          // [CORRECCIÓN] Asegurar que ordenEnCurso sea falso antes de intentar abrir (ya está chequeado al inicio del intervalo general, si se usa .finally() correctamente)
-          if (prediccionRaw != null && confianza >= 0.55 && historialVelas.length >= 55 && adxActual > 20) { // <-- Añadido !ordenEnCurso (implícito si la lógica de cierre lo maneja bien con finally)
-            const side = prediccionRaw > 0.5 ? 'BUY' : 'SELL';
-            let operar = false;
-            const modo = document.getElementById('modo-mercado')?.value || 'volatil';
-            // Asumiendo que alcista y bajista se calculan antes de este if
-            // const alcista = e20 > e50;
-            // const bajista = e20 < e50;
-            // (Asegúrate de que alcista y bajista estén definidos aquí)
-            if (modo === 'alcista' && side === 'BUY' && alcista) operar = true;
-            else if (modo === 'bajista' && side === 'SELL' && bajista) operar = true;
-            else if (modo === 'volatil' && ((side === 'BUY' && alcista) || (side === 'SELL' && bajista))) operar = true;
 
-            // [Corrección] Verificar !posicionActual aquí también (la obtenida de posiciones.find)
-            if (operar && !posicionActual) { // <-- Condición clave
-               // ACTIVAR BANDERA ANTES DE ABRIR POSICIÓN
-               ordenEnCurso = true;
-               abrirPosicionReal(side)
-                 .finally(() => {
-                    // DESACTIVAR BANDERA DESPUÉS DE ABRIR POSICIÓN (éxito o error)
-                    ordenEnCurso = false;
-                 });
-            } else if (operar && posicionActual) {
-               // [Corrección] Log para depuración si se intenta abrir con posición existente
-               // console.log(`[DEBUG] Condición de apertura cumplida, PERO posicionActual EXISTE:`, posicionActual);
-               // Opcional: Actualizar estado UI
-               // document.getElementById('estado').textContent = `⚠️ Señal de apertura, pero posición abierta para ${simboloActual}`;
+
+          if (posicionActual) {
+            const symbolSideKey = `${posicionActual.symbol}_${posicionActual.positionSide}`;
+            if (!window.estadoPosiciones[symbolSideKey]) {
+              window.estadoPosiciones[symbolSideKey] = { tp1Cerrado: false, slTrailing: false };
             }
           }
-      } else {
-          // Opcional: Si no se checkean posiciones, puedes omitir la lógica de trading en esta iteración
-          // o puedes usar una copia de 'posicionActual' de la última vez que se obtuvo.
-          // Para simplificar, solo omitimos la lógica de trading si no ha pasado suficiente tiempo.
-          console.log(`[DEBUG WS] No ha pasado suficiente tiempo para volver a checkear posiciones. Último check: ${new Date(window.ultimoCheckPosiciones).toLocaleTimeString()}, Ahora: ${new Date(ahoraMs).toLocaleTimeString()}`);
-          // Continuar con otras actualizaciones (gráficos, indicadores, predicción) pero no con trading automático basado en posiciones
-          //    // Lógica de cierre basada en la posición previa y la nueva predicción
-          // }
-          return; // <-- Salir de esta iteración del ws.onmessage si no se actualizan posiciones
-      }
 
-                // ✅ Mostrar TP/SL actual en el panel (manual o dinámico)
-            let tpPct, slPct;
-            const modoTPSL = document.getElementById('tpsl-mode')?.value || 'dinamico';
-           if (modoTPSL === 'manual') {
-            tpPct = parseFloat(document.getElementById('takeProfit')?.value) || 3.0;
-          slPct = parseFloat(document.getElementById('stopLoss')?.value) || 1.5;
-          } else {
-          tpPct = (atrGlobal * 6 / ultimoPrecio) * 100;
-         slPct = (atrGlobal * 3 / ultimoPrecio) * 100;
-          }
-          const tpEl = document.getElementById('tp-dinamico');
-         const slEl = document.getElementById('sl-dinamico');
-         if (tpEl) tpEl.textContent = `TP: ${tpPct.toFixed(2)}%`;
-          if (slEl) slEl.textContent = `SL: ${slPct.toFixed(2)}%`;
+          // ───────────────────────────────────────
+          // 🔴 LÓGICA DE CIERRE (si hay posición)
+          // ───────────────────────────────────────
 
-          // Verificar que la respuesta sea un array después del parsing
-          if (!Array.isArray(posiciones)) {
-             console.error('❌ Formato inesperado de posiciones (no es un array):', posiciones);
-             document.getElementById('estado').textContent = `⚠️ Error: Formato de posiciones inválido`;
-             return; // Salir de esta iteración si la respuesta no es un array
-          }
-
-          // [CORRECCIÓN] Asignar la posición específica para el símbolo actual
-          const posicionActual = posiciones.find(p => p.symbol === simboloActual && Math.abs(parseFloat(p.positionAmt || 0)) > 0.0001);
-
-          // [Agregado] Inicializar estado global para posiciones si no existe
-          if (typeof window.estadoPosiciones === 'undefined') window.estadoPosiciones = {};
-
-          // [Agregado] Inicializar estado persistente para esta posición si es la primera vez que la vemos en esta iteración
-          if (posicionActual) {
-              const symbolSideKey = `${posicionActual.symbol}_${posicionActual.positionSide}`;
-              if (!window.estadoPosiciones[symbolSideKey]) {
-                  window.estadoPosiciones[symbolSideKey] = { tp1Cerrado: false, slTrailing: false };
-              }
-          }
 
           // ✅ Solo evaluar cierre si ya se calculó la predicción y hay posición
           if (historialVelas.length >= 30 && prediccionRaw != null && posicionActual) { // <-- Asegurar que posicionActual no sea null aquí también
@@ -2458,33 +2836,85 @@ ws.onmessage = async (event) => {
             const symbolSideKey = `${posicionActual.symbol}_${posicionActual.positionSide}`;
             let estadoLocal = window.estadoPosiciones[symbolSideKey] || { tp1Cerrado: false, slTrailing: false };
 
+
+
             // 🔵 ROE y TP/SL dinámicos (misma lógica de antes)
-            let tpPctEquity = 3.0, slPctEquity = 1.5;
+            let tpPrice, slPrice, tpPctDisplay, slPctDisplay;
+
             const modoTPSL = document.getElementById('tpsl-mode')?.value || 'dinamico';
+
             if (modoTPSL === 'manual') {
-              tpPctEquity = Math.max(0.5, parseFloat(document.getElementById('takeProfit')?.value) || 3.0);
-              slPctEquity = Math.max(0.5, parseFloat(document.getElementById('stopLoss')?.value) || 1.5);
+              // Manual: usas % sobre precio (sin leverage)
+              const tpPct = parseFloat(document.getElementById('takeProfit')?.value) || 3.0;
+              const slPct = parseFloat(document.getElementById('stopLoss')?.value) || 1.5;
+
+              if (esLong) {
+                tpPrice = entryPrice * (1 + tpPct / 100);
+                slPrice = entryPrice * (1 - slPct / 100);
+              } else {
+                tpPrice = entryPrice * (1 - tpPct / 100);
+                slPrice = entryPrice * (1 + slPct / 100);
+              }
+              tpPctDisplay = tpPct;
+              slPctDisplay = slPct;
             } else {
+              // Dinámico: basado en ATR (sin leverage para precios)
               try {
-                const k5m = await obtenerDatos(simboloActual, '5m', 50);
+                const k5m = await obtenerDatos(simboloActual, '1m', 50);
                 if (k5m.length >= 20) {
-                  const a = calcularATR(k5m, 14);
-                  const atrVal = a[a.length - 1] || 0;
-                  tpPctEquity = Math.max(0.8, (atrVal * 6 / entryPrice) * leverage * 100);
-                  slPctEquity = Math.max(0.5, (atrVal * 3 / entryPrice) * leverage * 100);
+                  const atrArray = calcularATR(k5m, 14);
+                  const atrVal = atrArray[atrArray.length - 1] || 150; // fallback razonable
+
+                  // Ajusta estos multiplicadores según tu estrategia
+                  const tpMult = 2.0;
+                  const slMult = 1.0;
+
+                  const tpDist = atrVal * tpMult;
+                  const slDist = atrVal * slMult;
+
+                  if (esLong) {
+                    tpPrice = entryPrice + tpDist;
+                    slPrice = entryPrice - slDist;
+                  } else {
+                    tpPrice = entryPrice - tpDist;
+                    slPrice = entryPrice + slDist;
+                  }
+
+                  // Para mostrar en UI: % de movimiento del precio
+                  tpPctDisplay = (tpDist / entryPrice) * 100;
+                  slPctDisplay = (slDist / entryPrice) * 100;
+                } else {
+                  throw new Error("No hay suficientes velas");
                 }
               } catch (e) {
-                console.warn('⚠️ Error calculando ATR para TP/SL:', e.message);
-                tpPctEquity = 3.0; // Fallback
-                slPctEquity = 1.5; // Fallback
+                console.warn('⚠️ Fallback a TP/SL manual por error en ATR:', e.message);
+                // Fallback a valores manuales
+                const tpPct = 1.0, slPct = 0.5;
+                if (esLong) {
+                  tpPrice = entryPrice * 1.01;
+                  slPrice = entryPrice * 0.995;
+                } else {
+                  tpPrice = entryPrice * 0.99;
+                  slPrice = entryPrice * 1.005;
+                }
+                tpPctDisplay = tpPct;
+                slPctDisplay = slPct;
               }
             }
-            tpPctEquity = Math.max(0.5, tpPctEquity);
-            slPctEquity = Math.max(0.5, slPctEquity);
+
+            // Asegura que los precios sean válidos
+            tpPrice = parseFloat(tpPrice.toFixed(2));
+            slPrice = parseFloat(slPrice.toFixed(2));
 
             const roePct = ((markPrice - entryPrice) / entryPrice) * leverage * (esLong ? 1 : -1) * 100;
 
-            // 🟢 TP1 (50%): activa en ROE = 50% del TP total
+               let tpPctEquity = tpPctDisplay  ;
+               let slPctEquity = slPctDisplay ;
+
+               // actualizarLineasPrecios(entryPrice, tpPctPrecio, slPctPrecio, leverage); propuesta de nuevos calculos
+                //  actualizarLineasPrecios(entryPrice, tpPctEquity, slPctEquity, leverage);  actual
+                // let tpPct, slPct;
+            // 🟢 TP1 (50%): activa en ROE = 50% del TP total/// actualizarLineasPrecios(entryPrice, tpPctEquity, slPctEquity, leverage);
             const tp1Threshold = tpPctEquity * 0.5;
             // [Corrección] Verificar estado persistente ANTES de intentar TP1
             if (roePct >= tp1Threshold && !estadoLocal.tp1Cerrado) {
@@ -2497,8 +2927,8 @@ ws.onmessage = async (event) => {
               ordenEnCurso = true;
               cerrarParcial(simboloActual, posicionActual.positionSide, sizeParcial, `TP1 (50%)`)
                 .finally(() => {
-                   // DESACTIVAR BANDERA DESPUÉS DE CERRAR PARCIAL (éxito o error)
-                   ordenEnCurso = false;
+                  // DESACTIVAR BANDERA DESPUÉS DE CERRAR PARCIAL (éxito o error)
+                  ordenEnCurso = false;
                 });
             }
 
@@ -2508,7 +2938,7 @@ ws.onmessage = async (event) => {
               slPctEquity = 0.3; // 0.3% de margen
             }
 
-            // 🔴 SL, TP2 o IA
+            // 🔴 Decidir si cerrar: SL, TP2 o IA
             let cerrar = false, motivo = 'Manual';
             if (roePct <= -slPctEquity) {
               cerrar = true;
@@ -2520,7 +2950,7 @@ ws.onmessage = async (event) => {
               // ✅ Cierre por IA + 50% SL (SOLO SI AMBAS CONDICIONES SE CUMPLEN)
               // La lógica actual cierra LONG si IA predice BAJADA (< 0.35) y SHORT si IA predice SUBIDA (> 0.65)
               const debeCerrarPorIA = prediccionRaw != null && // 1. Verificar que prediccionRaw no sea null
-                confianza >= 0.55 && // 2. Confianza mínima (ajustable)
+                confianza >= 0.65 && // 2. Confianza mínima (ajustable)
                 roePct < 0 && // 3. La posición actual tiene pérdidas (ROE negativo)
                 Math.abs(roePct) > (slPctEquity * 0.5) && // 4. La pérdida es mayor al 50% del SL original
                 ((esLong && prediccionRaw <= 0.35) || (esShort && prediccionRaw >= 0.65)); // 5. La IA predice cambio de dirección (opuesta a la posición actual)
@@ -2532,80 +2962,162 @@ ws.onmessage = async (event) => {
             }
 
             if (cerrar) { // <-- Esta es la condición que decide si se cierra
-                // ACTIVAR BANDERA ANTES DE CERRAR TOTAL
-                ordenEnCurso = true;
-                cerrarPosicion(simboloActual, posicionActual.positionSide, motivo) // <-- Llamada a la función de cierre total
-                  .finally(() => {
-                     // DESACTIVAR BANDERA DESPUÉS DE CERRAR TOTAL (éxito o error)
-                     ordenEnCurso = false;
-                     // [Corrección] Limpiar estado persistente si se cierra totalmente
-                     delete window.estadoPosiciones[symbolSideKey];
-                  });
+              // ACTIVAR BANDERA ANTES DE CERRAR TOTAL
+              ordenEnCurso = true;
+              cerrarPosicion(simboloActual, posicionActual.positionSide, motivo) // <-- Llamada a la función de cierre total
+                .finally(() => {
+                  // DESACTIVAR BANDERA DESPUÉS DE CERRAR TOTAL (éxito o error)
+                  ordenEnCurso = false;
+                  // [Corrección] Limpiar estado persistente si se cierra totalmente
+                  delete window.estadoPosiciones[symbolSideKey];
+                });
             }
 
             // ✅ Actualizar líneas de PE/TP/SL (solo si hay posición abierta)
             actualizarLineasPrecios(entryPrice, tpPctEquity, slPctEquity, leverage);
           } // Fin del if (historialVelas.length >= 30 && prediccionRaw != null && posicionActual)
 
-          // 🔹 Abrir nuevas posiciones (fuera del bloque de cierre, como antes)
-          // [Corrección] Asegurar que !posicionActual sea verdadero ANTES de intentar abrir
-          // [Corrección] Asegurar que ordenEnCurso sea falso antes de intentar abrir (ya está chequeado al inicio del intervalo general, si se usara un setInterval general)
-          // [CORRECCIÓN IMPORTANTE] Asegurar que prediccionRaw no sea null y confianza sea >= 0.65
-          if (prediccionRaw != null && confianza >= 0.55 && historialVelas.length >= 55 && adxActual > 20 && !ordenEnCurso) { // <-- Añadido !ordenEnCurso
+               //actualizarLineasPrecios(entryPrice, tpPctPrecio, slPctPrecio, leverage);
+
+          // ───────────────────────────────────────
+          // 🟢 LÓGICA DE APERTURA (solo si NO hay posición)
+          // ───────────────────────────────────────
+
+          if (prediccionRaw != null && confianza >= 0.65 && historialVelas.length >= 55 && adxActual > 20 && !ordenEnCurso) { // <-- Añadido !ordenEnCurso
             const side = prediccionRaw > 0.5 ? 'BUY' : 'SELL';
             let operar = false;
             const modo = document.getElementById('modo-mercado')?.value || 'volatil';
-            // Asumiendo que alcista y bajista se calculan antes de este if
-            // const alcista = e20 > e50;
-            // const bajista = e20 < e50;
-            // (Asegúrate de que alcista y bajista estén definidos aquí)
+            // Asegúrate de que `alcista` y `bajista` estén definidos antes de este bloque
+
             if (modo === 'alcista' && side === 'BUY' && alcista) operar = true;
             else if (modo === 'bajista' && side === 'SELL' && bajista) operar = true;
             else if (modo === 'volatil' && ((side === 'BUY' && alcista) || (side === 'SELL' && bajista))) operar = true;
 
             // [Corrección] Verificar !posicionActual aquí también (la obtenida de posiciones.find)
             if (operar && !posicionActual) { // <-- Condición clave
-               // ACTIVAR BANDERA ANTES DE ABRIR POSICIÓN
-               ordenEnCurso = true;
-               abrirPosicionReal(side)
-                 .finally(() => {
-                    // DESACTIVAR BANDERA DESPUÉS DE ABRIR POSICIÓN (éxito o error)
-                    ordenEnCurso = false;
-                 });
-            } else if (operar && posicionActual) {
-               // [Corrección] Log para depuración si se intenta abrir con posición existente
-               console.log(`[DEBUG] Condición de apertura cumplida, PERO posicionActual EXISTE:`, posicionActual);
-               // Opcional: Actualizar estado UI
-               // document.getElementById('estado').textContent = `⚠️ Señal de apertura, pero posición abierta para ${simboloActual}`;
+              ordenEnCurso = true;
+              abrirPosicionReal(side)
+                .finally(() => {
+                  // DESACTIVAR BANDERA DESPUÉS DE ABRIR POSICIÓN (éxito o error)
+                  ordenEnCurso = false;
+                });
             }
+
+
+            else if (operar && posicionActual) {
+              // [Corrección] Log para depuración si se intenta abrir con posición existente
+              console.log(`[DEBUG] Condición de apertura cumplida, PERO posicionActual EXISTE:`, posicionActual);
+              // Opcional: Actualizar estado UI
+              document.getElementById('estado').textContent = `⚠️ Señal de apertura, pero posición abierta para ${simboloActual}`;
+            }
+
+            // ───────────────────────────────────────
+            // 💡 ACTUALIZAR TP/SL VISUAL EN PANEL
+            // ───────────────────────────────────────
+            let tpPct, slPct;
+            const modoTPSL = document.getElementById('tpsl-mode')?.value || 'dinamico';
+
+            if (modoTPSL === 'manual') {
+              tpPct = parseFloat(document.getElementById('takeProfit')?.value) || 3.0;
+              slPct = parseFloat(document.getElementById('stopLoss')?.value) || 1.5;
+            } else {
+               // ✅ Corregido: sin leverage, con multiplicadores razonables
+              tpPct = (atrGlobal * 2 / ultimoPrecio) * 100; // 2x ATR
+              slPct = (atrGlobal * 1 / ultimoPrecio) * 100; // 1x ATR
+            }
+
+            const tpEl = document.getElementById('tp-dinamico');
+            const slEl = document.getElementById('sl-dinamico');
+
+            if (tpEl) {
+              tpEl.textContent = modoTPSL === 'manual'
+                ? `TP (Manual): ${tpPct.toFixed(2)}%`
+                : `TP (Dinámico): ${tpPct.toFixed(2)}%`;
+            }
+            if (slEl) {
+              slEl.textContent = modoTPSL === 'manual'
+                ? `SL (Manual): ${slPct.toFixed(2)}%`
+                : `SL (Dinámico): ${slPct.toFixed(2)}%`;
+                 // 2. ✅ ACTUALIZAR LAS LÍNEAS DEL GRÁFICO
+              // Asumimos que tienes: entryPrice, leverage, y window.sideActual definidos
+              if (window.sideActual && typeof entryPrice !== 'undefined') {
+                actualizarLineasPrecios(entryPrice, tpPct, slPct, leverage);
+              }
+            }
+
           }
-      } // Fin del bloque else (cuando autoTrading es true)
 
 
 
-    } 
-    
-    else {
-      // === MOSTRAR PROGRESO SI AÚN NO SE ALCANZA EL LÍMITE ===
+        } // Fin del bloque else (cuando autoTrading es true)
+
+
+
+      }
+
+
+      else {
+        // === MOSTRAR PROGRESO SI AÚN NO SE ALCANZA EL LÍMITE ===
+        const estadoEl = document.getElementById('estado');
+        if (estadoEl) {
+          estadoEl.textContent = `📊 Recibidas ${velasCerradas}/100 velas. Esperando...`;
+          estadoEl.style.color = '#666';
+        }
+        console.log(`[DEBUG] Recibidas ${velasCerradas}/100 velas. Esperando más datos para procesar.`);
+      }
+
+      // ... (todo tu código de procesamiento de vela, indicadores, predicción, UI, trading) ...
+
+    // ✅ === VALIDAR PREDICCIONES PENDIENTES (al final del ws.onmessage) ===
+// ✅ Validar predicciones pendientes
+    if (Array.isArray(window.prediccionesPendientes) && window.prediccionesPendientes.length > 0) {
+      const ahora = historialVelas.length - 1;
+          
+      window.prediccionesPendientes = window.prediccionesPendientes.map(pred => {
+        if (pred.resultado !== null) return pred; // ya verificada
+
+        if (ahora >= pred.velaVerificacion) {
+          const indiceVerif = Math.min(pred.velaVerificacion, historialVelas.length - 1);
+          const precioFuturo = historialVelas[indiceVerif]?.close;
+
+          if (precioFuturo == null) return pred; // vela no disponible aún
+
+          const retorno = (precioFuturo - pred.precioInicio) / pred.precioInicio;
+          const direccionReal = retorno > 0 ? 'SUBIDA' : 'BAJADA';
+          const esAcierto = pred.direccion === direccionReal;
+           console.log("🔍 Validando predicciones pendientes...", window.prediccionesPendientes?.length);
+          pred.resultado = {
+            acierto: esAcierto,
+            retorno,
+            precioFuturo,
+            timestampVerif: Date.now()
+          };
+
+          registrarResultadoIA(pred, pred.resultado);
+          // Al final de registrarResultadoIA
+          localStorage.setItem('estadisticasIA', JSON.stringify(window.configEstadisticasIA));
+
+        }
+        return pred;
+      });
+
+    }
+
+
+    }
+    catch (err) {
+      console.error("❌ ERROR EN ws.onmessage:", err);
       const estadoEl = document.getElementById('estado');
       if (estadoEl) {
-        estadoEl.textContent = `📊 Recibidas ${velasCerradas}/100 velas. Esperando...`;
-        estadoEl.style.color = '#666';
-      }
-      console.log(`[DEBUG] Recibidas ${velasCerradas}/100 velas. Esperando más datos para procesar.`);
-    }
-
-  } catch (err) {
-    console.error("❌ ERROR EN ws.onmessage:", err);
-    const estadoEl = document.getElementById('estado');
-    if (estadoEl) {
         estadoEl.textContent = `❌ Error WebSocket: ${err.message}`;
         estadoEl.style.color = '#ef5350'; // Color rojo para error
+      }
     }
-  }
-};
+  };
 
 }
+
+
 //Y llámala después de 100 velas.
 function verificarEstadoPrediccion() {
   const timer = setInterval(() => {
@@ -2620,7 +3132,7 @@ function verificarEstadoPrediccion() {
 
 // === RECARGAR TESTNET ===
 async function recargarTestnet() {
-  if (!AUTENTICADO) return;
+ // if (!AUTENTICADO) return;
   if (confirm('¿Reiniciar capital a $1000 y borrar historial?')) {
     capitalActual = capitalInicial = 1000;
     operaciones = [];
@@ -2636,9 +3148,9 @@ async function recargarTestnet() {
 
 // === PRUEBA MANUAL ===
 async function operacionPrueba() {
-  if (!AUTENTICADO) return;
+ // if (!AUTENTICADO) return;
   const dir = document.getElementById('prediccion-direccion').textContent;
-  const adxE = document.getElementById('adx-valor');
+  const adxE = document.getElementById('adx1-valor');
   const adxActual = parseFloat(adxE?.textContent) || 0;
   if (adxActual < 20) {
     const continuar = confirm(`⚠️ ADX: ${adxActual.toFixed(1)} (<20). ¿Forzar orden?`);
@@ -2739,7 +3251,7 @@ async function ejecutarBacktesting() {
           else if (bajista && rsiActual > 30) prediccionRaw = 0.28;
         }
       }
-      const confianza = Math.abs(prediccionRaw - 0.5) * 2;
+     const confianza = Math.max(prediccionRaw, 1 - prediccionRaw);
 
       // ✅ Mostrar ADX y confianza en consola para depuración
       console.log(`[Backtest] Vela ${i}: ADX=${adxActual.toFixed(2)} | RSI=${rsiActual.toFixed(2)} | Confianza=${confianza.toFixed(2)} | Predicción=${prediccionRaw.toFixed(2)}`);
@@ -2765,7 +3277,7 @@ async function ejecutarBacktesting() {
         let cerrar = false, motivo = 'CloseOperation';
         if (roeRestante <= -sl) cerrar = true, motivo = `SL`;
         else if (roeRestante >= tp) cerrar = true, motivo = `TP2 (50%)`;
-        else if (confianza >= 0.7 && roeRestante < -0.5 && Math.abs(roeRestante) > (sl * 0.5)) {
+        else if (confianza >= 0.65 && roeRestante < -0.5 && Math.abs(roeRestante) > (sl * 0.5)) {
           const debeCerrarIA = (side === 'LONG' && prediccionRaw <= 0.3) || (side === 'SHORT' && prediccionRaw >= 0.7);
           if (debeCerrarIA) cerrar = true, motivo = `IA`;
         }
@@ -2778,7 +3290,7 @@ async function ejecutarBacktesting() {
       }
 
       // 🔹 ABRIR NUEVA POSICIÓN
-      if (!posicionAbierta && confianza >= 0.55 && adxActual > adxUmbral) {
+      if (!posicionAbierta && confianza >= 0.65 && adxActual > adxUmbral) {
         let side = null;
         if (modo === 'alcista' && prediccionRaw > 0.5 && alcista) side = 'LONG';
         else if (modo === 'bajista' && prediccionRaw <= 0.5 && bajista) side = 'SHORT';
@@ -2898,7 +3410,7 @@ function predRawValida(modo, p, alcista, bajista) {
 async function forzarCierreIA() {
   if (!confirm('⚠️ ¿Forzar cierre por IA en todas las posiciones?')) return;
   try {
-    const posiciones = await (await fetch('/api/binance/futures/positions')).json();
+    const posiciones = await (await fetchConAuth('/api/binance/futures/positions')).json();
     for (const pos of posiciones) {
       if (Math.abs(parseFloat(pos.positionAmt)) > 0.0001) {
         cerrarPosicion(pos.symbol, pos.positionSide, 'IA (Prueba Forzada)');
@@ -2938,3 +3450,4 @@ function detenerTradingAutomatico() {
   // El WebSocket y su onmessage siguen corriendo, actualizando precios, gráfico, indicadores, etc.
   // pero la lógica de trading automático (abrir/cerrar posiciones basadas en IA) no se ejecuta si autoTrading es false.
 }
+

@@ -1,0 +1,17 @@
+{
+  "admin": {
+    "passwordHash": "$2b$10$JDAVGqlt6aZVUGRkMvHD/usXOD85ZA1tdJssRSkDuLY2D88ySM9qa",
+    "role": "admin",
+    "apiKey": "hHMyJsaPDesCifwugECESiJY8B4OTw6n1fjx0DXQ1HKbStYzwPxW9ydANkpJq8JZ",
+    "apiSecret": "8Hp00Gs2m7ioIPOzhZilzezpGIPgpP1bzhv4YCoVGHfKyvBYN2ELfwjgxQVeZ2VM"
+  },
+
+"TIAPA_USER_001": {
+    "passwordHash": "$2b$10$...HASH_DE_SU_CONTRASEÑA...",
+    "role": "user",
+    "isActive": true,
+    "binanceApiKey": "API_KEY_DE_TESTNET_DEL_USUARIO",
+    "binanceApiSecret": "API_SECRET_DEL_USUARIO"
+  }
+
+}
