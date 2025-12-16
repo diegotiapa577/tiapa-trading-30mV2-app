@@ -207,16 +207,6 @@ function calcularATR(klines, periodo = 14) {
   // ✅ Devolver solo los valores válidos (desde el periodo en adelante)
   return atr.slice(periodo - 1);
 }
-// [Agregado] Asegurar que operaciones esté disponible globalmente para controlador_operaciones.js
-//window.operaciones = operaciones;
-// [Agregado] Asegurar que otras variables críticas también estén disponibles globalmente si es necesario
-//window.capitalActual = capitalActual;
-//window.capitalInicial = capitalInicial;
-// Nota: capitalActual y capitalInicial se actualizan en otras funciones, por lo que debes asegurarte
-// que cuando se actualicen, también se actualice el valor en window.capitalActual
-// por ejemplo, en actualizarPanelFinanciero() o donde se modifique capitalActual.
-// === UTILIDADES ===
- //nuevo auticacion sale
 
   // Función helper (reemplaza tu fetchConAuth o crea una nueva)
 function fetchConAuth(url, options = {}) {
@@ -237,11 +227,6 @@ function fetchConAuth(url, options = {}) {
   });
 }
 // nuevo autenticacion llega
-
-
-
-
-
 
 async function fetchSymbolInfo(symbol = 'BTCUSDT') {
   if (symbolInfo) return symbolInfo;
@@ -2234,63 +2219,6 @@ function iniciarSupervivencia() {
   setTimeout(iniciarSupervivencia, 10000);
 }
 
-async function verificarOrdenesSupervivencia() {
-  try {
-    const token = localStorage.getItem('authToken');
-    if (!token) return;
-    
-    // Obtener posiciones actuales
-    const posRes = await fetchConAuth('/api/binance/futures/positions', {
-      
-    });
-    
-    if (!res.ok) return;
-    const posiciones = await res.json();
-    
-    // Para cada posición abierta, aplicar lógica de cierre
-    for (const pos of posiciones) {
-      if (Math.abs(parseFloat(pos.positionAmt || 0)) <= 0.0001) continue;
-      
-      // Simular condiciones de cierre (TP/SL/IA)
-      await evaluarCierreSupervivencia(pos);
-    }
-    
-    // Actualizar UI
-    actualizarPosicionesAbiertas();
-  } catch (err) {
-    console.error('Error en modo supervivencia:', err);
-  }
-}
-
-async function evaluarCierreSupervivencia(pos) {
-  const symbol = pos.symbol;
-  const size = parseFloat(pos.positionAmt);
-  const entryPrice = parseFloat(pos.entryPrice);
-  const markPrice = parseFloat(pos.markPrice);
-  const side = size > 0 ? 'LONG' : 'SHORT';
-  
-  // Obtener configuración de TP/SL actual
-  const tpSl = tpSlConfig[symbol] || { tpPct: 3.0, slPct: 1.5 };
-  
-  // Calcular ROE
-  const leverage = parseFloat(pos.leverage);
-  const roePct = ((markPrice - entryPrice) / entryPrice) * leverage * (side === 'LONG' ? 1 : -1) * 100;
-  
-  // Verificar TP/SL
-  if (roePct >= tpSl.tpPct) {
-    console.log(`[SUPERVIVENCIA] TP alcanzado para ${symbol}. Cerrando...`);
-    await cerrarPosicion(symbol, pos.positionSide, 'TP (Supervivencia)');
-  } else if (roePct <= -tpSl.slPct) {
-    console.log(`[SUPERVIVENCIA] SL alcanzado para ${symbol}. Cerrando...`);
-    await cerrarPosicion(symbol, pos.positionSide, 'SL (Supervivencia)');
-  }
-  
-  // Opcional: cierre por IA (requiere último precio)
-  // Podrías obtener velas recientes vía REST y ejecutar predicción
-
-
-}
-
 
 // === STREAMING (ACTUALIZADO - Con logs y manejo de ordenEnCurso corregido) ===
 async function iniciarStreaming() {
@@ -2345,7 +2273,7 @@ async function iniciarStreaming() {
   ws.onopen = () => {
    
     console.log('🟢 ¡CONEXIÓN EXITOSA! WebSocket abierto.');
-    window.modoSupervivencia = false; // Detener modo supervivencia
+  //  window.modoSupervivencia = false; // Detener modo supervivencia
 
     if (estadoEl) {
       estadoEl.textContent = '📡 Conectado. Esperando vela cerrada (1m)...';

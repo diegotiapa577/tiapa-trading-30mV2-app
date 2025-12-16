@@ -30,7 +30,7 @@ if (!ADMIN_PASSWORD || !JWT_SECRET) {
   process.exit(1);
 }
 
-
+// Funcion para crear usuarios en el sistema
 function getUSERS() {
   const users = {
     admin: {

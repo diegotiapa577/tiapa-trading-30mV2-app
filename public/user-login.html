@@ -151,7 +151,7 @@
              localStorage.removeItem('authToken'); // ← Asegura que no queden tokens antiguos
              localStorage.setItem('authToken', data.token);
           localStorage.setItem('authToken', data.token);
-          window.location.href = '//localhost:8080/admin-panel.html';// ✅ Redirección correcta
+          window.location.href = 'https://trading-futuro-ern.onrender.com/admin-panel.html';// ✅ Redirección correcta
         } else {
           msg.textContent = data.error || 'Error al iniciar sesión';
         }
