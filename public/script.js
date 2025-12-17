@@ -410,7 +410,7 @@ function retryInitChart(attempts = 0) {
 }
 
 // === DATOS ===
-async function obtenerDatos(symbol = 'BTCUSDT', interval = '1m', limit = 60) {
+async function obtenerDatos(symbol = 'BTCUSDT', interval = '1h', limit = 60) {
   const res = await fetch(`/api/binance/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
   if (!res.ok) throw new Error(`Error: ${res.status}`);
   const klines = await res.json();
@@ -820,7 +820,7 @@ async function entrenarRed() {
 
   // Definir símbolos a usar para entrenamiento
   const SIMBOLOS_ENTRENAMIENTO = ['BTCUSDT'];
-  const INTERVALO = '1m'; // Usamos 4h como acordamos
+  const INTERVALO = '1h'; // Usamos 4h como acordamos
   const LIMITE_DATOS = 5500; // Ajusta este número. Por ejemplo, 15000 velas de 4h por símbolo
   const VELAS_FUTURAS = 3;
   const EPOCAS = 50;
@@ -1752,7 +1752,7 @@ async function abrirPosicionReal(side) {
       takeProfit = Math.max(0.5, parseFloat(document.getElementById('takeProfit').value) || 3.0); // ← de 1.5 → 3.0
       stopLoss = Math.max(0.5, parseFloat(document.getElementById('stopLoss').value) || 1.5);  // ← de 0.5 → 1.5
     } else {
-      const k5m = await obtenerDatos(simboloActual, '1m', 50);
+      const k5m = await obtenerDatos(simboloActual, '1h', 50);
       const atrArr = k5m.length >= 20 ? calcularATR(k5m, 14) : [];
       const atrVal = atrArr.length > 0 ? atrArr[atrArr.length - 1] : 0;
       takeProfit = Math.max(0.8, (atrVal * 6 / precio) * 100);
@@ -2150,9 +2150,9 @@ function actualizarSemaforo({ adx = 0,emaActual=0,rsiActual=50,atrActual=0.001, 
   const msgEl = document.getElementById('semaforo-msg');
 
   // ✅ Evaluar condiciones
-  const adxOk = adx > 20;
+  const adxOk = adx > 25;
   const datosOk = preciosLen >= 55;
-  const predOk = confianza >= 0.65;
+  const predOk = confianza >= 0.70;
   let modoOk = false;
   if (modo === 'alcista') modoOk = alcista;
   else if (modo === 'bajista') modoOk = bajista;
@@ -2268,7 +2268,7 @@ async function iniciarStreaming() {
     estadoEl.style.fontWeight = 'bold';
   }
 
-  const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@kline_1m');
+  const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@kline_1h');
 
   ws.onopen = () => {
    
@@ -2276,7 +2276,7 @@ async function iniciarStreaming() {
   //  window.modoSupervivencia = false; // Detener modo supervivencia
 
     if (estadoEl) {
-      estadoEl.textContent = '📡 Conectado. Esperando vela cerrada (1m)...';
+      estadoEl.textContent = '📡 Conectado. Esperando vela cerrada (1h)...';
       estadoEl.style.color = '#2196F3';
     }
   };
@@ -2625,7 +2625,7 @@ ws.onmessage = async (event) => {
 
         const direccion = prediccionRaw > 0.5 ? 'SUBIDA' : 'BAJADA';
         const VELAS_FUTURAS = 3; // ajusta según tu modelo
-        const confianzaMinima = 0.65; // 65%
+        const confianzaMinima = 0.70; // 65%
         if (confianza >= confianzaMinima || confianza <= (1 - confianzaMinima)) {
          console.log(`🧠 Predicción fuerte: ${direccion} (${(confianza * 100).toFixed(1)}%)`);
 
@@ -2788,7 +2788,7 @@ ws.onmessage = async (event) => {
             } else {
               // Dinámico: basado en ATR (sin leverage para precios)
               try {
-                const k5m = await obtenerDatos(simboloActual, '1m', 50);
+                const k5m = await obtenerDatos(simboloActual, '1h', 50);
                 if (k5m.length >= 20) {
                   const atrArray = calcularATR(k5m, 14);
                   const atrVal = atrArray[atrArray.length - 1] || 150; // fallback razonable
@@ -2878,7 +2878,7 @@ ws.onmessage = async (event) => {
               // ✅ Cierre por IA + 50% SL (SOLO SI AMBAS CONDICIONES SE CUMPLEN)
               // La lógica actual cierra LONG si IA predice BAJADA (< 0.35) y SHORT si IA predice SUBIDA (> 0.65)
               const debeCerrarPorIA = prediccionRaw != null && // 1. Verificar que prediccionRaw no sea null
-                confianza >= 0.65 && // 2. Confianza mínima (ajustable)
+                confianza >= 0.70 && // 2. Confianza mínima (ajustable)
                 roePct < 0 && // 3. La posición actual tiene pérdidas (ROE negativo)
                 Math.abs(roePct) > (slPctEquity * 0.5) && // 4. La pérdida es mayor al 50% del SL original
                 ((esLong && prediccionRaw <= 0.35) || (esShort && prediccionRaw >= 0.65)); // 5. La IA predice cambio de dirección (opuesta a la posición actual)
@@ -2911,7 +2911,7 @@ ws.onmessage = async (event) => {
           // 🟢 LÓGICA DE APERTURA (solo si NO hay posición)
           // ───────────────────────────────────────
 
-          if (prediccionRaw != null && confianza >= 0.65 && historialVelas.length >= 55 && adxActual > 20 && !ordenEnCurso) { // <-- Añadido !ordenEnCurso
+          if (prediccionRaw != null && confianza >= 0.70 && historialVelas.length >= 55 && adxActual > 20 && !ordenEnCurso) { // <-- Añadido !ordenEnCurso
             const side = prediccionRaw > 0.5 ? 'BUY' : 'SELL';
             let operar = false;
             const modo = document.getElementById('modo-mercado')?.value || 'volatil';
@@ -3205,7 +3205,7 @@ async function ejecutarBacktesting() {
         let cerrar = false, motivo = 'CloseOperation';
         if (roeRestante <= -sl) cerrar = true, motivo = `SL`;
         else if (roeRestante >= tp) cerrar = true, motivo = `TP2 (50%)`;
-        else if (confianza >= 0.65 && roeRestante < -0.5 && Math.abs(roeRestante) > (sl * 0.5)) {
+        else if (confianza >= 0.70 && roeRestante < -0.5 && Math.abs(roeRestante) > (sl * 0.5)) {
           const debeCerrarIA = (side === 'LONG' && prediccionRaw <= 0.3) || (side === 'SHORT' && prediccionRaw >= 0.7);
           if (debeCerrarIA) cerrar = true, motivo = `IA`;
         }
@@ -3218,7 +3218,7 @@ async function ejecutarBacktesting() {
       }
 
       // 🔹 ABRIR NUEVA POSICIÓN
-      if (!posicionAbierta && confianza >= 0.65 && adxActual > adxUmbral) {
+      if (!posicionAbierta && confianza >= 0.70 && adxActual > adxUmbral) {
         let side = null;
         if (modo === 'alcista' && prediccionRaw > 0.5 && alcista) side = 'LONG';
         else if (modo === 'bajista' && prediccionRaw <= 0.5 && bajista) side = 'SHORT';
