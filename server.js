@@ -516,7 +516,7 @@ app.post('/api/user/login', express.json(), (req, res) => {
     const token = jwt.sign(
       { id: code, role: 'user' },
       process.env.JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '72h' }
     );
     return res.json({ success: true, token });
   }
@@ -537,7 +537,7 @@ app.post('/api/login', express.json(), (req, res) => {
   const { password } = req.body;
   
   if (password === process.env.ADMIN_PASSWORD) {
-    const token = jwt.sign({ id: 'admin', role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '24h' });
+    const token = jwt.sign({ id: 'admin', role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '72h' });
     return res.json({ success: true, token });
   }
   
