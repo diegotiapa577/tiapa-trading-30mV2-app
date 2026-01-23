@@ -1,3 +1,5 @@
+// === CONFIGURACIÓN GLOBAL ===
+const IS_TESTNET = true; // Cambia a false en Mainnet
 let ws = null; // ← Declárala aquí
 const MAX_VELAS_HISTORICAS = 10;
 let historialVelas = []; // ← Guarda las velas cerradas completas
@@ -6,7 +8,8 @@ let chart = null;
 let dataSeries = null;
 let capitalInicial = 1000, capitalActual = 1000;
 let operaciones = [], ultimoPrecio = 0, streamingInterval = null;
-let simboloActual = 'BTCUSDT', symbolInfo = null;
+window.simboloActual = 'SOLUSDT'; // o el que quieras por defecto
+let symbolInfo = null;
 let lineaPE = null, lineaTP = null, lineaSL = null; // ✅ Líneas de PE/TP/SL
 let autoTrading = false;      // <-- Debe existir
 let ordenEnCurso = false;
@@ -26,7 +29,11 @@ let precioActual = 0;
 let openInterest = 0;
 let streamingActivo = false; // ← Evita múltiples conexiones
 // ✅ Para contar velas cerradas
+// Al inicio de tu archivo principal
+let posicionActual = null;
+
 let velasCerradas = 0;
+
 
 // ✅ Inicializar sistema de estadísticas de IA
 window.prediccionesPendientes = window.prediccionesPendientes || [];
@@ -46,13 +53,7 @@ window.tradingActivo = false;
 // ===== CONTROL DE REFRESCO AUTOMÁTICO DE POSICIONES (UI) =====
 let intervaloActualizacionPosiciones = null;
 
-// Configuración de estadísticas
-//window.configEstadisticasIA = {
- // objetivo: 20, // ← ¡cambia este número si quieres otro objetivo!
- // registros: [],
- // total: 0,
- // aciertos: 0
-//};
+
 
 // ✅ Sincronización MÍNIMA del checkbox autoTrading
 document.addEventListener('DOMContentLoaded', () => {
@@ -83,6 +84,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+// En la parte superior de tu script (o en window)
+window.iaFuertePendiente = null; // para apertura
+posicionActual = null; // para cierre
+window.historialOperaciones = [];
 
 // Mostrar el panel desde el inicio
 document.getElementById('panel-estadisticas-ia').style.display = 'block';
@@ -104,15 +109,15 @@ if (!window.configEstadisticasIA) {
   // Si no hay datos válidos, usar configuración por defecto
 }
  
-//const saved1 = localStorage.getItem('historialOperaciones');
-//if (saved1) {
- // window.configoperaciones = JSON.parse(saved1);
-//}
-
-// Actualizar UI
-
-
 // ✅ Función para decodificar el JWT y obtener el rol
+
+
+
+
+
+// ─── TELEGRAM NOTIFICATIONS ───
+let ultimaNotifGauss = 0;
+const INTERVALO_NOTIF = 10 * 60 * 1000; // 10 minutos
 
 
 function iniciarRefrescoPosiciones() {
@@ -137,29 +142,58 @@ function detenerRefrescoPosiciones() {
 
 
 function calcularRSI(precios, periodo = 14) {
-  if (precios.length < periodo + 1) return Array(precios.length).fill(50);
-  const rsi = Array(periodo).fill(50);
-  let gananciaProm = 0;
-  let perdidaProm = 0;
-  for (let i = 1; i <= periodo; i++) {
-    const cambio = precios[i] - precios[i - 1];
-    if (cambio > 0) gananciaProm += cambio;
-    else perdidaProm -= cambio;
+  if (precios.length <= periodo) {
+    return Array(precios.length).fill(50); // o []
   }
-  gananciaProm /= periodo;
-  perdidaProm /= periodo;
-  for (let i = periodo; i < precios.length; i++) {
-    const cambio = precios[i] - precios[i - 1];
-    const ganancia = cambio > 0 ? cambio : 0;
-    const perdida = cambio < 0 ? -cambio : 0;
-    gananciaProm = (gananciaProm * (periodo - 1) + ganancia) / periodo;
-    perdidaProm = (perdidaProm * (periodo - 1) + perdida) / periodo;
-    const rs = perdidaProm === 0 ? 100 : gananciaProm / perdidaProm;
-    rsi.push(100 - (100 / (1 + rs)));
-  }
-  return rsi;
-}
 
+  // Convertir a números
+  const closes = precios.map(p => parseFloat(p));
+  const rsi = new Array(closes.length).fill(0);
+
+  // Paso 1: calcular promedios iniciales (SMA de los primeros 'periodo' cambios)
+  let avgGain = 0;
+  let avgLoss = 0;
+
+  for (let i = 1; i <= periodo; i++) {
+    const change = closes[i] - closes[i - 1];
+    if (change > 0) avgGain += change;
+    else avgLoss += Math.abs(change);
+  }
+  avgGain /= periodo;
+  avgLoss /= periodo;
+
+  // Paso 2: primer valor RSI (en índice = periodo)
+  if (avgLoss === 0) {
+    rsi[periodo] = 100;
+  } else {
+    const rs = avgGain / avgLoss;
+    rsi[periodo] = 100 - (100 / (1 + rs));
+  }
+
+  // Paso 3: suavizado Wilder para el resto
+  for (let i = periodo + 1; i < closes.length; i++) {
+    const change = closes[i] - closes[i - 1];
+    const gain = change > 0 ? change : 0;
+    const loss = change < 0 ? Math.abs(change) : 0;
+
+    avgGain = (avgGain * (periodo - 1) + gain) / periodo;
+    avgLoss = (avgLoss * (periodo - 1) + loss) / periodo;
+
+    if (avgLoss === 0) {
+      rsi[i] = 100;
+    } else {
+      const rs = avgGain / avgLoss;
+      rsi[i] = 100 - (100 / (1 + rs));
+    }
+  }
+
+  // Opcional: rellenar índices iniciales con null o 50 (pero no afectan la lógica)
+  for (let i = 0; i < periodo; i++) {
+    rsi[i] = 50; // o null si prefieres ignorarlos
+  }
+
+  return rsi.map(v => isNaN(v) ? 50 : parseFloat(v.toFixed(2)));
+}
 function calcularEMA(precios, periodo = 20) {
   if (precios.length === 0) return [];
   const ema = [precios[0]];
@@ -171,41 +205,139 @@ function calcularEMA(precios, periodo = 20) {
 }
 
 function calcularATR(klines, periodo = 14) {
-  if (!Array.isArray(klines) || klines.length < periodo) return [];
-  
+  if (!Array.isArray(klines) || klines.length <= periodo) return [];
+
   const trs = [];
-  const atr = [];
+  // ✅ Calcular TR desde i = 1
+  for (let i = 1; i < klines.length; i++) {
+    const high = parseFloat(klines[i].h || klines[i].high);
+    const low = parseFloat(klines[i].l || klines[i].low);
+    const close = parseFloat(klines[i].c || klines[i].close);
+    const prevClose = parseFloat(klines[i - 1].c || klines[i - 1].close);
 
-  for (let i = 0; i < klines.length; i++) {
-    // ✅ CONVERSIÓN EXPLÍCITA A NÚMERO — CLAVE
-    const high = parseFloat(klines[i].h) || parseFloat(klines[i].high);
-    const low = parseFloat(klines[i].l) || parseFloat(klines[i].low);
-    const close = parseFloat(klines[i].c) || parseFloat(klines[i].close);
-    const prevClose = i > 0 
-      ? parseFloat(klines[i - 1].c) || parseFloat(klines[i - 1].close) 
-      : close;
-
-    const tr1 = high - low;
-    const tr2 = Math.abs(high - prevClose);
-    const tr3 = Math.abs(low - prevClose);
-    const tr = Math.max(tr1, tr2, tr3);
+    const tr = Math.max(
+      high - low,
+      Math.abs(high - prevClose),
+      Math.abs(low - prevClose)
+    );
     trs.push(tr);
   }
 
-  // ✅ Inicialización SMA del primer periodo
-  let sum = 0;
-  for (let i = 0; i < periodo; i++) {
-    sum += trs[i];
-  }
-  atr[periodo - 1] = sum / periodo;
+  if (trs.length < periodo) return [];
 
-  // ✅ WMA (Wilders) para el resto
+  // ✅ SMA inicial sobre los primeros 'periodo' TRs
+  let atr = trs.slice(0, periodo).reduce((a, b) => a + b, 0) / periodo;
+  const atrArray = new Array(periodo).fill(0); // placeholders
+  atrArray[periodo - 1] = atr;
+
+  // ✅ Wilder smoothing para el resto
   for (let i = periodo; i < trs.length; i++) {
-    atr[i] = (atr[i - 1] * (periodo - 1) + trs[i]) / periodo;
+    atr = (atr * (periodo - 1) + trs[i]) / periodo;
+    atrArray[i] = atr;
   }
 
-  // ✅ Devolver solo los valores válidos (desde el periodo en adelante)
-  return atr.slice(periodo - 1);
+  // ✅ Devolver desde el índice 'periodo - 1' (primer valor válido)
+  return atrArray.slice(periodo - 1).map(v => parseFloat(v.toFixed(2)));
+}
+
+// ───────────────────────────────────────
+// ✅ FUNCIÓN CENTRALIZADA PARA TP/SL DINÁMICO
+// ───────────────────────────────────────
+// ───────────────────────────────────────
+// ✅ FUNCIÓN CENTRALIZADA PARA TP/SL DINÁMICO (con soporte para UI)
+// ───────────────────────────────────────
+function calcularTPSLDinamico(entryPrice, atrValor, esLong, opciones = {}) {
+  const {
+    tp: tpMultPorDefecto = 2.0,
+    sl: slMultPorDefecto = 1.0,
+    usarUI = false // ← nuevo parámetro
+  } = opciones;
+
+  // Validación básica
+  if (!entryPrice || !atrValor || atrValor <= 0) {
+    console.warn("⚠️ TP/SL dinámico: datos inválidos (entryPrice o ATR)");
+    return { tpPrice: 0, slPrice: 0, tpPct: 0, slPct: 0 };
+  }
+
+  // ✅ Obtener multiplicadores: de UI si se pide, sino de los valores por defecto
+  let tpMult = tpMultPorDefecto;
+  let slMult = slMultPorDefecto;
+
+  if (usarUI) {
+    const tpInput = document.getElementById('tp-mult');
+    const slInput = document.getElementById('sl-mult');
+    
+    if (tpInput) tpMult = parseFloat(tpInput.value) || tpMultPorDefecto;
+    if (slInput) slMult = parseFloat(slInput.value) || slMultPorDefecto;
+  }
+
+  const tpDist = atrValor * tpMult;
+  const slDist = atrValor * slMult;
+
+  let tpPrice, slPrice, tpPct, slPct;
+
+  if (esLong) {
+    tpPrice = entryPrice + tpDist;
+    slPrice = entryPrice - slDist;
+  } else {
+    tpPrice = entryPrice - tpDist;
+    slPrice = entryPrice + slDist;
+  }
+
+  tpPct = (tpDist / entryPrice) * 100;
+  slPct = (slDist / entryPrice) * 100;
+
+  return {
+    tpPrice: parseFloat(tpPrice.toFixed(2)),
+    slPrice: parseFloat(slPrice.toFixed(2)),
+    tpPct: parseFloat(tpPct.toFixed(2)),
+    slPct: parseFloat(slPct.toFixed(2))
+  };
+}
+
+function actualizarTPSLenUI() {
+  const tpEl = document.getElementById('tp-dinamico');
+  const slEl = document.getElementById('sl-dinamico');
+  if (!tpEl || !slEl) return;
+
+  const modoTPSL = document.getElementById('tpsl-mode')?.value || 'dinamico';
+  let tpPct, slPct;
+
+  if (modoTPSL === 'manual') {
+    tpPct = parseFloat(document.getElementById('takeProfuit')?.value) || 3.0; // ❗ cuidado: typo "takeProfuit"
+    slPct = parseFloat(document.getElementById('stopLoss')?.value) || 1.5;
+  } else {
+    // Asegúrate de que `entryPrice` y `atrVal` estén definidos
+    const entryPrice = window.entryPrice; // o de donde lo obtengas
+    const atrVal = window.atrGlobal; // o recalcula si es necesario
+    const esLongUI = window.sideActual === 'LONG';
+
+    if (entryPrice && atrVal) {
+      const tpsl = calcularTPSLDinamico(entryPrice, atrVal, esLongUI, {
+        tp: 2.0,
+        sl: 1.0,
+        usarUI: true // ← ¡usa los multiplicadores de la UI!
+      });
+      tpPct = tpsl.tpPct;
+      slPct = tpsl.slPct;
+    } else {
+      tpPct = 0;
+      slPct = 0;
+    }
+  }
+
+  tpEl.textContent = modoTPSL === 'manual'
+    ? `TP (Manual): ${tpPct.toFixed(2)}%`
+    : `TP (Dinámico): ${tpPct.toFixed(2)}%`;
+    
+  slEl.textContent = modoTPSL === 'manual'
+    ? `SL (Manual): ${slPct.toFixed(2)}%`
+    : `SL (Dinámico): ${slPct.toFixed(2)}%`;
+
+  // Actualizar gráfico
+  if (window.sideActual && typeof window.entryPrice !== 'undefined') {
+    actualizarLineasPrecios(window.entryPrice, tpPct, slPct, window.leverage);
+  }
 }
 
   // Función helper (reemplaza tu fetchConAuth o crea una nueva)
@@ -228,7 +360,7 @@ function fetchConAuth(url, options = {}) {
 }
 // nuevo autenticacion llega
 
-async function fetchSymbolInfo(symbol = 'BTCUSDT') {
+async function fetchSymbolInfo(symbol ) {
   if (symbolInfo) return symbolInfo;
   try {
     const url = 'https://testnet.binancefuture.com/fapi/v1/exchangeInfo';
@@ -266,6 +398,28 @@ function calculateQuantity(price, notional = 100) {
   return parseFloat(qty.toFixed(8));
 }
 
+
+// ✅ Nueva función: solo para indicadores en tiempo real
+function calcularIndicadoresEnTiempoReal(klines) {
+  const closes = klines.map(k => k.close);
+  const rsi = calcularRSI(closes, 14);
+  const adx = calcularADX(klines); // asegúrate de tener esta función
+  const { macdLine, signalLine } = calcularMACD(closes, 12, 26, 9);
+  const ema20 = calcularEMA(closes, 20);
+  const ema50 = calcularEMA(closes, 50);
+  
+  // Guardar en window para acceso global
+  window.indicadores = {
+    rsi: rsi[rsi.length - 1],
+    adx: adx[adx.length - 1],
+    macdLine,
+    signalLine,
+    ema20: ema20[ema20.length - 1],
+    ema50: ema50[ema50.length - 1],
+    closes: closes,
+    timestamp: Date.now()
+  };
+}
 
 function inicializarGrafico() {
   const container = document.getElementById('chart');
@@ -410,7 +564,7 @@ function retryInitChart(attempts = 0) {
 }
 
 // === DATOS ===
-async function obtenerDatos(symbol = 'BTCUSDT', interval = '1h', limit = 60) {
+async function obtenerDatos(symbol , interval = '5m', limit = 60) {
   const res = await fetch(`/api/binance/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
   if (!res.ok) throw new Error(`Error: ${res.status}`);
   const klines = await res.json();
@@ -446,6 +600,7 @@ async function obtenerDatosHistoricos(symbol, interval, totalLimit) {
     let startTime;
     switch (interval) {
       case '1m': startTime = endTime - (limit * 60 * 1000) - 1; break;
+      case '3m': startTime = endTime - (limit * 3 * 60 * 1000) - 1; break;
       case '5m': startTime = endTime - (limit * 5 * 60 * 1000) - 1; break;
       case '15m': startTime = endTime - (limit * 15 * 60 * 1000) - 1; break;
       case '30m': startTime = endTime - (limit * 30 * 60 * 1000) - 1; break;
@@ -489,7 +644,7 @@ async function obtenerDatosHistoricos(symbol, interval, totalLimit) {
 
     // Actualizamos endTime para la próxima llamada al timestamp de la primera vela obtenida en esta iteración
     // (Asumiendo que las velas vienen en orden ascendente de tiempo)
-    endTime = klines[0][0] - 1; // Timestamp en milisegundos de la primera vela, restamos 1ms para evitar solapamiento
+    endTime = klines[0][0] - 1; // Timestamp en milisegundos de la primera vela, restamos 5ms para evitar solapamiento
     // Aseguramos que endTime no sea negativo
     if (endTime < 0) {
         endTime = 0;
@@ -616,7 +771,7 @@ function prepararDatosConEtiquetas(klines) {
 }
 
 
-async function obtenerOpenInterest(symbol = 'BTCUSDT') {
+async function obtenerOpenInterest(symbol ) {
   const res = await fetch(`/api/binance/futures/open-interest?symbol=${symbol}`);
   if (!res.ok) return 0;
   const data = await res.json();
@@ -628,11 +783,33 @@ async function obtenerOpenInterest(symbol = 'BTCUSDT') {
 
 
 function calcularMACD(precios, rapido = 12, lento = 26, signal = 9) {
+  if (precios.length <= lento) {
+    return { macdLine: [], signalLine: [] };
+  }
+
   const emaRapida = calcularEMA(precios, rapido);
   const emaLenta = calcularEMA(precios, lento);
-  const macdLine = emaRapida.map((val, i) => val - emaLenta[i]);
-  const signalLine = calcularEMA(macdLine.slice(lento - 1), signal);
-  return { macdLine, signalLine };
+
+  // ✅ Alinear MACD desde el índice donde EMA lenta es válida
+  const inicio = lento - 1;
+  const macdLine = [];
+  for (let i = inicio; i < precios.length; i++) {
+    const rapida = emaRapida[i] || 0;
+    const lenta = emaLenta[i] || 0;
+    macdLine.push(rapida - lenta);
+  }
+
+  // ✅ Calcular señal sobre la MACD line (requiere al menos 'signal' valores)
+  if (macdLine.length <= signal) {
+    return { macdLine: macdLine, signalLine: [] };
+  }
+
+  const signalLine = calcularEMA(macdLine, signal);
+
+  return {
+    macdLine: macdLine,
+    signalLine: signalLine
+  };
 }
 
 function calcularBandasBollinger(precios, periodo = 20, desv = 2) {
@@ -654,6 +831,12 @@ function calcularBandasBollinger(precios, periodo = 20, desv = 2) {
 }
 
 function calcularOBV(klines) {
+  // ✅ En Testnet, devolver array de ceros (misma longitud que klines)
+  if (IS_TESTNET) {
+    return new Array(klines.length).fill(0);
+  }
+
+  // 🟢 En Mainnet, calcular el OBV real
   if (klines.length === 0) return [];
   const obv = [0];
   for (let i = 1; i < klines.length; i++) {
@@ -665,6 +848,7 @@ function calcularOBV(klines) {
   }
   return obv;
 }
+
 function calcularADX(klines, period = 14) {
   if (!Array.isArray(klines) || klines.length < period + 10) return [];
 
@@ -806,22 +990,13 @@ function prepararDatosParaIA(klines, openInterest = 0) {
   return { X: tf.tensor2d(X), y: tf.tensor2d(y, [y.length, 1]) };
 }
 
-// === ENTRENAMIENTO (CORREGIDO - MultiSímbolo con gather) ===
-// baraja los datos, crea el modelo con más dropout, y lo entrena.
-// === ENTRENAMIENTO (MULTI-SÍMBOLO) ===
-// Esta función descarga datos de múltiples símbolos, los prepara con etiquetas,
-// los concatena, baraja los datos mezclados, crea el modelo con Dropout y lo entrena.
 // === ENTRENAMIENTO: MULTI-SÍMBOLO (3+), 15m, 15k velas, portable ===
 async function entrenarRed() {
-  //if (!AUTENTICADO) {
-   // alert('🔒 Acceso denegado. Ingresa la clave primero.');
-   // return;
- // }
 
   // Definir símbolos a usar para entrenamiento
-  const SIMBOLOS_ENTRENAMIENTO = ['BTCUSDT'];
-  const INTERVALO = '1h'; // Usamos 4h como acordamos
-  const LIMITE_DATOS = 5500; // Ajusta este número. Por ejemplo, 15000 velas de 4h por símbolo
+  const SIMBOLOS_ENTRENAMIENTO = ['SOLUSDT'];
+  const INTERVALO = '5m'; //  1m
+  const LIMITE_DATOS = 10000; // Ajusta este número. Por ejemplo, 15000 velas de 4h por símbolo
   const VELAS_FUTURAS = 3;
   const EPOCAS = 50;
   const BATCH_SIZE = 32;
@@ -1101,6 +1276,9 @@ async function predecir(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, 
 
   const ultimos10 = ultimosPrecios.slice(-10);
   const cambios = ultimos10.map((p, idx) => idx === 0 ? 0 : (p - ultimos10[idx - 1]) / ultimos10[idx - 1]);
+   
+   // 🔧 OBV: desactivado en Testnet
+
 
   const features = [
     ...cambios,
@@ -1115,7 +1293,7 @@ async function predecir(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, 
     posicionBB,
     anchoBB / precioActual,
     atrActual / precioActual,
-    obvActual / 1e9,
+    obvActual / 1e9,// ✅ ¡Usar esta variable, no obvActual / 1e9!  ,para testnet, en Maint se devuelve el cambio/se elimina 0bv=0    obvActual / 1e9,
     openInterest / 1e6
   ];
 
@@ -1243,90 +1421,9 @@ function reiniciarEstadisticasIA() {
 // Vincular botón
 document.getElementById('btn-exportar-ia').addEventListener('click', exportarEstadisticasIA);
 
-// === PANEL FINANCIERO ===modificada
-function actualizarPanelFinanciero() {
-  if (operaciones.length === 0) {
-    document.getElementById('pf').textContent = '—';
-    document.getElementById('expectancy').textContent = '—';
-    document.getElementById('sharpe').textContent = '—';
-    document.getElementById('max-dd').textContent = '—';
-    return;
-  }
-  
-  // 🔹 Ganancias y pérdidas
-  // 🔹 Clasificación de operaciones
-  const wins = operaciones.filter(o => o.ganancia > 0);
-  const losses = operaciones.filter(o => o.ganancia <= 0); // incluye 0
-  const totalWin = wins.reduce((s, o) => s + o.ganancia, 0);
-  const totalLoss = Math.abs(losses.reduce((s, o) => s + o.ganancia, 0));
-  const winRate = operaciones.length > 0 ? wins.length / operaciones.length : 0;
-  
-  // 🔹 Profit Factor
-  const pf = totalLoss > 0 ? (totalWin / totalLoss).toFixed(2) : '∞';
-  document.getElementById('pf').textContent = pf;
-  
-  // 🔹 Expectancy
-  const avgWin = wins.length > 0 ? totalWin / wins.length : 0;
-  const avgLoss = losses.length > 0 ? totalLoss / losses.length : 0;
-  const expectancy = (winRate * avgWin) - ((1 - winRate) * avgLoss);
-  const expEl = document.getElementById('expectancy');
-  expEl.textContent = expectancy >= 0 ? `+$${expectancy.toFixed(2)}` : `-$${Math.abs(expectancy).toFixed(2)}`;
-  expEl.style.color = expectancy >= 0 ? '#26a69a' : '#ef5350';
-  
-  // 🔹 ROI y retorno diario (estimado)
-  const capitalInicial = 1000; // o desde input/constante
-  const gananciaTotal = operaciones.reduce((sum, op) => sum + op.ganancia, 0);
-  const roi = (gananciaTotal / capitalInicial) * 100;
-
-  document.getElementById('roi').textContent = `${roi.toFixed(2)}%`;
-  document.getElementById('ganancias').textContent = `$${totalWin.toFixed(2)}`;
-  document.getElementById('perdidas').textContent = `-$${totalLoss.toFixed(2)}`;
-  
-
-
-  // 🔹 Sharpe Ratio (simple: ROI anualizado / desv ROE)
-  // 🔹 ROE real por operación (usando leverage guardado)
-  const roes = operaciones.map(o => {
-    const leverage = o.leverage || 1;
-    const retorno = (o.salida - o.entrada) / o.entrada;
-    return retorno * leverage * 100;
-  });
-  
 
 
 
-  // 🔹 Sharpe (por operación)
-  if (roes.length >= 5) {
-    const mean = roes.reduce((a, b) => a + b, 0) / roes.length;
-    const variance = roes.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / roes.length;
-    const std = Math.sqrt(variance);
-    
-    if (std > 0.01) {
-      const sharpe = (mean / std).toFixed(2);
-      document.getElementById('sharpe').textContent = parseFloat(sharpe) > 10 ? '10+' : sharpe;
-    } else {
-      document.getElementById('sharpe').textContent = '—';
-    }
-  } else {
-    document.getElementById('sharpe').textContent = '—';
-  }
-  
-
-  // 🔹 Max Drawdown (estimado desde historial)
-  let peak = capitalInicial;
-  let maxDD = 0;
-  let capital = capitalInicial;
-  operaciones.forEach(op => {
-    capital += op.ganancia;
-    peak = Math.max(peak, capital);
-    const dd = (peak - capital) / peak;
-    maxDD = Math.max(maxDD, dd);
-  });
-  
-  const ddEl = document.getElementById('max-dd');
-  ddEl.textContent = `${(maxDD * 100).toFixed(1)}%`;
-  ddEl.style.color = maxDD > 0.08 ? '#ef5350' : '#26a69a';
-}
 
 function renderizarHistorial() {
   const tbody = document.querySelector('#historial tbody');
@@ -1529,39 +1626,7 @@ function registrarOperacionReal(symbol, side, entrada, salida, cantidad, pnl, mo
   console.log(`[OPERACIÓN REGISTRADA] ${symbol} ${side} | ROE: ${roePct.toFixed(2)}% | PnL Bruto: $${pnlBrutaCalculada.toFixed(2)} | Fees: $${feesTotales.toFixed(3)} | PnL Neto: $${pnl.toFixed(2)} | Leverage: ${leverage}`);
 }
 // === CAPITAL TESTNET ===
-async function actualizarCapitalTestnet() {
-  //if (!AUTENTICADO) return;
-  try {
-    const token = localStorage.getItem('authToken');
-     const res = await fetchConAuth('/api/binance/futures/account', {
-    });
-    const data = await res.json();
-    let saldoUSDT = 0;
-    if (data.availableBalance) saldoUSDT = parseFloat(data.availableBalance);
-    else if (data.assets?.length) {
-      const usdt = data.assets.find(a => a.asset === 'USDT');
-      saldoUSDT = usdt ? parseFloat(usdt.walletBalance) : 0;
-    }
-    const ticker = await (await fetch('/api/binance/ticker?symbol=BTCUSDT')).json();
-    const precioBTC = parseFloat(ticker.price) || 1;
-    const saldoBTC = saldoUSDT / precioBTC;
-    const montoInvertir = parseFloat(document.getElementById('montoCompra')?.value) || 100;
-    const usdtEl = document.getElementById('saldo-usdt');
-    const btcEl = document.getElementById('saldo-btc');
-    const invEl = document.getElementById('monto-invertir');
-    if (usdtEl) usdtEl.textContent = `$${saldoUSDT.toFixed(2)}`;
-    if (btcEl) btcEl.textContent = `${saldoBTC.toFixed(6)} BTC`;
-    if (invEl) invEl.textContent = `$${montoInvertir.toFixed(2)}`;
-  } catch (err) {
-    const usdtEl = document.getElementById('saldo-usdt');
-    const btcEl = document.getElementById('saldo-btc');
-    const invEl = document.getElementById('monto-invertir');
-    const montoInvertir = parseFloat(document.getElementById('montoCompra')?.value) || 100;
-    if (usdtEl) usdtEl.textContent = `$1000.00`;
-    if (btcEl) btcEl.textContent = `0.000000 BTC`;
-    if (invEl) invEl.textContent = `$${montoInvertir.toFixed(2)}`;
-  }
-}
+
 
 
 
@@ -1583,15 +1648,7 @@ function actualizarLineasPrecios(entrada, tpPct, slPct, leverage) {
   // y limpiarse cuando se cierra la última posición.
   // Asegúrate de que 'sideActual' esté definida globalmente antes de usarla aquí.
   if (typeof window.sideActual === 'undefined' || window.sideActual === null) {
-     // Si no hay una posición activa o no se ha definido el side, ocultar las líneas o no actualizarlas
-     // Opcional: Podrías querer ocultarlas completamente
-     // lineaPE.applyOptions({ visible: false });
-     // lineaTP.applyOptions({ visible: false });
-     // lineaSL.applyOptions({ visible: false });
-     // return;
-     // Para este ejemplo, asumiremos que no se llama a esta función si no hay side, o que side se limpia correctamente.
-     // Si sideActual no está definido o es null, no actualizamos las líneas.
-     console.warn("advertencia: sideActual no está definido o es null. No se actualizarán las líneas.");
+    // console.warn("advertencia: sideActual no está definido o es null. No se actualizarán las líneas.");
      return;
   }
 
@@ -1624,23 +1681,9 @@ function actualizarLineasPrecios(entrada, tpPct, slPct, leverage) {
   lineaTP.setData(dataTP);
   lineaSL.setData(dataSL);
 
-  // Opcional: Actualizar textos de tooltips si los usas
-  // document.getElementById('tooltip-pe')?.textContent = `PE: $${entrada.toFixed(4)}`;
-  // document.getElementById('tooltip-tp')?.textContent = `TP (${tpPct}%): $${precioTP.toFixed(4)}`;
-  // document.getElementById('tooltip-sl')?.textContent = `SL (${slPct}%): $${precioSL.toFixed(4)}`;
-  // Y mostrarlos en la posición del precio en el gráfico
-  // (Este código de tooltip es más complejo y depende de cómo lo hayas implementado originalmente)
 
   console.log(`[Gráfico] Líneas actualizadas - PE: ${entrada.toFixed(4)}, TP (${side}): ${precioTP.toFixed(4)}, SL (${side}): ${precioSL.toFixed(4)}`);
 
-  // === AJUSTAR ESCALA DEL GRÁFICO PARA ZOOM IN EN LA POSICIÓN ACTUAL ===
-  // Calculamos un rango de precios que incluya PE, TP y SL, y un pequeño margen
-  // para que no estén pegados a los bordes superior/inferior
-
-  // Determinar límites superior e inferior del rango de precios
-   // === AJUSTAR ESCALA DEL GRÁFICO PARA ZOOM IN EN LA POSICIÓN ACTUAL ===
-  // Calculamos un rango de precios que incluya PE, TP y SL, y un pequeño margen
-  // para que no estén pegados a los bordes superior/inferior
 
   // Determinar límites superior e inferior del rango de precios
   const precios = [entrada, precioTP, precioSL];
@@ -1661,12 +1704,6 @@ function actualizarLineasPrecios(entrada, tpPct, slPct, leverage) {
   // Esto implica desactivar la autoescala y posiblemente ajustar los márgenes
   // para que el rango de precios deseado ocupe la mayor parte del área vertical del gráfico.
   try {
-     // Desactivar autoescala y aplicar márgenes para enfocar
-     // scaleMargins: { top: <porcentaje>, bottom: <porcentaje> }
-     // top: 0.1 significa que el precio más alto ocupará el 10% superior del gráfico
-     // bottom: 0.15 significa que el precio más bajo ocupará el 15% inferior del gráfico
-     // (0.1 + 0.15 = 0.25, por lo tanto, el 75% central del gráfico mostrará el rango deseado)
-     // Es un enfoque relativo, no absoluto como setVisibleRange.
      // Los valores de margen deben ser ajustados para lograr el "zoom" deseado.
      const margenSuperiorRelativo = 0.15; // Ajusta este valor (0.10 a 0.25 típicamente)
      const margenInferiorRelativo = 0.15; // Ajusta este valor (0.10 a 0.25 típicamente)
@@ -1678,10 +1715,6 @@ function actualizarLineasPrecios(entrada, tpPct, slPct, leverage) {
              bottom: margenInferiorRelativo,
          },
          // Opcional: Puedes intentar forzar el rango mínimo/máximo si autoScale está desactivado
-         // Aunque minPriceScale y maxPriceScale pueden no ser directos o requerir valores absolutos
-         // que dependen del precio actual, y su efectividad puede variar.
-         // minPriceScale: limiteInferior, // No garantizado que funcione como setVisibleRange
-         // maxPriceScale: limiteSuperior, // No garantizado que funcione como setVisibleRange
          // Es mejor depender de scaleMargins con autoScale: false para el zoom relativo.
      });
      // Opcional: Forzar un ajuste del gráfico después de aplicar las opciones
@@ -1734,79 +1767,103 @@ function ocultarLineasPrecios() {
 async function abrirPosicionReal(side) {
   //if (!AUTENTICADO) return;
   try {
-    const ticker = await (await fetch(`/api/binance/ticker?symbol=${simboloActual}`)).json();
+    
+    const simbolo = document.getElementById('selector-simbolo').value;
+    const ticker = await (await fetch(`/api/binance/ticker?symbol=${simbolo}`)).json();
     const precio = parseFloat(ticker.price);
     let monto = parseFloat(document.getElementById('montoCompra').value) || 100;
     if (monto < 100) monto = 100;
     let qty = symbolInfo ? calculateQuantity(precio, monto) : Math.floor((monto / precio) / 0.001) * 0.001;
-    const lev = parseInt(document.getElementById('apalancamiento').value) || 4;
+    const lev = parseInt(document.getElementById('apalancamiento').value) || 2;
     console.log(`🔍 [DEBUG] Monto deseado: $${monto}`);
     console.log(`🔍 [DEBUG] Precio: $${precio}`);
     console.log(`🔍 [DEBUG] Size calculado: ${qty.toFixed(8)} BTC`);
     console.log(`🔍 [DEBUG] Notional real: $${(qty * precio).toFixed(3)}`);
     
     const tpslMode = document.getElementById('tpsl-mode')?.value || 'dinamico';
-    let takeProfit = 1.5, stopLoss = 0.5;
+    let takeProfit = 3.0; // valores por defecto (manual)
+    let stopLoss = 1.5;
+  
     // En abrirPosicionReal():
     if (tpslMode === 'manual') {
       takeProfit = Math.max(0.5, parseFloat(document.getElementById('takeProfit').value) || 3.0); // ← de 1.5 → 3.0
-      stopLoss = Math.max(0.5, parseFloat(document.getElementById('stopLoss').value) || 1.5);  // ← de 0.5 → 1.5
+      stopLoss = Math.max(0.25, parseFloat(document.getElementById('stopLoss').value) || 1.5);  // ← de 0.5 → 1.5
     } else {
-      const k5m = await obtenerDatos(simboloActual, '1h', 50);
-      const atrArr = k5m.length >= 20 ? calcularATR(k5m, 14) : [];
+      
+      // Obtener ATR reciente (mismo que usas en otros lugares)
+      const simbolo = document.getElementById('selector-simbolo').value;
+      const k5m = await obtenerDatos(simbolo, '5m', 50);
+     
+      const atrArr = k5m.length >= 20 ? calcularATR(k5m, 14):[];
       const atrVal = atrArr.length > 0 ? atrArr[atrArr.length - 1] : 0;
-      takeProfit = Math.max(0.8, (atrVal * 6 / precio) * 100);
-      stopLoss = Math.max(0.3, (atrVal * 3 / precio) * 100);
-    }
-    
-   // 1. Cambiar apalancamiento
-   const token = localStorage.getItem('authToken');
-const leverageRes = await fetch('/api/binance/futures/leverage', {
-  method: 'POST',
-    headers: {
-    'Authorization': `Bearer ${token}`, // ← ¡Obligatorio!
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({ symbol: simboloActual, leverage: lev })
-});
-if (!leverageRes.ok) {
-  const leverageErr = await leverageRes.json();
-  console.error('⚠️ Error cambiando apalancamiento:', leverageErr);
-  // Opcional: lanzar error y detener la apertura
-  throw new Error(`Error cambiando apalancamiento: ${leverageErrr.msg || 'Desconocido'}`);
-} else {
-    console.log('✅ Apalancamiento cambiado a:', lev);
-}
 
-// 2. Abrir la posición
-const res = await fetch('/api/binance/futures/order', {
-  method: 'POST',
-    headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}` // ← ¡Agregado!
-  },
-  body: JSON.stringify({ symbol: simboloActual, side, quantity: qty.toString() /*, leverage: lev */ }) // <-- 'leverage' ya no va aquí
-});
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(`${err.msg || 'Error Binance'} (code: ${err.code})`);
+      const tpMult = parseFloat(document.getElementById('tp-mult')?.value) || 2.0;
+      const slMult = parseFloat(document.getElementById('sl-mult')?.value) || 1.0;
+
+      takeProfit = (atrVal * tpMult / precio) * 100;
+      stopLoss = (atrVal * slMult / precio) * 100;
+      console.log(`🔍 [DEBUG] TP dinámico: ${takeProfit.toFixed(2)}%`);
+      console.log(`🔍 [DEBUG] SL dinámico: ${stopLoss.toFixed(2)}%`);
+      console.log(`🔍 [DEBUG] ATR usado: En Abrir Posicion Real: ${atrVal.toFixed(2)}`);
+
+   
+    };
+
+    
+    // 1. Cambiar apalancamiento
+    const token = localStorage.getItem('authToken');
+    const leverageRes = await fetch('/api/binance/futures/leverage', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`, // ← ¡Obligatorio!
+        'Content-Type': 'application/json'
+      },
+       
+    
+      body: JSON.stringify({ symbol: simbolo, leverage: lev })
+    });
+    if (!leverageRes.ok) {
+      const leverageErr = await leverageRes.json();
+      console.error('⚠️ Error cambiando apalancamiento:', leverageErr);
+      // Opcional: lanzar error y detener la apertura
+      throw new Error(`Error cambiando apalancamiento: ${leverageErrr.msg || 'Desconocido'}`);
+    } else {
+      console.log('✅ Apalancamiento cambiado a:', lev);
     }
+
+    // 2. Abrir la posición
+    const res = await fetch('/api/binance/futures/order', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}` // ← ¡Agregado!
+      },
+     
+      body: JSON.stringify({ symbol: simbolo, side, quantity: qty.toString() /*, leverage: lev */ }) // <-- 'leverage' ya no va aquí
+    });
+
+
+    const orderData = await res.json();
+
+    // ✅ Manejar respuesta (incluyendo -1007)
+   
+    await manejarRespuestaOrden(res, orderData, simbolo);
+
+
+    
+    // Si llega aquí, la orden se ejecutó o el estado fue verificado
+
     console.log(`🟢 Orden ${side} abierta | TP: ${takeProfit.toFixed(2)}% | SL: ${stopLoss.toFixed(2)}%`);
-    document.getElementById('estado').textContent = `✅ ${side} ${qty} ${simboloActual}`;
+ 
+    document.getElementById('estado').textContent = `✅ ${side} ${qty} ${simbolo}`;
     
     // ✅ Guardar TP/SL por símbolo para cierre consistente
-    tpSlConfig[simboloActual] = { tpPct: takeProfit, slPct: stopLoss, modo: tpslMode };
+    tpSlConfig[simbolo] = { tpPct: takeProfit, slPct: stopLoss, modo: tpslMode };
     
-    const resultado = await res.json();
-// ... (manejo de resultado) ...
-     
-   // ✅ Guardar TP/SL por símbolo para cierre consistente
 
-  // [Agregado] Actualizar sideActual global para el gráfico
-  // Convertimos 'BUY'/'SELL' a 'LONG'/'SHORT'
-  // ESTA LÍNEA DEBE ESTAR AQUÍ, DENTRO DEL TRY, DESPUÉS DE ENVIAR LA ORDEN EXITOSAMENTE
-  window.sideActual = side === 'BUY' ? 'LONG' : 'SHORT';
-  console.log(`[DEBUG] sideActual actualizado a: ${window.sideActual} para ${simboloActual}`);
+
+  window.sideActual = side === 'BUY' ? 'LONG' : 'SHORT'; // ✅ Solo actualiza sideActual
+  console.log(`[DEBUG] sideActual actualizado a: ${window.sideActual} para ${simbolo}`);
 
 // ...
   await actualizarPosicionesAbiertas();
@@ -1818,11 +1875,11 @@ iniciarRefrescoPosiciones(); // Activa el refresco visual cada 2s
    // console.error('🔴 abrirPosicionReal error:', err);
    // const msg = err.message.includes('-4164') ? '❌ Notional < 100 USDT' : `❌ ${err.message}`;
     //document.getElementById('estado').textContent = msg;
-   // ✅ Guardar TP/SL por símbolo para cierre consistentetpSlConfig[simboloActual] = { tpPct: takeProfit, slPct: stopLoss, modo: tpslMode };
+   // ✅ Guardar TP/SL por símbolo para cierre consistentetpSlConfig[window.simboloActual] = { tpPct: takeProfit, slPct: stopLoss, modo: tpslMode };
   // [Agregado] Actualizar sideActual global para el gráfico
   // Convertimos 'BUY'/'SELL' a 'LONG'/'SHORT'
    //window.sideActual = side === 'BUY' ? 'LONG' : 'SHORT';
-  // console.log(`[DEBUG] sideActual actualizado a: ${window.sideActual} para ${simboloActual}`);
+  // console.log(`[DEBUG] sideActual actualizado a: ${window.sideActual} para ${window.simboloActual}`);
 // ...
 //await actualizarPosicionesAbiertas();
   }
@@ -1857,7 +1914,21 @@ async function cerrarParcial(symbol, positionSide, sizeParcial, motivo) {
         quantity: sizeParcial.toString()
       })
     });
-    const resultado = await closeRes.json();
+
+     const closeData = await closeRes.json();
+
+    const resultado = closeData
+
+ 
+
+    // ✅ Manejar respuesta (incluyendo -1007)
+    await manejarRespuestaOrden(closeRes, closeData, symbol);
+
+    // Si llega aquí, el cierre se ejecutó o el estado fue verificado
+    console.log("✅ Cierre procesado (o estado verificado). Continuando con cálculos...");
+
+
+
 
     // ✅ 2. Obtener precio real de cierre con validaciones robustas
     let precioSalida = precioEntrada;
@@ -2044,7 +2115,7 @@ async function cerrarPosicion(symbol, positionSide = 'BOTH', motivo = 'Manual') 
     // Obtenemos las posiciones actuales de la API
     try {
   const posiciones = await (await fetchConAuth('/api/binance/futures/positions')).json();
-  // Buscamos si hay ALGUNA posición abierta para simboloActual (no solo la del mismo side, todas)
+  // Buscamos si hay ALGUNA posición abierta para window.simboloActual (no solo la del mismo side, todas)
   const hayPosicionSimbolo = posiciones.some(p => p.symbol === symbol && Math.abs(parseFloat(p.positionAmt)) > 0.0001);
 
   if (!hayPosicionSimbolo) {
@@ -2077,12 +2148,16 @@ async function cerrarPosicion(symbol, positionSide = 'BOTH', motivo = 'Manual') 
     const estadoEl = document.getElementById('estado');
     if (estadoEl) estadoEl.textContent = msg;
   }
+   posicionActual = null;
+   
 }
 
 // ✅ ACTUALIZAR POSICIONES — Seguro
 async function actualizarPosicionesAbiertas() {
   try {
-    const res = await fetchConAuth(`/api/binance/futures/positions?_t=${Date.now()}`);
+    const simbolo = document.getElementById('selector-simbolo').value;
+    // console.log("🔍 Consultando posiciones para:", simbolo); // ← AGREGA ESTO
+    const res = await fetchConAuth(`/api/binance/futures/positions?symbol=${simbolo}&_t=${Date.now()}`);
     const data = await res.json();
     
     // ✅ ¡AÑADE ESTA LÍNEA! → Si no es array, hazlo array vacío
@@ -2139,8 +2214,1144 @@ async function actualizarPosicionesAbiertas() {
   }
 }
 
-// === SEMÁFORO MEJORADO (ACTUALIZADO) ===
-// Añadimos un parámetro opcional 'tradingActivo' para reflejar el estado del autotrading
+
+// ───────────────────────────────────────
+// 🔥 APERTURA: IA ↔ Cruce con prioridad a confirmaciones pendientes
+// ───────────────────────────────────────
+function evaluarAperturaReversion(simbolo, prediccionRaw, indicadores, historialVelas) {
+  console.log("🔍 [APERTURA] Nueva vela en Reversion | IA:", prediccionRaw, "MACD último:", indicadores.macdLine.slice(-4), "Signal último:", indicadores.signalLine.slice(-4));
+ 
+  // Ejemplo: al activar Modo Mercado, desactivar Gauss y Reversión
+  document.getElementById('modo-reversion-activo')?.addEventListener('change', (e) => {
+    if (e.target.checked) {
+      document.getElementById('modo-mercado-activo').checked = false;
+      document.getElementById('modo-gauss-activo').checked = false;
+    }
+  });
+ 
+  const modoActivo = document.getElementById('modo-reversion-activo')?.checked || false;
+  if (!modoActivo || prediccionRaw == null) return;
+
+  const modoAuto = document.querySelector('input[name="modo-reversion"]:checked')?.value === 'auto';
+  const btnOperar = document.getElementById('btn-operar-reversion');
+  const estadoDiv = document.getElementById('estado-reversion');
+
+  // ─── UMBRALES DE PRUEBA ───
+  const UMBRAL_IA = 0.60;
+  const UMBRAL_RSI_MIN = 20;
+  const UMBRAL_RSI_MAX = 80;
+ // AHORA (suave para pruebas):
+  const UMBRAL_MACD_COMPRA = -0.0355;  // zona de compra , segun estudio dat  MIN +/- 0.0355 equiv. 60 en BTC de trabajo 1m =0.0355. <50
+  const UMBRAL_MACD_VENTA = 0.0355;    // zona de venta
+
+  // ─── Validar indicadores ───
+  if (!indicadores?.rsi || !indicadores?.adx || !indicadores?.macdLine || !indicadores?.signalLine) {
+    return;
+  }
+
+  const rsiActual = indicadores.rsi;
+  const adxActual = indicadores.adx;
+  const macdLine = indicadores.macdLine;
+  const signalLine = indicadores.signalLine;
+
+  if (macdLine.length < 2 || signalLine.length < 2) return;
+
+  const macdActual = macdLine[macdLine.length - 1];
+  const signalActual = signalLine[signalLine.length - 1];
+  const macdPrev = macdLine[macdLine.length - 2];
+  const signalPrev = signalLine[signalLine.length - 2];
+
+  const cruceAlcista = macdPrev <= signalPrev && macdActual > signalActual;
+  const cruceBajista = macdPrev >= signalPrev && macdActual < signalActual;
+  const hayCruce = cruceAlcista || cruceBajista;
+
+  // ─── VALIDAR CONDICIONES TÉCNICAS ACTUALES ───
+  const adxValido = adxActual >= 25;
+  const rsiValido = rsiActual > UMBRAL_RSI_MIN && rsiActual < UMBRAL_RSI_MAX;
+  const condicionesTecnicas = adxValido && rsiValido;
+
+  // ───────────────────────────────────────
+  // ✅ 1. PRIMERO: verificar CONFIRMACIONES de señales pendientes
+  // ───────────────────────────────────────
+
+  // A. Confirmar CRUCE pendiente (de vela N) con IA actual (vela N+1)
+  const crucePend = window.crucePendiente;
+  if (crucePend && 
+      crucePend.simbolo === simbolo && 
+      historialVelas.length === crucePend.velaIndex + 1) {
+    
+    const esLongConf = crucePend.side === 'BUY';
+    const iaConfirma = esLongConf 
+      ? (prediccionRaw >= UMBRAL_IA) 
+      : (prediccionRaw <= (1 - UMBRAL_IA));
+     console.log(`🔍 [CONFIRMACIÓN IA] Vela: ${historialVelas.length} | IA: ${(prediccionRaw*100).toFixed(1)}% | Signal: ${signalActual.toFixed(1)} | ADX: ${adxActual.toFixed(1)} | RSI: ${rsiActual.toFixed(1)}`);
+
+
+    // ✅ Validar que la zona ACTUAL coincida con la dirección del cruce pendiente
+    const enZonaValidaAhora = esLongConf
+      ? (signalActual < UMBRAL_MACD_COMPRA)
+      : (signalActual > UMBRAL_MACD_VENTA);
+
+    if (iaConfirma && condicionesTecnicas && enZonaValidaAhora) {
+      ejecutarApertura(crucePend.side, simbolo, modoAuto, btnOperar, estadoDiv, signalActual);
+      window.crucePendiente = null;
+      return;
+    } else {
+      window.crucePendiente = null;
+    }
+  }
+
+  // B. Confirmar IA pendiente (de vela N) con CRUCE actual (vela N+1)
+  const iaPend = window.iaFuertePendiente;
+  if (iaPend && 
+      iaPend.simbolo === simbolo && 
+      historialVelas.length === iaPend.velaIndex + 1) {
+      console.log("✅ [CONFIRMACIÓN] IA pendiente de vela", iaPend.velaIndex, "con side", iaPend.side);
+      
+    const esLongConf = iaPend.side === 'BUY';
+    const cruceConfirma = esLongConf ? cruceAlcista : cruceBajista;
+      console.log("📊 Cruce válido:", cruceConfirma, "| En zona:", esLongConf, "| Signal actual:", signalActual);
+     const enZonaConfirma = esLongConf 
+  
+      ? (signalActual < UMBRAL_MACD_COMPRA) 
+      : (signalActual > UMBRAL_MACD_VENTA);
+    
+    if (cruceConfirma && enZonaConfirma && condicionesTecnicas) {
+      ejecutarApertura(iaPend.side, simbolo, modoAuto, btnOperar, estadoDiv, signalActual);
+      window.iaFuertePendiente = null;
+      return; // ✅ Sale después de abrir
+    } else {
+      window.iaFuertePendiente = null; // limpiar si no se confirma
+    }
+  }
+
+  // ───────────────────────────────────────
+  // 🔸 2. LUEGO: guardar NUEVAS señales de esta vela
+  // ───────────────────────────────────────
+
+  // A. Guardar CRUCE si está en zona y condiciones técnicas válidas
+  if (hayCruce && condicionesTecnicas) {
+    const enZonaCompra = cruceAlcista && signalActual < UMBRAL_MACD_COMPRA;
+    const enZonaVenta = cruceBajista && signalActual > UMBRAL_MACD_VENTA;
+    console.log(`🔔 [CRUCE DETECTADO] Vela: ${historialVelas.length} | Signal: ${signalActual.toFixed(1)} | Esperando IA en próxima vela...`);
+
+
+    if (enZonaCompra || enZonaVenta) {
+      window.crucePendiente = {
+        velaIndex: historialVelas.length,
+        side: enZonaCompra ? 'BUY' : 'SELL',
+        simbolo: simbolo,
+        timestamp: Date.now()
+      };
+      if (estadoDiv && !modoAuto) {
+        estadoDiv.textContent = `🔔 Cruce detectado. Esperando confirmación IA...`;
+      }
+      return;
+    }
+  }
+
+  // B. Guardar IA si es fuerte y condiciones técnicas válidas
+  const esLongPorIA = prediccionRaw > 0.5;
+  const iaFuerte = esLongPorIA ? (prediccionRaw >= UMBRAL_IA) : (prediccionRaw <= (1 - UMBRAL_IA));
+  
+  if (iaFuerte && condicionesTecnicas) {
+    window.iaFuertePendiente = {
+      velaIndex: historialVelas.length,
+      side: esLongPorIA ? 'BUY' : 'SELL',
+      simbolo: simbolo,
+      rsi: rsiActual,
+      adx: adxActual,
+      timestamp: Date.now()
+    };
+    if (estadoDiv && !modoAuto) {
+      estadoDiv.textContent = `🔔 IA fuerte detectada. Esperando cruce...`;
+    }
+    return;
+  }
+}
+
+
+
+// ─── UTILIDAD: verificar si el modo permite la operación ───
+function permitirOperacion(side) {
+  const modo = document.querySelector('input[name="modo-operacion"]:checked')?.value || 'both';
+  if (modo === 'long' && side === 'SELL') return false;
+  if (modo === 'short' && side === 'BUY') return false;
+  return true;
+}
+
+// ─── Función auxiliar (igual que antes) ───
+function ejecutarApertura(side, simbolo, modoAuto, btnOperar, estadoDiv, signalActual) {
+
+  // En la sección de confirmación (antes de if (modoAuto))
+  console.log(`[DEBUG] Confirmando apertura: side=${side}, signal=${signalActual}, modoAuto=${modoAuto}`);
+  console.log(`[DEBUG] ordenEnCurso=${ordenEnCurso}, posicionActual=`, posicionActual);
+  console.log(`[DEBUG] Zona válida: ${side === 'BUY' ? (signalActual < -60) : (signalActual > 60)}`);
+   
+   
+ if (!permitirOperacion(side)) {
+  console.log(`⚠️ Operación ${side} bloqueada por modo de operación`);
+  return;
+  }
+
+
+  if (modoAuto) {
+    if (ordenEnCurso || posicionActual) {
+       console.log("🛑 Bloqueado: hay posición u orden en curso");
+      if (estadoDiv) estadoDiv.textContent = "🔒 Posición abierta";
+    } else {
+      console.log(`✅ [APERTURA AUTOMÁTICA] ${side} | Signal: ${signalActual.toFixed(1)}`);
+      ordenEnCurso = true;
+      posicionActual = { side, simbolo };
+      abrirPosicionReal(side)
+        .finally(() => { ordenEnCurso = false; });
+      if (estadoDiv) estadoDiv.textContent = `✅ Automático: ${side} abierto`;
+    }
+  } else {
+    if (btnOperar) {
+      btnOperar.textContent = `⚡ ABRIR ${side} (Signal: ${signalActual.toFixed(0)})`;
+      btnOperar.style.display = 'inline-block';
+      btnOperar.disabled = false;
+      btnOperar.onclick = () => {
+        if (ordenEnCurso || posicionActual) {
+          alert("⚠️ Ya hay posición abierta.");
+          return;
+        }
+        console.log(`✅ [APERTURA MANUAL] ${side}`);
+        ordenEnCurso = true;
+        posicionActual = { side, simbolo };
+        abrirPosicionReal(side)
+          .finally(() => {
+            ordenEnCurso = false;
+            btnOperar.style.display = 'none';
+          });
+      };
+    }
+    if (estadoDiv) estadoDiv.textContent = `🔔 Confirmación recibida. ¡Confirma apertura!`;
+  }
+}
+
+
+// ───────────────────────────────────────
+// 🔒 CIERRE: cruce final en vela M+1 (después de apertura)
+// ───────────────────────────────────────
+function evaluarCierreReversion(simbolo, posicionActual, indicadores) {
+  const modoActivo = document.getElementById('modo-reversion-activo')?.checked || false;
+  if (!modoActivo || !posicionActual) return;
+
+  const posicionRev = posicionActual;
+  if (!posicionRev || posicionRev.simbolo !== simbolo) return;
+
+  const macdLine = indicadores?.macdLine;
+  const signalLine = indicadores?.signalLine;
+  if (!macdLine || !signalLine || macdLine.length < 2) return;
+
+  const macdActual = macdLine[macdLine.length - 1];
+  const signalActual = signalLine[signalLine.length - 1];
+  const macdPrev = macdLine[macdLine.length - 2];
+
+  // Umbrales de cierre (ajustables)
+  //const UMBRAL_CIERRE_LONG = 0;
+ // const UMBRAL_CIERRE_SHORT = 0;
+
+  const esLong = posicionRev.side === 'BUY';
+  const cierreLong = macdPrev >= signalActual && macdActual < signalActual ;
+  const cierreShort = macdPrev <= signalActual && macdActual > signalActual ;
+  const hayCierre = (esLong && cierreLong) || (!esLong && cierreShort);
+
+  if (!hayCierre) return;
+
+  const modoAuto = document.querySelector('input[name="modo-reversion"]:checked')?.value === 'auto';
+  const btnCerrar = document.getElementById('btn-cerrar-reversion');
+  const estadoDiv = document.getElementById('estado-reversion');
+
+  if (modoAuto) {
+    console.log(`✅ [CIERRE AUTOMÁTICO] ${posicionRev.side} por cruce final`);
+    ordenEnCurso = true;
+    const simbolo = document.getElementById('selector-simbolo').value;
+    cerrarPosicion(simbolo, posicionActual.positionSide, 'MACD cruce final')
+      .finally(() => {
+        ordenEnCurso = false;
+        posicionActual = false;
+        if (btnCerrar) btnCerrar.style.display = 'none';
+      });
+    if (estadoDiv) estadoDiv.textContent = `✅ Cierre automático ejecutado`;
+  } else {
+    if (btnCerrar) {
+      btnCerrar.style.display = 'inline-block';
+      btnCerrar.disabled = false;
+      btnCerrar.onclick = () => {
+        console.log(`✅ [CIERRE MANUAL] ${posicionRev.side}`);
+        ordenEnCurso = true;
+        const simbolo = document.getElementById('selector-simbolo').value;
+        cerrarPosicion(simbolo, posicionActual.positionSide, 'Cierre manual MACD')
+          .finally(() => {
+            ordenEnCurso = false;
+            posicionActual = false;
+            btnCerrar.style.display = 'none';
+          });
+      };
+    }
+    if (estadoDiv) estadoDiv.textContent = `🔔 Cierre recomendado. Confirma manualmente.`;
+  }
+}
+
+
+// ─── INICIALIZAR HISTORIAL (al inicio de tu script) ───
+if (!window.historialOperaciones) {
+  window.historialOperaciones = [];
+}
+
+// ─── FUNCIÓN: agregar operación al historial ───
+function registrarOperacion(operacion) {
+  const simbolo = document.getElementById('selector-simbolo').value;
+  window.historialOperaciones.push({
+    fecha: new Date().toISOString(),
+    simbolo: operacion.simbolo ,
+    side: operacion.side,
+    entrada: operacion.entrada,
+    salida: operacion.salida,
+    roe: operacion.roe,
+    pnlNeto: operacion.pnlNeto,
+    modo: operacion.modo || 'auto',
+    motivoCierre: operacion.motivoCierre || 'unknown'
+  });
+}
+
+// ─── VERIFICAR POSICIÓN ACTUAL EN BINANCE ───
+async function verificarPosicionActual(simbolo ) {
+  try {
+    const token = localStorage.getItem('authToken');
+    const response = await fetch('/api/binance/futures/position', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ symbol: simbolo })
+    });
+
+    const data = await response.json();
+    
+    if (response.ok) {
+      // Actualizar posicionActual
+      posicionActual = data;
+      
+      // Calcular tamaño real
+      const positionAmt = parseFloat(data.positionAmt);
+      const hayPosicionReal = Math.abs(positionAmt) > 0.0001;
+      
+      console.log(`📊 Posición actual: ${positionAmt} | ¿Real?: ${hayPosicionReal}`);
+      
+      // Opcional: actualizar UI
+      const estadoDiv = document.getElementById('estado-reversion');
+      if (estadoDiv) {
+        estadoDiv.textContent = hayPosicionReal 
+          ? `📊 Posición abierta: ${positionAmt.toFixed(4)}`
+          : '📊 Sin posición abierta';
+      }
+      
+      return data;
+    } else {
+      console.error("❌ Error al verificar posición:", data);
+      return null;
+    }
+  } catch (error) {
+    console.error("⚠️ Excepción en verificarPosicionActual:", error);
+    return null;
+  }
+}
+
+// ─── MANEJAR RESPUESTA DE ORDEN (reutilizable) ─── 
+const simbolo = document.getElementById('selector-simbolo').value;
+async function manejarRespuestaOrden(response, data, simbolo ) {
+  if (response.status === 202 && data.code === -1007) {
+    console.warn("⏳ Timeout Binance: verificando estado real...");
+    await verificarPosicionActual(simbolo);
+    return { success: true, unknown: true };
+  }
+  
+  if (response.ok) {
+    console.log("✅ Orden ejecutada:", data);
+    return { success: true, unknown: false };
+  }
+  
+  console.error("❌ Orden fallida:", data);
+  return { success: false, unknown: false };
+}
+
+
+
+// ─── FUNCIÓN: exportar a CSV ───
+document.getElementById('btn-exportar')?.addEventListener('click', () => {
+  const historial = window.historialOperaciones;
+  if (!historial || historial.length === 0) {
+    alert("No hay operaciones para exportar.");
+    return;
+  }
+
+  const cabeceras = ['Fecha','Símbolo','Operación','Entrada','Salida','ROE%','PnL Neto','Modo','Cierre'];
+  const filas = historial.map(op => [
+    op.fecha.replace('T', ' ').substring(0, 19),
+    op.simbolo,
+    op.side,
+    op.entrada,
+    op.salida,
+    op.roe,
+    op.pnlNeto,
+    op.modo,
+    op.motivoCierre
+  ]);
+
+  let csv = cabeceras.join(',') + '\n';
+  csv += filas.map(f => 
+    f.map(cell => `"${typeof cell === 'string' ? cell.replace(/"/g, '""') : cell}"`).join(',')
+  ).join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `operaciones_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+// ─── FUNCIÓN: reset historial ───
+document.getElementById('btn-reset-historial')?.addEventListener('click', () => {
+  if (confirm("¿Borrar historial de operaciones? Esta acción no se puede deshacer.")) {
+    window.historialOperaciones = [];
+    alert("✅ Historial de operaciones reseteado.");
+  }
+});
+
+// ───────────────────────────────────────
+// ───────────────────────────────────────
+// 📊 ACTUALIZAR MONITOR MACD EN TIEMPO REAL (con alineación visual correcta)
+// ───────────────────────────────────────
+function actualizarMonitorMACD() {
+  const indicadores = window.indicadores;
+  const valoresEl = document.getElementById('macd-signal-valores');
+  const indicadorEl = document.getElementById('signal-indicador');
+  const estadoEl = document.getElementById('estado-senal');
+
+  if (!valoresEl || !indicadorEl || !estadoEl) return;
+
+  // Protección si no hay datos
+  if (!indicadores || !Array.isArray(indicadores.signalLine) || indicadores.signalLine.length < 1) {
+    valoresEl.textContent = "MACD: -- | Signal: --";
+    indicadorEl.style.left = '50%';
+    estadoEl.textContent = '⏳ Esperando datos...';
+    estadoEl.style.color = '#ffd700';
+    return;
+  }
+
+  const signalLine = indicadores.signalLine;
+  const macdLine = indicadores.macdLine;
+
+  if (!Array.isArray(macdLine) || macdLine.length < 1) {
+    valoresEl.textContent = "MACD: -- | Signal: --";
+    indicadorEl.style.left = '50%';
+    estadoEl.textContent = '⚠️ Datos incompletos';
+    return;
+  }
+
+  // ✅ EXTRAER VALORES REALES
+  const signalActual = signalLine[signalLine.length - 1];
+  const macdActual = macdLine[macdLine.length - 1];
+  console.log("📈 [MONITOR] Valor usado para cursor:", signalActual);
+
+  // ✅ FORMATEAR PARA MOSTRAR
+  const signalMostrar = parseFloat(signalActual.toFixed(4));
+  const macdMostrar = parseFloat(macdActual.toFixed(4));
+  valoresEl.textContent = `MACD: ${macdMostrar} | Signal: ${signalMostrar}`;
+
+  // ───────────────────────────────────────
+  // ✅ POSICIONAMIENTO VISUAL: adaptado a SOLUSDT (rango ±0.1)
+  // Zona verde: Signal < -0.0455 → 0% a 30%
+  // Zona neutra: -0.01 ≤ Signal ≤ +0.01 → 45% a 55%
+  // Zona roja: Signal > +0.0455 → 70% a 100%
+  // ───────────────────────────────────────
+  let porcentaje;
+
+  if (signalActual < -0.0355) {
+    // Mapear –0.1 a –0.0355 → 0% a 30%
+    const rango = -0.0355 - (-0.8); // 0.0545
+    const rel = Math.max(0, signalActual - (-0.8));
+    porcentaje = (rel / rango) * 30;
+  } else if (signalActual > 0.0355) {
+    // Mapear +0.0355 a +0.1 → 70% a 100%
+    const rango = 0.8 - 0.0355; // 0.0545
+    const rel = Math.min(rango, signalActual - 0.0355);
+    porcentaje = 70 + (rel / rango) * 30;
+  } else if (signalActual <= -0.8) {
+    // –0.0355 a –0.01 → 30% a 45%
+    const rango = -0.8 - (-0.0355); // 0.0355
+    const rel = signalActual - (-0.0355);
+    porcentaje = 30 + (rel / rango) * 15;
+  } else if (signalActual >= 0.8) {
+    // +0.01 a +0.0355 → 55% a 70%
+    const rango = 0.0355 - 0.8; // 0.0355
+    const rel = signalActual - 0.8;
+    porcentaje = 55 + (rel / rango) * 15;
+  } else {
+    // –0.01 a +0.01 → 45% a 55%
+    const rango = 0.08;
+    const rel = signalActual + 0.8;
+    porcentaje = 45 + (rel / rango) * 10;
+  }
+
+  const porcentajeClamped = Math.max(0, Math.min(100, porcentaje));
+  indicadorEl.style.left = `${porcentajeClamped}%`;
+
+  // ───────────────────────────────────────
+  // ✅ ESTADOS (umbrales adaptados a SOLUSDT)
+  // ───────────────────────────────────────
+  let estado = '⚪ Zona neutra';
+  let color = '#90a4ae';
+
+  if (signalActual < -0.0355) {
+    estado = '🟢 ¡Zona de COMPRA!';
+    color = '#4caf50';
+  } else if (signalActual > 0.0355) {
+    estado = '🔴 ¡Zona de VENTA!';
+    color = '#f44336';
+  } else {
+    estado = '⚪ Zona neutra';
+    color = '#90a4ae';
+  }
+  console.log("🔍 [MONITOR] Signal usado:", signalActual, "| MACD:", macdActual);
+  estadoEl.textContent = estado;
+  estadoEl.style.color = color;
+}
+
+function actualizarDebug() {
+  const debugEl = document.getElementById('debug-panel');
+  if (!debugEl) return;
+  
+  const pos = posicionActual;
+  const size = pos ? parseFloat(pos.positionAmt) : 0;
+  const hayPos = Math.abs(size) > 0.0001;
+  
+  debugEl.innerHTML = `
+    📌 DEBUG | Posición: ${hayPos ? 'SÍ' : 'NO'} | Tamaño: ${size.toFixed(6)}<br>
+    🧠 IA: ${(window.prediccionRaw || 0).toFixed(3)} | Modo Auto: ${document.querySelector('input[name="modo-reversion"]:checked')?.value === 'auto'}<br>
+    📊 Signal: ${(window.indicadores?.signalLine?.at(-1) || '--').toFixed(1)}
+  `;
+}
+
+
+
+
+
+
+// ───────────────────────────────────────
+// 📊 DIBUJAR GRÁFICO MACD (centrado en cero, estilo Binance)
+// ───────────────────────────────────────
+function dibujarMACDBinance(macdLine, signalLine) {
+  const contenedor = document.getElementById('macd-chart');
+  if (!contenedor || !macdLine || !signalLine || macdLine.length === 0) return;
+
+  // ✅ Número de velas a mostrar (máximo 50)
+  const n = Math.min(50, macdLine.length);
+  const macdSlice = macdLine.slice(-n);
+  const signalSlice = signalLine.slice(-n);
+  const histSlice = macdSlice.map((m, i) => m - signalSlice[i]);
+
+  // ✅ Encontrar máximo absoluto del histograma (para escalar)
+  const maxHist = Math.max(...histSlice.map(h => Math.abs(h))) || 1;
+
+  // ✅ Limpiar contenedor
+  contenedor.innerHTML = '';
+
+  // ✅ Dimensiones
+  const anchoBarra = 8;
+  const gap = 3;
+  const totalAncho = n * (anchoBarra + gap);
+  contenedor.style.width = `${totalAncho}px`;
+
+  // ✅ Altura total (debe coincidir con el height del contenedor en HTML - margen)
+  const alturaTotal = 300; // ← ajusta si cambias el height del #macd-chart
+  const mitad = alturaTotal / 2; // línea cero en el centro
+
+  // ✅ Dibujar cada elemento
+  for (let i = 0; i < n; i++) {
+    const hist = histSlice[i];
+    const macd = macdSlice[i];
+    const signal = signalSlice[i];
+    const absHist = Math.abs(hist);
+
+    // --- Histograma centrado en cero ---
+    const opacidad = Math.min(0.9, Math.max(0.2, absHist / maxHist));
+    const barHeight = (absHist / maxHist) * mitad * 0.95; // 95% del espacio
+
+    const bar = document.createElement('div');
+    bar.style.position = 'absolute';
+    bar.style.left = `${i * (anchoBarra + gap)}px`;
+    bar.style.width = `${anchoBarra}px`;
+    bar.style.height = `${barHeight}px`;
+
+    if (hist >= 0) {
+      // Barras positivas: hacia arriba desde cero
+      bar.style.bottom = `${mitad}px`;
+      bar.style.backgroundColor = `rgba(38, 166, 154, ${opacidad})`; // verde
+    } else {
+      // Barras negativas: hacia abajo desde cero
+      bar.style.top = `${mitad}px`;
+      bar.style.backgroundColor = `rgba(239, 83, 80, ${opacidad})`; // rojo
+    }
+    contenedor.appendChild(bar);
+
+    // --- Punto MACD (azul) ---
+    const escala = mitad / maxHist;
+    const macdY = mitad - (macd * escala);
+    const macdDot = document.createElement('div');
+    macdDot.style.position = 'absolute';
+    macdDot.style.left = `${i * (anchoBarra + gap) + anchoBarra / 2 - 2}px`;
+    macdDot.style.bottom = `${macdY}px`;
+    macdDot.style.width = '4px';
+    macdDot.style.height = '4px';
+    macdDot.style.backgroundColor = '#29b6f6';
+    macdDot.style.borderRadius = '50%';
+    contenedor.appendChild(macdDot);
+
+    // --- Punto Signal (naranja) ---
+    const signalY = mitad - (signal * escala);
+    const signalDot = document.createElement('div');
+    signalDot.style.position = 'absolute';
+    signalDot.style.left = `${i * (anchoBarra + gap) + anchoBarra / 2 - 1.5}px`;
+    signalDot.style.bottom = `${signalY}px`;
+    signalDot.style.width = '3px';
+    signalDot.style.height = '3px';
+    signalDot.style.backgroundColor = '#ff9800';
+    signalDot.style.borderRadius = '50%';
+    contenedor.appendChild(signalDot);
+  }
+
+  // --- Línea cero (centrada) ---
+  const zeroLine = document.createElement('div');
+  zeroLine.style.position = 'absolute';
+  zeroLine.style.bottom = `${mitad}px`;
+  zeroLine.style.left = '0';
+  zeroLine.style.width = '100%';
+  zeroLine.style.height = '1px';
+  zeroLine.style.backgroundColor = '#444';
+  contenedor.appendChild(zeroLine);
+}
+
+
+      // ───────────────────────────────────────
+      // 📊 REGISTRO DE EVENTOS IA (hasta 50)
+      // ───────────────────────────────────────
+      let eventosIA = JSON.parse(localStorage.getItem('eventosIA')) || [];
+
+      function registrarEventoIA(simbolo, prediccionRaw, indicadores, precio) {
+        const registroActivo = document.getElementById('registro-activo')?.checked || false;
+        if (!registroActivo || prediccionRaw == null) return;
+
+        const ahora = new Date();
+        const evento = {
+          fecha: ahora.toISOString(), // ISO 8601: 2025-04-05T14:30:00.000Z
+          fechaLocal: ahora.toLocaleString(), // legible: "5/4/2025, 2:30:00 p. m."
+          simbolo,
+          prediccion: prediccionRaw,
+          confianza: Math.max(prediccionRaw, 1 - prediccionRaw),
+          lado: prediccionRaw > 0.5 ? 'BUY' : 'SELL',
+          precio,
+          rsi: indicadores?.rsi || null,
+          adx: indicadores?.adx || null,
+          macd: indicadores?.macdLine?.[indicadores.macdLine.length - 1] || null,
+          signal: indicadores?.signalLine?.[indicadores.signalLine.length - 1] || null,
+          atr: indicadores?.atr || null
+        };
+
+        // Mantener solo los últimos 50
+        eventosIA.unshift(evento);
+        if (eventosIA.length > 50) eventosIA.pop();
+
+        // Guardar en localStorage (persistente)
+        localStorage.setItem('eventosIA', JSON.stringify(eventosIA));
+
+        // Actualizar UI
+        document.getElementById('contador-eventos').textContent = `${eventosIA.length}/50`;
+        document.getElementById('btn-exportar-registro').disabled = eventosIA.length === 0;
+      }
+
+
+// ─── FUNCIÓN: reset eventos IA ───
+document.getElementById('btn-reset-ia')?.addEventListener('click', () => {
+  if (confirm("¿Borrar todos los eventos IA y señales pendientes?")) {
+    // Limpiar eventos guardados
+    window.eventosIA = [];
+    // Limpiar señales pendientes de reversión
+    window.iaFuertePendiente = null;
+    window.crucePendiente = null;
+    // Limpiar otros estados relacionados (ajusta según tu código)
+    if (window.estadoPosiciones) {
+      window.estadoPosiciones = {};
+    }
+    alert("✅ Eventos IA y señales pendientes reseteados.");
+  }
+});
+
+// ─── Inicializar si no existe (al inicio del script) ───
+if (!window.eventosIA) window.eventosIA = [];
+
+
+      // ───────────────────────────────────────
+      // 📥 EXPORTAR A CSV
+      // ───────────────────────────────────────
+      function exportarEventosACSV() {
+        if (eventosIA.length === 0) return;
+
+        // Cargar desde localStorage (en caso de que la página se recargue)
+        const datos = JSON.parse(localStorage.getItem('eventosIA')) || [];
+        if (datos.length === 0) return;
+
+        // Encabezados
+        const headers = [
+          'Fecha', 'Símbolo', 'Predicción', 'Confianza', 'Lado', 'Precio',
+          'RSI', 'ADX', 'MACD', 'Signal', 'ATR'
+        ];
+
+        // Convertir a CSV
+        const csv = [
+          headers.join(','),
+          ...datos.map(e => [
+            `"${e.fechaLocal}"`,
+            e.simbolo,
+            e.prediccion?.toFixed(4) || '',
+            e.confianza?.toFixed(4) || '',
+            e.lado,
+            e.precio?.toFixed(2) || '',
+            e.rsi?.toFixed(2) || '',
+            e.adx?.toFixed(2) || '',
+            e.macd?.toFixed(2) || '',
+            e.signal?.toFixed(2) || '',
+            e.atr?.toFixed(2) || ''
+          ].join(','))
+        ].join('\n');
+
+        // Crear y descargar archivo
+        const now = new Date();
+        const nombre = `registro-reversa-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}.csv`;
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nombre;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
+      // Vincular botón
+      document.getElementById('btn-exportar-registro')?.addEventListener('click', exportarEventosACSV);
+
+
+// ─── SISTEMA GAUSS: TENDENCIA EN 1H ───
+function evaluarSistemaGauss(simbolo, prediccionRaw, indicadores, historialVelas) {
+
+
+// Ejemplo: al activar Modo Mercado, desactivar Gauss y Reversión
+document.getElementById('modo-gauss-activo')?.addEventListener('change', (e) => {
+  if (e.target.checked) {
+    document.getElementById('modo-reversion-activo').checked = false;
+    document.getElementById('modo-mercado-activo').checked = false;
+  }
+});
+
+
+  const modoActivo = document.getElementById('modo-gauss-activo')?.checked || false;
+  if (!modoActivo) return;
+
+  // Verificar datos mínimos
+  if (!indicadores?.adx || !indicadores?.atr || !indicadores?.ema20 || !indicadores?.ema50 ||
+      !indicadores?.macdLine || !indicadores?.signalLine || prediccionRaw == null) {
+       console.log("⚠️ Esperando datos completos...");
+        return;
+  }
+
+  const adx = indicadores.adx;
+  const atr = indicadores.atr;
+  const ema20 = indicadores.ema20;
+  const ema50 = indicadores.ema50;
+  const macdLine = indicadores.macdLine;
+  const signalLine = indicadores.signalLine;
+  const precioActual = parseFloat(historialVelas[historialVelas.length - 1].close);
+
+  if (macdLine.length < 2) { 
+    console.log("⚠️ Esperando MACD completo...");
+    return;
+
+  }
+  const macdActual = macdLine[macdLine.length - 1];
+  const signalActual = signalLine[signalLine.length - 1];
+  const macdPrev = macdLine[macdLine.length - 2];
+  const signalPrev = signalLine[signalLine.length - 2];
+
+   // Calcular diferencias
+  const deltaEMA = Math.abs(ema20 - ema50) / ema50;
+  const esAlcista = ema20 > ema50;
+  const macdPositivo = macdActual > 0;
+  const signalPositivo = signalActual > 0;
+
+   // ─── DIAGNÓSTICO EN CONSOLA ───
+
+ // ─── LOG LOCAL + TELEGRAM ───
+const mensajeGauss = `🔍 [GAUSS] Vela-SOL: ${historialVelas.length} | IA: ${(prediccionRaw*100).toFixed(1)}% | ADX: ${adx.toFixed(1)} | ATR: ${atr.toFixed(4)} | EMA20/50: ${deltaEMA.toFixed(4)} (${esAlcista ? '↑' : '↓'}) | MACD: ${macdActual.toFixed(4)} | Signal: ${signalActual.toFixed(4)}`;
+
+console.log(mensajeGauss);
+
+// Enviar a Telegram si está activado y pasaron 10 min
+const notifActiva = document.getElementById('gauss-notif-telegram')?.checked || false;
+const ahora = Date.now();
+
+if (notifActiva && (ahora - ultimaNotifGauss) >= INTERVALO_NOTIF) {
+  enviarTelegram(mensajeGauss);
+  ultimaNotifGauss = ahora;
+}
+
+
+
+ // segun estudio dat en Gaus ATR bueno trabajo=0.1428 , adx =40, pruebas ATR=0.06, adx=30
+
+
+  // ─── ZONA 1: ARRANQUE DE TENDENCIA ALCISTA ───
+  const arranqueAlcista = 
+    (prediccionRaw >= 0.60) &&
+    (adx > 25) &&
+    (atr > 0.06) &&
+    (ema20 > ema50) &&
+    ((ema20 - ema50) / ema50 >= 0.0015) && // >1.5%
+
+    (macdActual > 0) &&
+    (signalActual > 0);
+
+  // ─── ZONA 2: AGOTAMIENTO ALCISTA ───
+  const agotamientoAlcista = 
+    (adx < 25) &&
+    (Math.abs(ema20 - ema50) / ema50 <= 0.0005) && // <0.5%
+    (prediccionRaw <= 0.40) &&
+    (macdActual < 0) &&
+    (signalActual < 0);
+
+  // ─── ZONA 1: ARRANQUE DE TENDENCIA BAJISTA ───
+  const arranqueBajista = 
+    (prediccionRaw <= 0.40) &&
+    (adx > 25) &&
+    (atr > 0.06) &&
+    (ema20 < ema50) &&
+    ((ema50 - ema20) / ema50 >= 0.0015) &&
+    (macdActual < 0) &&
+    (signalActual < 0);
+
+  // ─── ZONA 2: AGOTAMIENTO BAJISTA ───
+  const agotamientoBajista = 
+    (adx < 30) &&
+    (Math.abs(ema20 - ema50) / ema50 <= 0.0005) &&
+    (prediccionRaw >= 0.60) &&
+    (macdActual > 0) &&
+    (signalActual > 0);
+
+  const modoAuto = document.querySelector('input[name="modo-gauss"]:checked')?.value === 'auto';
+  const btnCerrar = document.getElementById('btn-cerrar-gauss');
+    const estadoDiv = document.getElementById('estado-reversion');
+
+  // ─── CIERRE: si hay posición abierta y hay agotamiento ───
+  if (posicionActual && posicionActual.simbolo === simbolo) {
+    const esLong = posicionActual.side === 'BUY';
+    const debeCerrar = (esLong && agotamientoAlcista) || (!esLong && agotamientoBajista);
+
+    if (debeCerrar) {
+      if (modoAuto) {
+        console.log(`✅ [GAUSS] Cierre automático por agotamiento`);
+        ordenEnCurso = true;
+        cerrarPosicion(simbolo, 'BOTH', 'Gauss - Agotamiento')
+          .finally(() => {
+            ordenEnCurso = false;
+            posicionActual = null;
+            if (btnCerrar) btnCerrar.style.display = 'none';
+          });
+        if (estadoDiv) estadoDiv.textContent = '✅ Cierre Gauss automático';
+      } else {
+        if (btnCerrar) {
+          btnCerrar.style.display = 'inline-block';
+          btnCerrar.onclick = () => {
+            console.log(`✅ [GAUSS] Cierre manual`);
+            ordenEnCurso = true;
+            cerrarPosicion(simbolo, 'BOTH', 'Gauss - Cierre manual')
+              .finally(() => {
+                ordenEnCurso = false;
+                posicionActual = null;
+                btnCerrar.style.display = 'none';
+              });
+          };
+        }
+        if (estadoDiv) estadoDiv.textContent = '🔔 Cierre Gauss recomendado';
+      }
+      return;
+    }
+  }
+
+  // ─── APERTURA: si no hay posición y hay arranque ───
+  console.log("🔍 [GAUSS] ¿Hay posición guardada?", posicionActual);
+  console.log("🔍 [GAUSS] Arranque bajista:", arranqueBajista);
+   console.log("🔍 [GAUSS] Arranque alcista:", arranqueAlcista);
+
+  // ─── APERTURA: si no hay posición y hay arranque ───
+  if (!posicionActual) {
+    let nuevaOrden = null;
+    if (arranqueAlcista) {
+      nuevaOrden = 'BUY';
+      console.log('🟢 [GAUSS] Arranque alcista detectado');
+    } else if (arranqueBajista) {
+      nuevaOrden = 'SELL';
+      console.log('🔴 [GAUSS] Arranque bajista detectado');
+    }
+
+    if (nuevaOrden) {
+      posicionActual = {
+        side: nuevaOrden,
+        simbolo: simbolo,
+        entrada: precioActual,
+        timestamp: Date.now()
+      };
+      window.sideActual = nuevaOrden === 'BUY' ? 'LONG' : 'SHORT';
+
+      // Abrir posición
+      if (modoAuto) {
+        ordenEnCurso = true;
+        abrirPosicionReal(nuevaOrden)
+          .finally(() => {
+            ordenEnCurso = false;
+          });
+        if (estadoDiv) estadoDiv.textContent = `✅ Gauss ${nuevaOrden} abierto`;
+      } else {
+        if (btnCerrar) {
+          btnCerrar.style.display = 'none'; // ocultar cierre (no hay posición)
+        }
+        const btnAbrir = document.getElementById('btn-abrir-gauss');
+        if (btnAbrir) {
+          btnAbrir.style.display = 'inline-block';
+          btnAbrir.onclick = () => {
+            ordenEnCurso = true;
+            abrirPosicionReal(nuevaOrden)
+              .finally(() => {
+                ordenEnCurso = false;
+                btnAbrir.style.display = 'none';
+              });
+          };
+        }
+        if (estadoDiv) estadoDiv.textContent = `🔔 Gauss ${nuevaOrden} detectado. Modo manual.`;
+      }
+    }
+  }
+}
+
+
+// ─── SISTEMA 1: MODO MERCADO ───
+function evaluarModoMercado(
+  simbolo,
+  prediccionRaw,
+  confianza,
+  adxActual,
+  rsiActual,
+  historialVelas,
+  ordenEnCurso,
+  posicionActual,
+  alcista,
+  bajista
+) {
+ // 🔍 [DIAG. APERTURA Entrada a APP modo-mercado-Despues]
+
+  // Ejemplo: al activar Modo Mercado, desactivar Gauss y Reversión
+  document.getElementById('modo-mercado-activo')?.addEventListener('change', (e) => {
+    if (e.target.checked) {
+      document.getElementById('modo-reversion-activo').checked = false;
+      document.getElementById('modo-gauss-activo').checked = false;
+    }
+  });
+
+
+// 🔍 DEBUG: imprimir valores reales
+console.log("🔍 [DEBUG] Valores reales antes del if:", {
+  prediccionRaw: prediccionRaw,
+  confianza: confianza,
+  adxActual: adxActual,
+  historialVelasLength: historialVelas.length,
+  ordenEnCurso: ordenEnCurso,
+  tipoOrdenEnCurso: typeof ordenEnCurso
+});
+
+if (prediccionRaw != null && 
+    confianza >= 0.60 && 
+    adxActual >= 20 && 
+    historialVelas.length >= 55 && 
+    !ordenEnCurso) {
+
+  // 🔍 DEBUG: imprimir valores reales
+  console.log("🔍 [DEBUG] Valores reales despues del if :", {
+    prediccionRaw: prediccionRaw,
+    confianza: confianza,
+    adxActual: adxActual,
+    historialVelasLength: historialVelas.length,
+    ordenEnCurso: ordenEnCurso,
+    tipoOrdenEnCurso: typeof ordenEnCurso
+  });
+
+
+    const side = prediccionRaw > 0.5 ? 'BUY' : 'SELL';
+    let operar = false;
+    const modo = document.getElementById('modo-mercado')?.value || 'volatil';
+   // window.sideActual = side === 'BUY' ? 'LONG' : 'SHORT';
+    //console.log(`[DEBUG] sideActual actualizado a: ${window.sideActual} para ${window.simboloActual}`);
+
+    // 🔍 [DIAGNÓSTICO 2] Modo y side
+    console.log(`🔍 [DIAG. APERTURA] Side: ${side}, Modo UI: "${modo}"`);
+
+    // Zonas seguras de RSI (evitar extremos)
+    const rsiSeguroAlcista = rsiActual >= 50 && rsiActual < 75;
+    const rsiSeguroBajista = rsiActual < 50 && rsiActual > 25;
+    // 🔍 LOG 2: ¿El RSI está en zona segura?
+    console.log(`🔍 [RSI SEGURO] RSI: ${rsiActual.toFixed(2)} → Alcista: ${rsiSeguroAlcista}, Bajista: ${rsiSeguroBajista}`);
+
+    // Evaluar según el modo
+    if (modo === 'alcista') {
+      if (side === 'BUY' && alcista && rsiSeguroAlcista) {
+        operar = true;
+      }
+    } else if (modo === 'bajista') {
+      if (side === 'SELL' && bajista && rsiSeguroBajista) {
+        operar = true;
+      }
+    } else if (modo === 'volatil') {
+      if (side === 'BUY' && alcista && rsiSeguroAlcista) {
+        operar = true;
+      } else if (side === 'SELL' && bajista && rsiSeguroBajista) {
+        operar = true;
+      }
+    }
+    
+    // 🔍 [DIAGNÓSTICO 3] ¿Se cumplen condiciones de modo?
+    console.log(`🔍 [DIAG. APERTURA] Modo="${modo}", alcista=${alcista}, bajista=${bajista}, operar=${operar}`);
+
+    // [Corrección] Verificar !posicionActual aquí también
+    if (operar && !posicionActual) {
+      console.log(`[DEBUG] Posicion actual aqui  operar&&!posicionActual:`, posicionActual);
+      // 💡 EN VEZ DE ABRIR AHORA, GUARDAMOS PARA EVALUAR EN VELA N+3
+      window.prediccionPendiente = {
+        velaObjetivo: historialVelas.length + 3,
+        precioRef: historialVelas[historialVelas.length - 1].close,
+        side: side,
+        timestamp: Date.now()
+      };
+      console.log(`📌 Predicción guardada. Se evaluará en vela #${window.prediccionPendiente.velaObjetivo}`);
+      console.log(`✅ Señal válida guardada para vela N+3: ${side}`);
+    } else if (operar && posicionActual) {
+      // [Corrección] Log para depuración si se intenta abrir con posición existente
+      console.log(`⚠️ Señal válida, pero hay posición abierta:`, posicionActual);
+      console.log(`[DEBUG] Condición de apertura cumplida, PERO posicionActual EXISTE:`, posicionActual);
+      document.getElementById('estado').textContent = `⚠️ Señal de apertura, pero posición abierta para ${simbolo}`;
+    } else {
+      // 🔍 [DIAGNÓSTICO 4] ¿Cuál condición falló?
+      if (prediccionRaw == null) console.log(`❌ Falló: prediccionRaw es null`);
+      if (confianza < 0.63) console.log(`❌ Falló: confianza baja (${(confianza * 100).toFixed(1)}%)`);
+      if (historialVelas.length < 55) console.log(`❌ Falló: velas insuficientes (${historialVelas.length}/55)`);
+      if (ordenEnCurso) console.log(`❌ Falló: ordenEnCurso = true`);
+    }
+  }
+}
+
+
+// ─── VERIFICAR PREDICCIÓN PENDIENTE (N+3) ───
+function verificarPrediccionPendiente(historialVelas, ordenEnCurso, posicionActual) {
+  const indiceVelaActual = historialVelas.length;
+  if (window.prediccionPendiente &&
+      indiceVelaActual === window.prediccionPendiente.velaObjetivo &&
+      !ordenEnCurso &&
+      !posicionActual) {
+
+    const { precioRef, side } = window.prediccionPendiente;
+    const precioActual = historialVelas[indiceVelaActual - 1].close;
+
+    const movimientoCorrecto = (side === 'BUY' && precioActual > precioRef) ||
+                              (side === 'SELL' && precioActual < precioRef);
+
+    if (movimientoCorrecto) {
+      console.log(`✅ Movimiento confirmado en vela #${indiceVelaActual}. Abriendo ${side}.`);
+      ordenEnCurso = true;
+      abrirPosicionReal(side)
+        .finally(() => { ordenEnCurso = false; });
+    } else {
+      console.log(`❌ Movimiento NO confirmado en vela #${indiceVelaActual}. Predicción descartada.`);
+    }
+
+    delete window.prediccionPendiente;
+  }
+}
+
+
+// ─── SEMÁFORO DE OPERACIÓN + CONTROL AUTOMÁTICO ───
+function actualizarSemaforoOperacion(adx, atr) {
+  const semaforoEl = document.getElementById('semaforo-operacion');
+  const modoAutoInput = document.querySelector('input[name="modo-reversion"][value="auto"]');
+  const modoReversionActivo = document.getElementById('modo-reversion-activo');
+  const estadoDiv = document.getElementById('estado-reversion');
+  
+  if (!semaforoEl || !modoAutoInput) return;
+
+  // 1. Hora local en UTC-4
+  const horaLocal = (new Date().getUTCHours() - 4 + 24) % 24;
+
+  // 2. Condiciones técnicas
+  const adxFuerte = adx > 20;
+  // const atrFuerte = atr > 70;
+  const atrFuerte = atr >= 0.007;
+  const enVentanaVerde = horaLocal >= 7 && horaLocal < 13;
+
+  // 3. Evaluar estado
+  let estado = '🔴 ROJO';
+  let color = '#ef5350';
+  let debeDesactivarAuto = false;
+
+  if (enVentanaVerde && adxFuerte && atrFuerte) {
+    estado = '🟢 VERDE';
+    color = '#66bb6a';
+    debeDesactivarAuto = false;
+    //else if ((horaLocal >= 4 && horaLocal < 16) && (adx > 20 || atr > 50)) {
+  } else if ((horaLocal >= 4 && horaLocal < 16) && (adx > 20 || atr >= 0.007)) {
+    estado = '🟡 AMARILLA';
+    color = '#ffca28';
+    debeDesactivarAuto = false; // permitir manual en amarillo
+  }
+
+  // 4. Actualizar UI del semáforo
+  semaforoEl.textContent = estado;
+  semaforoEl.style.color = color;
+  semaforoEl.title = `Hora: ${horaLocal}:00 | ADX: ${adx.toFixed(1)} | ATR: ${atr.toFixed(1)}`;
+
+  // 5. ✅ DESACTIVAR MODO AUTOMÁTICO EN ROJO
+  if (debeDesactivarAuto) {
+    const estabaEnAuto = modoAutoInput.checked;
+    if (estabaEnAuto) {
+      modoAutoInput.checked = false;
+      console.log("⚠️ Modo automático desactivado: condiciones de mercado no óptimas (ROJO).");
+      if (estadoDiv) estadoDiv.textContent = "🔒 Automático desactivado (semáforo ROJO)";
+    }
+    
+    // Opcional: desactivar también el toggle principal
+    if (modoReversionActivo && modoReversionActivo.checked) {
+      // No desactivamos el toggle general, solo el modo automático
+      // Así puedes seguir operando en manual si quieres
+    }
+  }
+}
+
 
 function actualizarSemaforo({ adx = 0,emaActual=0,rsiActual=50,atrActual=0.001, precioActual=0, confianza = 0, preciosLen = 0, modo = 'volatil', alcista = false, bajista = false, tradingActivo = true }) {
   const luzADX = document.getElementById('cond-adx');
@@ -2149,10 +3360,17 @@ function actualizarSemaforo({ adx = 0,emaActual=0,rsiActual=50,atrActual=0.001, 
   const luzDatos = document.getElementById('cond-datos');
   const msgEl = document.getElementById('semaforo-msg');
 
-  // ✅ Evaluar condiciones
-  const adxOk = adx > 25;
+//Segun estudio   ATR bueno = 0.1428 //// ATR min = 0.0800  /// actual de trabajo 0.12 , equivalente 40 en BTC
+// segun estudio ADX bueno =40 /// ADX min = 35 ////pruebas   adx=30,, atr=0.06
+
+
+
+  // ✅ Evaluar condicione0
+  const adxOk = adx >= 25;
   const datosOk = preciosLen >= 55;
-  const predOk = confianza >= 0.70;
+  const predOk = confianza >= 0.60;
+  const atrok = atrActual >= 0.06;
+
   let modoOk = false;
   if (modo === 'alcista') modoOk = alcista;
   else if (modo === 'bajista') modoOk = bajista;
@@ -2173,7 +3391,7 @@ function actualizarSemaforo({ adx = 0,emaActual=0,rsiActual=50,atrActual=0.001, 
   }
   
   else {
-    const listo = adxOk && datosOk && predOk && modoOk;
+    const listo = adxOk && datosOk && predOk && modoOk && atrok;
     if (msgEl) {
       msgEl.textContent = listo ? '✅ Listo para operar' : '❌ Condiciones no cumplidas';
       msgEl.style.color = listo ? '#26a69a' : '#ef5350';
@@ -2202,7 +3420,7 @@ const rsiEl = document.getElementById('rsi-valor');
 if (rsiEl) rsiEl.textContent = rsiActual.toFixed(1);
 
 const atrEl = document.getElementById('atr-valor');
-if (atrEl) atrEl.textContent = atrActual.toFixed(1);
+if (atrEl) atrEl.textContent = atrActual.toFixed(4);
 
 const precioEl = document.getElementById('precio-actual');
 if (precioEl) precioEl.textContent = precioActual.toFixed(1)
@@ -2237,13 +3455,6 @@ async function iniciarStreaming() {
   console.log('🚀 INICIANDO STREAMING...');
 
 
-
-  //if (!AUTENTICADO) {
-   // alert('🔒 Acceso denegado. Entrena el modelo primero.');
-   // streamingActivo = false;
-   // return;
- // }
-
   streamingActivo = true; // ✅ Marcar como activo
    
   console.log('🚀 INICIANDO STREAMING...');
@@ -2252,11 +3463,6 @@ async function iniciarStreaming() {
     alert('⚠️ Primero entrena el modelo antes de iniciar el streaming.');
     return;
   }
-
-  //if (!AUTENTICADO) {
-   // alert('🔒 Acceso denegado. Entrena el modelo primero.');
-   // return;
- // }
 
   console.log('✅ Modelos y autenticación verificados. Iniciando WebSocket...');
 
@@ -2268,15 +3474,14 @@ async function iniciarStreaming() {
     estadoEl.style.fontWeight = 'bold';
   }
 
-  const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@kline_1h');
+  const ws = new WebSocket('wss://stream.binance.com:9443/ws/solusdt@kline_5m');
 
   ws.onopen = () => {
    
     console.log('🟢 ¡CONEXIÓN EXITOSA! WebSocket abierto.');
-  //  window.modoSupervivencia = false; // Detener modo supervivencia
 
     if (estadoEl) {
-      estadoEl.textContent = '📡 Conectado. Esperando vela cerrada (1h)...';
+      estadoEl.textContent = '📡 Conectado. Esperando vela cerrada (5m)...';
       estadoEl.style.color = '#2196F3';
     }
   };
@@ -2333,7 +3538,7 @@ ws.onclose = async () => {
 };
 
 /// === WEBSOCKET: MANEJO DE DATOS EN TIEMPO REAL (CORREGIDO - V2 - Mayor Dropout) ===
-// Asegúrate de que 'historialVelas', 'modelo', 'autoTrading', 'ordenEnCurso', 'simboloActual', etc. estén definidas globalmente.
+// Asegúrate de que 'historialVelas', 'modelo', 'autoTrading', 'ordenEnCurso', 'window.simboloActual', etc. estén definidas globalmente.
 // Asegúrate de que 'crearModelo', 'predecir', 'actualizarSemaforo', 'cerrarPosicion', 'abrirPosicionReal', 'actualizarGrafico', 'inicializarGrafico' estén disponibles globalmente.
 // Asegúrate de que 'calcularRSI', 'calcularEMA', 'calcularMACD', 'calcularBandasBollinger', 'calcularATR', 'calcularADX', 'calcularOBV' estén disponibles globalmente.
 
@@ -2342,7 +3547,7 @@ ws.onmessage = async (event) => {
     // console.log("🔹 [DEBUG] ws.onmessage iniciado");
     const data = JSON.parse(event.data);
     const kline = data.k;
-
+  
     // ✅ Actualizar UI del estado con la vela recibida
     const estadoEl = document.getElementById('estado');
     if (estadoEl) {
@@ -2358,7 +3563,7 @@ ws.onmessage = async (event) => {
 
     // ❌ Ignorar si la vela NO está cerrada (solo procesar cuando x=true)
     if (!kline.x) {
-      console.log(`⏳ Vela en curso: ${new Date(kline.t).toLocaleTimeString()}`);
+    //  console.log(`⏳ Vela en curso: ${new Date(kline.t).toLocaleTimeString()}`);
       return;
     }
 
@@ -2395,6 +3600,9 @@ ws.onmessage = async (event) => {
     // ✅ Incrementar contador de velas cerradas
     velasCerradas++; // <-- [CORRECCIÓN] Incrementar aquí, después de agregar correctamente
     console.log(`📊 Velas cerradas acumuladas: ${velasCerradas}/100`);
+    
+    
+    
     //
     // === ACTUALIZAR GRÁFICO ===
 
@@ -2402,6 +3610,8 @@ ws.onmessage = async (event) => {
     // === PROCESAR DATOS PARA PREDICCIÓN Y TRADING (cuando hay 100 velas cerradas) ===
     if (velasCerradas >= 55) { // <-- Asegura que haya al menos 100 velas cerradas para procesar
       console.log('✅ 100 velas recibidas. Procesando datos para IA...');
+
+
 
       // [DIAGNÓSTICO] Verificar longitud de historialVelas
       console.log(`[DIAGNÓSTICO WS] historialVelas.length: ${historialVelas.length}`);
@@ -2415,7 +3625,7 @@ ws.onmessage = async (event) => {
       }
        // cambio diego
       // ✅ Obtener últimos 100 precios y volúmenes (de historialVelas con estructura {time, open, high, low, close, volume})
-      const ultimas100 = historialVelas.slice(-55);
+      const ultimas100 = historialVelas.slice(-100);
       // [DIAGNÓSTICO] Verificar que slice funciona y hay 100 elementos
       console.log(`[DIAGNÓSTICO WS] ultimas100.length: ${ultimas100.length}`);
       console.log(`[DIAGNÓSTICO WS] Primera vela de ultimas100 (close, volume):`, { close: ultimas100[0].close, volume: ultimas100[0].volume });
@@ -2433,6 +3643,10 @@ ws.onmessage = async (event) => {
       // [DIAGNÓSTICO] Verificar que ultimoPrecio sea un número válido
       const ultimoPrecio = closes[closes.length - 1];
       console.log(`[DIAGNÓSTICO WS] ultimoPrecio calculado: ${ultimoPrecio} (typeof: ${typeof ultimoPrecio}, isNaN: ${isNaN(ultimoPrecio)})`);
+       
+       const simbolo = document.getElementById('selector-simbolo').value;
+      const k5m = await obtenerDatos(simbolo, '5m', 50);
+     
 
       // ✅ Calcular indicadores técnicos (últimos valores de los arrays)
       // [DIAGNÓSTICO] Calcular todos los indicadores y verificar sus longitudes y valores
@@ -2442,8 +3656,11 @@ ws.onmessage = async (event) => {
       const ema50 = calcularEMA(closes, 50);
       const { macdLine: macdValues, signalLine: signalValues } = calcularMACD(closes, 12, 26, 9);
       const { superior: bbSuperior, inferior: bbInferior } = calcularBandasBollinger(closes, 20, 2);
-      const atrValues = calcularATR(ultimas100, 14); // Usar las últimas 100 velas del historial (con estructura correcta)
-      const adxValues = calcularADX(ultimas100, 14); // Usar las últimas 100 velas del historial (con estructura correcta)
+      const atrValues = k5m.length >= 20 ? calcularATR(k5m, 14):[];
+
+      const adxValues = k5m.length >= 20 ? calcularADX(k5m, 14):[];
+
+     // const adxValues = calcularADX(ultimas100, 14); // Usar las últimas 100 velas del historial (con estructura correcta)
       const obvValues = calcularOBV(ultimas100); // Usar las últimas 100 velas del historial (con estructura correcta)
       console.log("[DIAGNÓSTICO WS] Cálculo de indicadores finalizado.");
 
@@ -2463,50 +3680,27 @@ ws.onmessage = async (event) => {
       if (!Array.isArray(adxValues) || adxValues.length === 0) { console.error("[DIAGNÓSTICO WS] ADX no es un array o está vacío:", adxValues); return; }
       if (!Array.isArray(obvValues) || obvValues.length === 0) { console.error("[DIAGNÓSTICO WS] OBV no es un array o está vacío:", obvValues); return; }
 
-      // Calcular desfases correctos basados en la lógica de las funciones de cálculo
-      // RSI: rsi[0] <-> closes[13] -> desfase 13 (índice 0 de rsi es para closes[13])
-      // EMA20: ema[0] <-> closes[19] -> desfase 19 (índice 0 de ema es para closes[19])
-      // EMA50: ema[0] <-> closes[49] -> desfase 49 (índice 0 de ema es para closes[49])
-      // MACD: macdLine[0] <-> closes[33] -> desfase 33 (índice 0 de macdLine es para closes[33])
-      // BB: superior[0] <-> closes[19] -> desfase 19 (índice 0 de bbSuperior es para closes[19])
-      // ATR: atr[0] <-> klines[13] -> desfase 13 (índice 0 de atr es para klines[13])
-      // ADX: adx[0] <-> klines[27] -> desfase 27 (índice 0 de adx es para klines[27])
-      // OBV: obv[0] <-> klines[0] -> desfase 0 (índice 0 de obv es para klines[0])
 
-      const desfaseRsi = 13;
-      const desfaseEma = 19; // Usamos EMA20 para la comparación alcista/bajista
-      const desfaseMacd = 33;
-      const desfaseBb = 19;
-      const desfaseAtr = 13;
-      const desfaseAdx = 27; // <-- CORREGIDO: calcularADX empieza en klines[27]
-      const desfaseObv = 0;
-       //cambio diego
-      // El índice i debe ser >= max(desfaseRsi, desfaseEma, desfaseMacd, desfaseBb, desfaseAtr, desfaseAdx, desfaseObv, 10_para_ventana_precios)
-      // Usamos el índice más alto de 'ultimas100', que es 99 (porque son 100 velas, de 0 a 99)
-      const i = 54; // Índice de la última vela en 'ultimas100'
-
-      // [DIAGNÓSTICO] Verificar índices antes de acceder a arrays
-      console.log(`[DIAGNÓSTICO WS] Accediendo arrays en i=99 con desfases: RSI[${i-desfaseRsi}], EMA[${i-desfaseEma}], MACD[${i-desfaseMacd}], BB[${i-desfaseBb}], ATR[${i-desfaseAtr}], ADX[${i-desfaseAdx}], OBV[${i-desfaseObv}]`);
-      if ((i - desfaseRsi) < 0 || (i - desfaseRsi) >= rsi.length) { console.error(`[DIAGNÓSTICO WS] Índice RSI ${i - desfaseRsi} fuera de rango (${rsi.length}) para i=${i}`); return; }
-      if ((i - desfaseEma) < 0 || (i - desfaseEma) >= ema20.length) { console.error(`[DIAGNÓSTICO WS] Índice EMA ${i - desfaseEma} fuera de rango (${ema20.length}) para i=${i}`); return; }
-      if ((i - desfaseMacd) < 0 || (i - desfaseMacd) >= macdValues.length) { console.error(`[DIAGNÓSTICO WS] Índice MACD ${i - desfaseMacd} fuera de rango (${macdValues.length}) para i=${i}`); return; }
-      if ((i - desfaseBb) < 0 || (i - desfaseBb) >= bbSuperior.length) { console.error(`[DIAGNÓSTICO WS] Índice BB ${i - desfaseBb} fuera de rango (${bbSuperior.length}) para i=${i}`); return; }
-      if ((i - desfaseAtr) < 0 || (i - desfaseAtr) >= atrValues.length) { console.error(`[DIAGNÓSTICO WS] Índice ATR ${i - desfaseAtr} fuera de rango (${atrValues.length}) para i=${i}`); return; }
-      if ((i - desfaseAdx) < 0 || (i - desfaseAdx) >= adxValues.length) { console.error(`[DIAGNÓSTICO WS] Índice ADX ${i - desfaseAdx} fuera de rango (${adxValues.length}) para i=${i}`); return; }
-      if ((i - desfaseObv) < 0 || (i - desfaseObv) >= obvValues.length) { console.error(`[DIAGNÓSTICO WS] Índice OBV ${i - desfaseObv} fuera de rango (${obvValues.length}) para i=${i}`); return; }
 
       // [CORRECCIÓN] Asignar valores con fallback solo si son NaN o undefined
       // Usamos los índices calculados con los desfases correctos
-      const rsiActual = (rsi[i - desfaseRsi] != null && !isNaN(rsi[i - desfaseRsi])) ? rsi[i - desfaseRsi] : 50;
-      const e20 = (ema20[i - desfaseEma] != null && !isNaN(ema20[i - desfaseEma])) ? ema20[i - desfaseEma] : ultimoPrecio;
-      const e50 = (ema50[i - desfaseEma] != null && !isNaN(ema50[i - desfaseEma])) ? ema50[i - desfaseEma] : ultimoPrecio; // Usamos el mismo desfase para EMA
-      const macdActual = (macdValues[i - desfaseMacd] != null && !isNaN(macdValues[i - desfaseMacd])) ? macdValues[i - desfaseMacd] : 0;
-      const signalActual = (signalValues[i - desfaseMacd] != null && !isNaN(signalValues[i - desfaseMacd])) ? signalValues[i - desfaseMacd] : 0;
-      const bbSup = (bbSuperior[i - desfaseBb] != null && !isNaN(bbSuperior[i - desfaseBb])) ? bbSuperior[i - desfaseBb] : ultimoPrecio; // Usamos el desfase de EMA porque BB también empieza en 19
-      const bbInf = (bbInferior[i - desfaseBb] != null && !isNaN(bbInferior[i - desfaseBb])) ? bbInferior[i - desfaseBb] : ultimoPrecio; // Usamos el desfase de EMA porque BB también empieza en 19
-      const atrGlobal = (atrValues[i - desfaseAtr] != null && !isNaN(atrValues[i - desfaseAtr])) ? atrValues[i - desfaseAtr] : 0;
-      const adxActual = (adxValues[i - desfaseAdx] != null && !isNaN(adxValues[i - desfaseAdx])) ? adxValues[i - desfaseAdx] : 0;
-      const obvActual = (obvValues[i - desfaseObv] != null && !isNaN(obvValues[i - desfaseObv])) ? obvValues[i - desfaseObv] : 0;
+      // ✅ Usa siempre el último valor válido de cada indicadorf
+      const rsiActual = rsi.length > 0 ? (rsi[rsi.length - 1] || 50) : 50;
+      const e20 = ema20.length > 0 ? (ema20[ema20.length - 1] || ultimoPrecio) : ultimoPrecio;
+      const e50 = ema50.length > 0 ? (ema50[ema50.length - 1] || ultimoPrecio) : ultimoPrecio;
+      const macdActual = macdValues.length > 0 ? (macdValues[macdValues.length - 1] || 0) : 0;
+      const signalActual = signalValues.length > 0 ? (signalValues[signalValues.length - 1] || 0) : 0;
+      const bbSup = bbSuperior.length > 0 ? (bbSuperior[bbSuperior.length - 1] || ultimoPrecio) : ultimoPrecio;
+      const bbInf = bbInferior.length > 0 ? (bbInferior[bbInferior.length - 1] || ultimoPrecio) : ultimoPrecio;
+      const atrGlobal1= atrValues.length > 0 ? atrValues[atrValues.length - 1] : 0;
+      const atrGlobal= parseFloat(atrGlobal1.toFixed(4));
+    
+      
+     // const atrGlobal = atrValues.length > 0 ? (atrValues[atrValues.length - 1] || 0) : 0;
+      const adxActual = adxValues.length > 0 ? adxValues[adxValues.length - 1] : 0;
+
+
+      const obvActual = obvValues.length > 0 ? (obvValues[obvValues.length - 1] || 0) : 0;
 
       const alcista = e20 > e50;
       const bajista = e20 < e50;
@@ -2524,6 +3718,44 @@ ws.onmessage = async (event) => {
       const ultimosPrecios = closes.slice(-10);
       const ultimosVolumenes = volumes.slice(-10);
       const cambios = ultimosPrecios.map((p, idx) => idx === 0 ? 0 : (p - ultimosPrecios[idx - 1]) / ultimosPrecios[idx - 1]);
+
+          
+
+
+      //const macdRedondeado = macdValues.map(v => parseFloat(v.toFixed(4)));
+      //const signalRedondeado = signalValues .map(v => parseFloat(v.toFixed(4)));
+      // Calcular indicadores
+      // ✅ CORRECTO: usar las variables que sí existen
+      window.indicadores = {
+        macdLine: macdValues,
+        signalLine: signalValues,
+        rsi: rsiActual,
+        adx: adxActual,
+        atr: atrGlobal,
+        ema20: e20,
+        ema50: e50
+      };
+
+          // ✅ Actualizar el monitor visual
+       actualizarMonitorMACD();
+
+
+       // Ejemplo:
+    //const adxActual = indicadores.adx;
+     //const atrActual = indicadores.atr; // asegúrate de tener ATR en tus indicadores
+
+     actualizarSemaforoOperacion(adxActual, atrActual);
+
+      // Asumiendo que window.indicadores existe y tiene macdLine/signalLine
+
+      //if (window.indicadores?.macdLine && window.indicadores?.signalLine) {
+        //console.log("📊 Dibujando MACD con", window.indicadores.macdLine.length, "valores");
+       // dibujarMACDBinance(window.indicadores.macdLine, window.indicadores.signalLine);
+     // }
+       
+
+        // 👇 ESTE ES EL MOMENTO DE ACTUALIZAR TP/SL EN UI
+      // actualizarTPSLenUI(); // ← tu bloque debe estar aquí
 
       // [DIAGNÓSTICO] Construir array de features como lo hace prepararDatosParaIA
       const featuresParaPrediccion = [
@@ -2581,6 +3813,9 @@ ws.onmessage = async (event) => {
           prediccionRaw = 0.5; // Fallback seguro
       }
 
+
+
+
       // [DIAGNÓSTICO] Calcular confianza y dirección ANTES de actualizar UI
       let confianza = 0;
       let dir = '—';
@@ -2591,41 +3826,51 @@ ws.onmessage = async (event) => {
           // ... (resto del código para actualizar UI de predicción y semáforo) ...
            } else {
           console.warn('[DIAGNÓSTICO WS] prediccionRaw es null, undefined o NaN. No se actualizará la UI de predicción.');
-          // Opcional: Actualizar UI con mensaje de error o '—'
-          // document.getElementById('prediccion-direccion').textContent = '—';
-          // document.getElementById('prediccion-porcentaje').textContent = '—';
-          // const progEl = document.getElementById('prediccion-progreso');
-          // if (progEl) progEl.style.width = '0%';
           }
+
+
+
+
+      // Después de obtener la predicción de la IA
+       // const prediccionRaw = await predecir(...);
+
+      // Registrar evento (si está activo el modo)
+      
+      registrarEventoIA(
+        simbolo,
+        prediccionRaw,
+        window.indicadores, // o tu objeto de indicadores
+        precioActual // o historialVelas[historialVelas.length - 1].close
+      );
 
       // ✅ Actualizar UI de predicción (solo si prediccionRaw es válida)
-       // Agregado po diego
+      // Agregado po diego
 
-       // ✅ Filtro: solo mostrar si hay cierta confianza
-         // if (confianza < 0.55) { // ← Umbral profesional
-          //  document.getElementById('prediccion-porcentaje').textContent = '—';
-          //const prog = document.getElementById('prediccion-progreso');
-         //if (prog) {
-         //    prog.style.width = '0%';
-         //   prog.style.backgroundColor = '#666'; // gris
-         //    }
-         //       return; // No seguir si no hay suficiente confianza
-        // }
+      // ✅ Filtro: solo mostrar si hay cierta confianza
+      // if (confianza < 0.55) { // ← Umbral profesional
+      //  document.getElementById('prediccion-porcentaje').textContent = '—';
+      //const prog = document.getElementById('prediccion-progreso');
+      //if (prog) {
+      //    prog.style.width = '0%';
+      //   prog.style.backgroundColor = '#666'; // gris
+      //    }
+      //       return; // No seguir si no hay suficiente confianza
+      // }
       if (prediccionRaw != null && !isNaN(prediccionRaw)) {
-          const dirEl = document.getElementById('prediccion-direccion'); 
-          const porcEl = document.getElementById('prediccion-porcentaje');
-          const progEl = document.getElementById('prediccion-progreso');
-          if (dirEl) dirEl.innerHTML = `${dir === 'SUBIDA' ? '🟢' : '🔴'} ${dir}`;
-          if (porcEl) porcEl.textContent = `${Math.round(confianza * 100)}%`;
-          if (progEl) {
-            progEl.style.width = `${Math.round(confianza * 100)}%`;
-            progEl.style.backgroundColor = confianza > 0.65 ? (dir === 'SUBIDA' ? '#26a69a' : '#ef5350') : '#666';
-          }
+        const dirEl = document.getElementById('prediccion-direccion');
+        const porcEl = document.getElementById('prediccion-porcentaje');
+        const progEl = document.getElementById('prediccion-progreso');
+        if (dirEl) dirEl.innerHTML = `${dir === 'SUBIDA' ? '🟢' : '🔴'} ${dir}`;
+        if (porcEl) porcEl.textContent = `${Math.round(confianza * 100)}%`;
+        if (progEl) {
+          progEl.style.width = `${Math.round(confianza * 100)}%`;
+          progEl.style.backgroundColor = confianza >= 0.60 ? (dir === 'SUBIDA' ? '#26a69a' : '#ef5350') : '#666';
+        }
       }
 
         const direccion = prediccionRaw > 0.5 ? 'SUBIDA' : 'BAJADA';
         const VELAS_FUTURAS = 3; // ajusta según tu modelo
-        const confianzaMinima = 0.70; // 65%
+        const confianzaMinima = 0.60; // 65%
         if (confianza >= confianzaMinima || confianza <= (1 - confianzaMinima)) {
          console.log(`🧠 Predicción fuerte: ${direccion} (${(confianza * 100).toFixed(1)}%)`);
 
@@ -2672,6 +3917,8 @@ ws.onmessage = async (event) => {
           // Continúa hasta el final del try.
       } 
       
+
+
         else {
 
           if (typeof window.ultimoCheckPosiciones === 'undefined') {
@@ -2682,6 +3929,12 @@ ws.onmessage = async (event) => {
           const tiempoMinimoEntreChecks = 10000; // 10 segundos en milisegundos (ajusta según sea necesario)
 
           let posiciones = null;
+
+
+
+
+
+
 
 
           if (ahoraMs - window.ultimoCheckPosiciones >= tiempoMinimoEntreChecks) {
@@ -2722,9 +3975,11 @@ ws.onmessage = async (event) => {
 
             return;
           }
-
-          // [CORRECCIÓN] Asignar la posición específica para el símbolo actual
-          const posicionActual = posiciones.find(p => p.symbol === simboloActual && Math.abs(parseFloat(p.positionAmt || 0)) > 0.0001);
+          // [CORRECCIÓN] Asegurar que posicionActual sea null si no hay posición
+          const simbolo = document.getElementById('selector-simbolo').value;
+          const posicionActual = posiciones.find(p =>
+            p.symbol === simbolo && Math.abs(parseFloat(p.positionAmt || 0)) > 0.0001
+          ) || null;
 
           // Inicializar estado persistente de posiciones si no existe
           if (typeof window.estadoPosiciones === 'undefined') {
@@ -2741,10 +3996,36 @@ ws.onmessage = async (event) => {
             }
           }
 
+        // Desde aqui comienza el uso de la cuenta de Binance relacionada con los API KEY y API SECRET...
+
+
+        // ───────────────────────────────────────
+        // 🔥 CIERRE REVERSIÓN - 5m
+        // ───────────────────────────────────────
+
+          // Después de tener: posicionActual, window.simboloActual
+         // evaluarCierreReversion(window.simboloActual, posicionActual, window.indicadores);
+
           // ───────────────────────────────────────
           // 🔴 LÓGICA DE CIERRE (si hay posición)
           // ───────────────────────────────────────
 
+          // --- NUEVA PROTECCIÓN: EXCLUIR POSICIONES DE MODO REVERSIÓN ---
+          if (posicionActual) {
+            const esPosicionReversion =
+              posicionActual &&
+              posicionActual.simbolo === posicionActual.symbol;
+
+            if (esPosicionReversion) {
+              // ✅ Delegar cierre a la lógica de reversión
+              evaluarCierreReversion(
+                posicionActual.symbol,
+                posicionActual,
+                window.indicadores
+              );
+             // return; // ← Salir sin ejecutar cierre antiguo
+            }
+          }
 
           // ✅ Solo evaluar cierre si ya se calculó la predicción y hay posición
           if (historialVelas.length >= 30 && prediccionRaw != null && posicionActual) { // <-- Asegurar que posicionActual no sea null aquí también
@@ -2788,22 +4069,25 @@ ws.onmessage = async (event) => {
             } else {
               // Dinámico: basado en ATR (sin leverage para precios)
               try {
-                const k5m = await obtenerDatos(simboloActual, '1h', 50);
+                const simbolo = document.getElementById('selector-simbolo').value;
+                const k5m = await obtenerDatos(simbolo, '5m', 50);
                 if (k5m.length >= 20) {
                   const atrArray = calcularATR(k5m, 14);
-                  const atrVal = atrArray[atrArray.length - 1] || 150; // fallback razonable
-
+                  const atrVal = atrArray .length > 0 ? atrArray [atrArray .length - 1] : 0;// fallback razonable
                   // Ajusta estos multiplicadores según tu estrategia
-                  const tpMult = 2.0;
-                  const slMult = 1.0;
+                  const tpMult = parseFloat(document.getElementById('tp-mult')?.value) || 2.0;
+                  const slMult = parseFloat(document.getElementById('sl-mult')?.value) || 1.0;
 
                   const tpDist = atrVal * tpMult;
                   const slDist = atrVal * slMult;
+                   console.log(`🔍 [DEBUG] ATR usado/cerrar posicion: ${atrVal.toFixed(2)}`);
+               
+
 
                   if (esLong) {
                     tpPrice = entryPrice + tpDist;
                     slPrice = entryPrice - slDist;
-                  } else {
+                  }else {
                     tpPrice = entryPrice - tpDist;
                     slPrice = entryPrice + slDist;
                   }
@@ -2812,10 +4096,11 @@ ws.onmessage = async (event) => {
                   tpPctDisplay = (tpDist / entryPrice) * 100;
                   slPctDisplay = (slDist / entryPrice) * 100;
                 } else {
-                  throw new Error("No hay suficientes velas");
-                }
-              } catch (e) {
-                console.warn('⚠️ Fallback a TP/SL manual por error en ATR:', e.message);
+
+                 throw new Error("No hay suficientes velas");
+                  }
+                } catch (e) {
+                  console.warn('⚠️ Fallback a TP/SL manual por error en ATR:', e.message);
                 // Fallback a valores manuales
                 const tpPct = 1.0, slPct = 0.5;
                 if (esLong) {
@@ -2825,8 +4110,7 @@ ws.onmessage = async (event) => {
                   tpPrice = entryPrice * 0.99;
                   slPrice = entryPrice * 1.005;
                 }
-                tpPctDisplay = tpPct;
-                slPctDisplay = slPct;
+            
               }
             }
 
@@ -2836,63 +4120,76 @@ ws.onmessage = async (event) => {
 
             const roePct = ((markPrice - entryPrice) / entryPrice) * leverage * (esLong ? 1 : -1) * 100;
 
+            
+
                let tpPctEquity = tpPctDisplay  ;
                let slPctEquity = slPctDisplay ;
 
-               // actualizarLineasPrecios(entryPrice, tpPctPrecio, slPctPrecio, leverage); propuesta de nuevos calculos
-                //  actualizarLineasPrecios(entryPrice, tpPctEquity, slPctEquity, leverage);  actual
-                // let tpPct, slPct;
-            // 🟢 TP1 (50%): activa en ROE = 50% del TP total/// actualizarLineasPrecios(entryPrice, tpPctEquity, slPctEquity, leverage);
-            const tp1Threshold = tpPctEquity * 0.5;
-            // [Corrección] Verificar estado persistente ANTES de intentar TP1
-            if (roePct >= tp1Threshold && !estadoLocal.tp1Cerrado) {
-              const sizeParcial = Math.abs(size) * 0.5;
-              // [Corrección] Marcar como TP1 ejecutado en estado persistente ANTES de llamar a cerrarParcial
+
+
+
+            // 🔴 DECISIÓN DE CIERRE: SL, TP1, TP2, IA y Trailing (opcional)
+
+            const trailingEnabled = document.getElementById('trailing-enabled')?.checked || false;
+            let cerrar = false;
+            let motivo = 'Manual';
+
+            // 1. 🟢 TP1: Cierre parcial al 50% del ROE objetivo
+            // (Solo si TP1 no se ha ejecutado)
+            if (!estadoLocal.tp1Cerrado && roePct >= tpPctEquity ) {
+              console.log(`✅ TP1 ALCANZADO | ROE: ${roePct.toFixed(2)}%`);
               estadoLocal.tp1Cerrado = true;
-              window.estadoPosiciones[symbolSideKey] = estadoLocal; // [Corrección] Guardar estado persistente
+              window.estadoPosiciones[symbolSideKey] = estadoLocal;
 
-              // ACTIVAR BANDERA ANTES DE CERRAR PARCIAL
               ordenEnCurso = true;
-              cerrarParcial(simboloActual, posicionActual.positionSide, sizeParcial, `TP1 (50%)`)
-                .finally(() => {
-                  // DESACTIVAR BANDERA DESPUÉS DE CERRAR PARCIAL (éxito o error)
-                  ordenEnCurso = false;
-                });
-            }
+              const simbolo = document.getElementById('selector-simbolo').value;
+              cerrarParcial(simbolo, posicionActual.positionSide, Math.abs(size) * 0.5, `TP1 (100%)`)
+                .finally(() => { ordenEnCurso = false; });
+           }
 
-            // 🔵 Trailing SL: tras ROE ≥ 1.0%, mover SL a break-even + 0.3% (en equity) - Aplicar si activado
-            // [Corrección] Usar estado persistente para trailing
-            if (roePct >= 1.0 && estadoLocal.slTrailing) { // <-- Usar estado persistente
-              slPctEquity = 0.3; // 0.3% de margen
-            }
+            // 2. 📉 Trailing Stop (opcional, solo si hay ganancia)
+            //if (trailingEnabled && roePct >= 0.3) {
+             //  console.log(`🚀 [TRAILING ACTIVADO] ROE=${roePct.toFixed(2)}%`);
+              
+             // if (roePct <= 0.1) {
+             //   cerrar = true;
+             //   motivo = `🟢 Trailing: +${roePct.toFixed(2)}%`;
+             // console.log(`✅ [CIERRE POR TRAILING] ROE=${roePct.toFixed(2)}%`);
+            //  }
+          //  }
 
-            // 🔴 Decidir si cerrar: SL, TP2 o IA
-            let cerrar = false, motivo = 'Manual';
-            if (roePct <= -slPctEquity) {
+            // 3. 🔴 Stop Loss (solo si no se cerró por trailing)
+            if (!cerrar && roePct <= -slPctEquity) {
               cerrar = true;
-              motivo = `SL alcanzado (${slPctEquity.toFixed(1)}%)`;
-            } else if (roePct >= tpPctEquity) {
-              cerrar = true;
-              motivo = `TP2 (50%)`;
-            } else {
-              // ✅ Cierre por IA + 50% SL (SOLO SI AMBAS CONDICIONES SE CUMPLEN)
-              // La lógica actual cierra LONG si IA predice BAJADA (< 0.35) y SHORT si IA predice SUBIDA (> 0.65)
-              const debeCerrarPorIA = prediccionRaw != null && // 1. Verificar que prediccionRaw no sea null
-                confianza >= 0.70 && // 2. Confianza mínima (ajustable)
-                roePct < 0 && // 3. La posición actual tiene pérdidas (ROE negativo)
-                Math.abs(roePct) > (slPctEquity * 0.5) && // 4. La pérdida es mayor al 50% del SL original
-                ((esLong && prediccionRaw <= 0.35) || (esShort && prediccionRaw >= 0.65)); // 5. La IA predice cambio de dirección (opuesta a la posición actual)
-
-              if (debeCerrarPorIA) { // <-- Condición clave para cierre por IA
-                cerrar = true; // <-- Activar bandera de cierre
-                motivo = `IA cambio + PnL=${roePct.toFixed(2)}%`; // <-- Asignar motivo
-              }
+              motivo = `🔴 SL: ${roePct.toFixed(2)}%`;
             }
+
+            // 4. 🎯 TP2 (Take Profit total)
+           // else if (!cerrar && roePct >= tpPctEquity) {
+            //  cerrar = true;
+           //   motivo = `🎯 TP2: +${roePct.toFixed(2)}%`;
+           // }
+
+            // 5. 🤖 Cierre por IA (solo si no se cerró por TP/SL/trailing)
+          //  else if (!cerrar) {
+           //   const esShort = !esLong;
+            //  const debeCerrarPorIA = prediccionRaw != null &&
+            //    confianza >= 0.60 &&
+            //    roePct < 0 &&
+            //    Math.abs(roePct) > (slPctEquity * 0.5) &&
+            ///    ((esLong && prediccionRaw <= 0.35) || (esShort && prediccionRaw >= 0.65));
+
+            //  if (debeCerrarPorIA) {
+            //    cerrar = true;
+           //     motivo = `🤖 IA cambio: ${roePct.toFixed(2)}%`;
+           //   }
+           // }
 
             if (cerrar) { // <-- Esta es la condición que decide si se cierra
               // ACTIVAR BANDERA ANTES DE CERRAR TOTAL
               ordenEnCurso = true;
-              cerrarPosicion(simboloActual, posicionActual.positionSide, motivo) // <-- Llamada a la función de cierre total
+              const simbolo = document.getElementById('selector-simbolo').value;
+              cerrarPosicion(simbolo, posicionActual.positionSide, motivo) // <-- Llamada a la función de cierre total
                 .finally(() => {
                   // DESACTIVAR BANDERA DESPUÉS DE CERRAR TOTAL (éxito o error)
                   ordenEnCurso = false;
@@ -2900,46 +4197,82 @@ ws.onmessage = async (event) => {
                   delete window.estadoPosiciones[symbolSideKey];
                 });
             }
-
+            
+             
+            let entrada = entryPrice;
+            let tpPct = tpPctEquity;
+            let slPct = slPctEquity;
+             
             // ✅ Actualizar líneas de PE/TP/SL (solo si hay posición abierta)
-            actualizarLineasPrecios(entryPrice, tpPctEquity, slPctEquity, leverage);
+            actualizarLineasPrecios(entrada, tpPct, slPct, leverage);
+
           } // Fin del if (historialVelas.length >= 30 && prediccionRaw != null && posicionActual)
 
-               //actualizarLineasPrecios(entryPrice, tpPctPrecio, slPctPrecio, leverage);
+           console.log("🔍 [GAUSS] ¿Orden en Curso activa?", ordenEnCurso);
 
-          // ───────────────────────────────────────
+          // Después de tener: prediccionRaw, window.simboloActual, indicadores, historialVelas
+          evaluarAperturaReversion(document.getElementById('selector-simbolo').value, prediccionRaw, window.indicadores, historialVelas);
+
+
+
+          // ❌ Desactivar otros modos si Gauss está activo
+         // if (document.getElementById('modo-gauss-activo')?.checked) {
+            // Opcional: desactivar reversión si Gauss está activo
+          //   document.getElementById('modo-reversion-activo').checked = false;
+         // } else {
+            // Evaluar reversión normalmente
+         //   evaluarAperturaReversion(window.simboloActual, prediccionRaw,  window.indicadores, historialVelas);
+         // }f
+
+          // ✅ Evaluar Gauss SIEMPRE que esté activo
+          evaluarSistemaGauss(document.getElementById('selector-simbolo').value, prediccionRaw,  window.indicadores, historialVelas);
+
+
+          // En 5m, exige ADX un poco más alto (ej: > 25) para filtrar mercados laterales
+
           // 🟢 LÓGICA DE APERTURA (solo si NO hay posición)
           // ───────────────────────────────────────
 
-          if (prediccionRaw != null && confianza >= 0.70 && historialVelas.length >= 55 && adxActual > 20 && !ordenEnCurso) { // <-- Añadido !ordenEnCurso
-            const side = prediccionRaw > 0.5 ? 'BUY' : 'SELL';
-            let operar = false;
-            const modo = document.getElementById('modo-mercado')?.value || 'volatil';
-            // Asegúrate de que `alcista` y `bajista` estén definidos antes de este bloque
 
-            if (modo === 'alcista' && side === 'BUY' && alcista) operar = true;
-            else if (modo === 'bajista' && side === 'SELL' && bajista) operar = true;
-            else if (modo === 'volatil' && ((side === 'BUY' && alcista) || (side === 'SELL' && bajista))) operar = true;
-
-            // [Corrección] Verificar !posicionActual aquí también (la obtenida de posiciones.find)
-            if (operar && !posicionActual) { // <-- Condición clave
-              ordenEnCurso = true;
-              abrirPosicionReal(side)
-                .finally(() => {
-                  // DESACTIVAR BANDERA DESPUÉS DE ABRIR POSICIÓN (éxito o error)
-                  ordenEnCurso = false;
-                });
-            }
+          // En 5m, exige ADX un poco más alto (ej: > 25) para filtrar mercados laterales
+         
+            // 🔍 [DIAGNÓSTICO 1] Verificar entradas iniciales
+              // ✅ Verificar que no haya posición real abierta
+            const hayPosicionReal = posicionActual &&
+            Math.abs(parseFloat(posicionActual.positionAmt)) > 0.0001;
+           console.log(`🔍 [DIAG. APERTURA Entrada a APP modo-mercado-Antes] Pred: ${prediccionRaw != null ? prediccionRaw.toFixed(3) : 'null'}, Conf: ${(confianza * 100).toFixed(1)}%, Velas: ${historialVelas.length}, ADX: ${adxActual.toFixed(1)}, OrdenEnCurso: ${ordenEnCurso}`);
 
 
-            else if (operar && posicionActual) {
+          // ─── EVALUAR SISTEMA 1: MODO MERCADO (solo si está activo) ───
+          const modoMercadoActivo = document.getElementById('modo-mercado-activo')?.checked || false;
+          if (modoMercadoActivo) {
+            evaluarModoMercado(
+              document.getElementById('selector-simbolo').value,
+              prediccionRaw,
+              confianza,
+              adxActual,
+              rsiActual,
+              historialVelas,
+              ordenEnCurso,
+              posicionActual,
+              alcista,
+              bajista
+            );
+          }
+          
+          // ─── VERIFICAR PREDICCIÓN PENDIENTE ───
+          verificarPrediccionPendiente(historialVelas, ordenEnCurso, posicionActual);
+           
+           // else if (operar && posicionActual) {
               // [Corrección] Log para depuración si se intenta abrir con posición existente
-              console.log(`[DEBUG] Condición de apertura cumplida, PERO posicionActual EXISTE:`, posicionActual);
+          //    console.log(`[DEBUG] Condición de apertura cumplida, PERO posicionActual EXISTE:`, posicionActual);
               // Opcional: Actualizar estado UI
-              document.getElementById('estado').textContent = `⚠️ Señal de apertura, pero posición abierta para ${simboloActual}`;
-            }
+          //    document.getElementById('estado').textContent = `⚠️ Señal de apertura, pero posición abierta para ${window.simboloActual}`;
+           // }
 
-            // ───────────────────────────────────────
+         
+          
+            // ─────────   ──────────────────────────────
             // 💡 ACTUALIZAR TP/SL VISUAL EN PANEL
             // ───────────────────────────────────────
             let tpPct, slPct;
@@ -2949,9 +4282,33 @@ ws.onmessage = async (event) => {
               tpPct = parseFloat(document.getElementById('takeProfit')?.value) || 3.0;
               slPct = parseFloat(document.getElementById('stopLoss')?.value) || 1.5;
             } else {
-               // ✅ Corregido: sin leverage, con multiplicadores razonables
-              tpPct = (atrGlobal * 2 / ultimoPrecio) * 100; // 2x ATR
-              slPct = (atrGlobal * 1 / ultimoPrecio) * 100; // 1x ATR
+              try {
+                const simbolo = document.getElementById('selector-simbolo').value;
+                const k5m = await obtenerDatos(simbolo, '5m', 50);
+                if (k5m.length >= 20) {
+                  const atrArray = calcularATR(k5m, 14);
+                  const atrVal = atrArray.length > 0 ? atrArray[atrArray.length - 1] : 0;// fallback razonable
+                  // Ajusta estos multiplicadores según tu estrategia
+
+                  // ✅ Corregido: sin leverage, con multiplicadores razonables
+                  const tpMult = parseFloat(document.getElementById('tp-mult')?.value) || 2.0;
+                  const slMult = parseFloat(document.getElementById('sl-mult')?.value) || 1.0;
+
+                  tpPct = (atrVal * tpMult / ultimoPrecio) * 100; // 2x ATR
+                  slPct = (atrVal * slMult / ultimoPrecio) * 100; // 1x ATR
+                  console.log(`🔍 [DEBUG] ATR usado/actualizar pantalla: ${atrVal.toFixed(2)}`);
+                 
+                }
+
+                else {
+
+                  throw new Error("No hay suficientes velas");
+                }
+
+
+              }catch(e)  {
+              console.warn('⚠️ Fallback a TP/SL manual por error en ATR:', e.message);
+              }
             }
 
             const tpEl = document.getElementById('tp-dinamico');
@@ -2969,11 +4326,13 @@ ws.onmessage = async (event) => {
                  // 2. ✅ ACTUALIZAR LAS LÍNEAS DEL GRÁFICO
               // Asumimos que tienes: entryPrice, leverage, y window.sideActual definidos
               if (window.sideActual && typeof entryPrice !== 'undefined') {
-                actualizarLineasPrecios(entryPrice, tpPct, slPct, leverage);
+                const entrada = entryPrice;
+                actualizarLineasPrecios(entrada, tpPct, slPct, leverage);
               }
             }
 
-          }
+          
+        
 
 
 
@@ -3058,21 +4417,219 @@ function verificarEstadoPrediccion() {
 }
 
 
-// === RECARGAR TESTNET ===
-async function recargarTestnet() {
- // if (!AUTENTICADO) return;
-  if (confirm('¿Reiniciar capital a $1000 y borrar historial?')) {
-    capitalActual = capitalInicial = 1000;
-    operaciones = [];
-    localStorage.removeItem('historialOperaciones');
-    localStorage.setItem('capitalActual', 1000);
-    localStorage.setItem('capitalInicial', 1000);
-    actualizarPanelFinanciero();
-    renderizarHistorial();
-    await actualizarCapitalTestnet();
-    alert('✅ Testnet recargado con $1000');
+// Función genérica para actualizar capital
+async function actualizarCapitalDesdeCuenta(tipoCuenta = 'testnet') {
+  try {
+    const endpoint = tipoCuenta === 'mainnet' 
+      ? '/api/binance/mainnet/account' 
+      : '/api/binance/testnet/account';
+      
+    const token = localStorage.getItem('authToken');
+    const res = await fetch(endpoint, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!res.ok) throw new Error('Error en la respuesta');
+    
+    const data = await res.json();
+    let saldoUSDT = 0;
+    
+    // Extraer saldo USDT
+    if (data.availableBalance) {
+      saldoUSDT = parseFloat(data.availableBalance);
+    } else if (data.assets?.length) {
+      const usdt = data.assets.find(a => a.asset === 'USDT');
+      saldoUSDT = usdt ? parseFloat(usdt.walletBalance) : 0;
+    }
+    
+    // Guardar en localStorage
+    const keyPrefix = tipoCuenta === 'mainnet' ? 'mainnet_' : '';
+    localStorage.setItem(`${keyPrefix}capitalActual`, saldoUSDT);
+    localStorage.setItem(`${keyPrefix}capitalInicial`, saldoUSDT);
+    
+    // Actualizar interfaz
+    await actualizarPanelFinanciero(tipoCuenta);
+ 
+    
+    return saldoUSDT;
+    
+  } catch (err) {
+    console.error(`Error actualizando ${tipoCuenta}:`, err);
+    // Usar valores por defecto
+    const saldoDefault = tipoCuenta === 'mainnet' ? 0 : 1000;
+    const keyPrefix = tipoCuenta === 'mainnet' ? 'mainnet_' : '';
+    localStorage.setItem(`${keyPrefix}capitalActual`, saldoDefault);
+    localStorage.setItem(`${keyPrefix}capitalInicial`, saldoDefault);
+   await actualizarPanelFinanciero(tipoCuenta);
+ 
+    return saldoDefault;
   }
 }
+
+// Función para recargar Testnet
+async function recargarTestnet() {
+  if (confirm('¿Actualizar Panel Financiero con saldo Testnet?')) {
+    const saldo = await actualizarCapitalDesdeCuenta('testnet');
+    alert(`✅ Testnet recargado - Saldo: $${saldo.toFixed(2)}`);
+  }
+}
+
+
+
+// Función para recargar Mainnet  
+async function recargarMainnet() {
+  if (confirm('¿Actualizar Panel Financiero con saldo Mainnet?')) {
+    const saldo = await actualizarCapitalDesdeCuenta('mainnet');
+    alert(`✅ Mainnet recargado - Saldo: $${saldo.toFixed(2)}`);
+  }
+}
+
+async function obtenerPrecioBTC() {
+  try {
+    // Asegurar que la URL es correcta
+    const response = await fetch('/api/binance/ticker?symbol=BTCUSDT');
+    if (!response.ok) {
+      throw new Error('Respuesta no OK');
+    }
+    const data = await response.json();
+    const precio = parseFloat(data.price);
+    return isNaN(precio) ? 1 : precio;
+  } catch (error) {
+    console.warn('Usando precio BTC por defecto: 1', error);
+    return 1;
+  }
+}
+
+
+async function actualizarSaldoCuenta(tipoCuenta = 'testnet') {
+  const keyPrefix = tipoCuenta === 'mainnet' ? 'mainnet_' : '';
+  const capitalActual = parseFloat(localStorage.getItem(`${keyPrefix}capitalActual`)) || 
+                       (tipoCuenta === 'mainnet' ? 0 : 1000);
+  
+  const montoInvertir = parseFloat(document.getElementById('montoCompra')?.value) || 100;
+  
+  // ✅ Obtener precio BTC de forma segura
+  let saldoBTC = 0;
+  try {
+    const precioBTC = await obtenerPrecioBTC();
+    saldoBTC = capitalActual / precioBTC;
+  } catch (error) {
+    console.warn('No se pudo calcular saldo BTC, usando 0');
+    saldoBTC = 0;
+  }
+  
+  const saldoUSDT = capitalActual;
+  
+  // Actualizar elementos
+  const usdtEl = document.getElementById('saldo-usdt');
+  const btcEl = document.getElementById('saldo-btc');
+  const invEl = document.getElementById('monto-invertir');
+  
+  if (usdtEl) usdtEl.textContent = `$${saldoUSDT.toFixed(2)}`;
+  if (btcEl) btcEl.textContent = `${saldoBTC.toFixed(6)} BTC`;
+  if (invEl) invEl.textContent = `$${montoInvertir.toFixed(2)}`;
+  
+  // Mostrar cuenta actual
+  const cuentaEl = document.getElementById('cuenta-actual');
+  if (cuentaEl) {
+    cuentaEl.textContent = tipoCuenta === 'mainnet' ? 'MAINNET' : 'TESTNET';
+    cuentaEl.style.color = tipoCuenta === 'mainnet' ? '#ff6b6b' : '#4ecdc4';
+  }
+}
+
+function actualizarMetricasFinancieras()  {
+  if (operaciones.length === 0) {
+    document.getElementById('pf').textContent = '—';
+    document.getElementById('expectancy').textContent = '—';
+    document.getElementById('sharpe').textContent = '—';
+    document.getElementById('max-dd').textContent = '—';
+    return;
+  }
+  
+  // 🔹 Ganancias y pérdidas
+  // 🔹 Clasificación de operaciones
+  const wins = operaciones.filter(o => o.ganancia > 0);
+  const losses = operaciones.filter(o => o.ganancia <= 0); // incluye 0
+  const totalWin = wins.reduce((s, o) => s + o.ganancia, 0);
+  const totalLoss = Math.abs(losses.reduce((s, o) => s + o.ganancia, 0));
+  const winRate = operaciones.length > 0 ? wins.length / operaciones.length : 0;
+  
+  // 🔹 Profit Factor
+  const pf = totalLoss > 0 ? (totalWin / totalLoss).toFixed(2) : '∞';
+  document.getElementById('pf').textContent = pf;
+  
+  // 🔹 Expectancy
+  const avgWin = wins.length > 0 ? totalWin / wins.length : 0;
+  const avgLoss = losses.length > 0 ? totalLoss / losses.length : 0;
+  const expectancy = (winRate * avgWin) - ((1 - winRate) * avgLoss);
+  const expEl = document.getElementById('expectancy');
+  expEl.textContent = expectancy >= 0 ? `+$${expectancy.toFixed(2)}` : `-$${Math.abs(expectancy).toFixed(2)}`;
+  expEl.style.color = expectancy >= 0 ? '#26a69a' : '#ef5350';
+  
+  // 🔹 ROI y retorno diario (estimado)
+  const capitalInicial = 1000; // o desde input/constante
+  const gananciaTotal = operaciones.reduce((sum, op) => sum + op.ganancia, 0);
+  const roi = (gananciaTotal / capitalInicial) * 100;
+
+  document.getElementById('roi').textContent = `${roi.toFixed(2)}%`;
+  document.getElementById('ganancias').textContent = `$${totalWin.toFixed(2)}`;
+  document.getElementById('perdidas').textContent = `-$${totalLoss.toFixed(2)}`;
+  
+
+
+  // 🔹 Sharpe Ratio (simple: ROI anualizado / desv ROE)
+  // 🔹 ROE real por operación (usando leverage guardado)
+  const roes = operaciones.map(o => {
+    const leverage = o.leverage || 1;
+    const retorno = (o.salida - o.entrada) / o.entrada;
+    return retorno * leverage * 100;
+  });
+  
+
+
+
+  // 🔹 Sharpe (por operación)
+  if (roes.length >= 5) {
+    const mean = roes.reduce((a, b) => a + b, 0) / roes.length;
+    const variance = roes.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / roes.length;
+    const std = Math.sqrt(variance);
+    
+    if (std > 0.01) {
+      const sharpe = (mean / std).toFixed(2);
+      document.getElementById('sharpe').textContent = parseFloat(sharpe) > 10 ? '10+' : sharpe;
+    } else {
+      document.getElementById('sharpe').textContent = '—';
+    }
+  } else {
+    document.getElementById('sharpe').textContent = '—';
+  }
+  
+
+  // 🔹 Max Drawdown (estimado desde historial)
+  let peak = capitalInicial;
+  let maxDD = 0;
+  let capital = capitalInicial;
+  operaciones.forEach(op => {
+    capital += op.ganancia;
+    peak = Math.max(peak, capital);
+    const dd = (peak - capital) / peak;
+    maxDD = Math.max(maxDD, dd);
+  });
+  
+  const ddEl = document.getElementById('max-dd');
+  ddEl.textContent = `${(maxDD * 100).toFixed(1)}%`;
+  ddEl.style.color = maxDD > 0.08 ? '#ef5350' : '#26a69a';
+}
+
+
+async function actualizarPanelFinanciero(tipoCuenta = 'testnet') {
+  // Actualizar saldo (incluyendo BTC)
+  await actualizarSaldoCuenta(tipoCuenta);
+  
+  // Actualizar métricas financieras
+  actualizarMetricasFinancieras();
+}
+
 
 // === PRUEBA MANUAL ===
 async function operacionPrueba() {
@@ -3104,16 +4661,16 @@ async function ejecutarBacktesting() {
   msgEl.style.color = '#aaa';
   try {
     // 🔹 Parámetros desde UI
-    const simbolo = document.getElementById('simbolo')?.value.toUpperCase() || 'BTCUSDT';
+    const simbolo = document.getElementById('simbolo')?.value.toUpperCase() ;
     const modo = document.getElementById('modo-mercado')?.value || 'volatil';
     const tpslMode = document.getElementById('tpsl-mode')?.value || 'dinamico';
-    const leverage = parseInt(document.getElementById('apalancamiento')?.value) || 4;
+    const leverage = parseInt(document.getElementById('apalancamiento')?.value) || 2;
     const notional = parseFloat(document.getElementById('montoCompra')?.value) || 100;
-    const intervalo = document.getElementById('intervalo-backtest')?.value || '1h'; // ← Selector de intervalo
+    const intervalo = document.getElementById('intervalo-backtest')?.value || '5m'; // ← Selector de intervalo
     const adxUmbral = parseFloat(document.getElementById('adx-umbral')?.value) || 20; // ← Umbral ajustable
 
     // 🔹 Descargar datos reales
-    const klines = await obtenerDatos(simbolo, intervalo, 500);
+    const klines = await obtenerDatos(simbolo, intervalo, 300);
     if (klines.length < 100) throw new Error(`Se necesitan ≥100 velas (${intervalo})`);
 
     // 🔹 Validar modelo
@@ -3205,7 +4762,7 @@ async function ejecutarBacktesting() {
         let cerrar = false, motivo = 'CloseOperation';
         if (roeRestante <= -sl) cerrar = true, motivo = `SL`;
         else if (roeRestante >= tp) cerrar = true, motivo = `TP2 (50%)`;
-        else if (confianza >= 0.70 && roeRestante < -0.5 && Math.abs(roeRestante) > (sl * 0.5)) {
+        else if (confianza >= 0.60 && roeRestante < -0.5 && Math.abs(roeRestante) > (sl * 0.5)) {
           const debeCerrarIA = (side === 'LONG' && prediccionRaw <= 0.3) || (side === 'SHORT' && prediccionRaw >= 0.7);
           if (debeCerrarIA) cerrar = true, motivo = `IA`;
         }
@@ -3218,7 +4775,7 @@ async function ejecutarBacktesting() {
       }
 
       // 🔹 ABRIR NUEVA POSICIÓN
-      if (!posicionAbierta && confianza >= 0.70 && adxActual > adxUmbral) {
+      if (!posicionAbierta && confianza >= 0.60 && adxActual > adxUmbral) {
         let side = null;
         if (modo === 'alcista' && prediccionRaw > 0.5 && alcista) side = 'LONG';
         else if (modo === 'bajista' && prediccionRaw <= 0.5 && bajista) side = 'SHORT';
@@ -3376,6 +4933,4 @@ function detenerTradingAutomatico() {
 
   // NO HACEMOS ws.close() ni clearInterval(streamingInterval);
   // El WebSocket y su onmessage siguen corriendo, actualizando precios, gráfico, indicadores, etc.
-  // pero la lógica de trading automático (abrir/cerrar posiciones basadas en IA) no se ejecuta si autoTrading es false.
 }
-

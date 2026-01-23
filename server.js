@@ -216,35 +216,57 @@ app.get("/api/binance/futures/open-interest", async (req, res) => {
 });
 
 // ✅ Cuenta (Testnet) - CORREGIDO para usar fetch importado
-  app.get("/api/binance/futures/account", requireAuth, async (req, res) => {
-  const { apiKey, apiSecret } = req.user;
-  //console.log("🔍 Usuario en endpoint:", req.user.id, req.user.role);
-  //console.log("🔑 apiKey:", req.user.apiKey?.substring(0,10) + '...');
-  if (!apiKey || !apiSecret) return res.status(500).json({ error: "Claves no configuradas" });
+// backend/routes/binanceRoutes.js
+
+// Endpoint para Testnet account
+app.get('/api/binance/testnet/account', requireAuth, async (req, res) => {
   try {
-    const timestamp = await getServerTime(); // Esta función también debería usar fetch importado si llama a Binance
-    const recvWindow = 60000;
-    const params = { timestamp, recvWindow };
-     const signature = signParams(params, apiSecret); // ✅ así
-    const url = `${BINANCE_FUTURES_URL}/fapi/v2/account?${new URLSearchParams(params)}&signature=${signature}`;
-    // Usar fetch importado
-    const response = await fetch(url, { headers: { "X-MBX-APIKEY": req.user.apiKey} });
-    if (!response.ok) {
-        throw new Error(`HTTP ${response.status} - ${response.statusText} al obtener cuenta`);
-    }
-    const data = await response.json();
-    res.json(data);
-  } catch (error) {
-    console.error("Error en /api/binance/futures/account (Testnet):", error);
-    res.status(500).json({ error: `No se pudo obtener la cuenta: ${error.message}` });
+    const { apiKey, apiSecret } = req.user;
+    
+    // Usar URL de Testnet
+    const url = 'https://testnet.binancefuture.com/fapi/v2/account';
+    const timestamp = Date.now();
+    const params = { timestamp: timestamp.toString(), recvWindow: '5000' };
+    const signature = signParams(params, apiSecret);
+    const queryString = new URLSearchParams(params).toString() + `&signature=${signature}`;
+    
+    const response = await axios.get(`${url}?${queryString}`, {
+      headers: { 'X-MBX-APIKEY': apiKey }
+    });
+    
+    res.json(response.data);
+  } catch (err) {
+    console.error('Error Testnet account:', err.response?.data || err.message);
+    res.status(500).json({ error: 'Error obteniendo cuenta Testnet' });
+  }
+});
+
+// Endpoint para Mainnet account  
+app.get('/api/binance/mainnet/account', requireAuth, async (req, res) => {
+  try {
+    const { apiKey, apiSecret } = req.user;
+    
+    // Usar URL de Mainnet
+    const url = 'https://fapi.binance.com/fapi/v2/account';
+    const timestamp = Date.now();
+    const params = { timestamp: timestamp.toString(), recvWindow: '5000' };
+    const signature = signParams(params, apiSecret);
+    const queryString = new URLSearchParams(params).toString() + `&signature=${signature}`;
+    
+    const response = await axios.get(`${url}?${queryString}`, {
+      headers: { 'X-MBX-APIKEY': apiKey }
+    });
+    
+    res.json(response.data);
+  } catch (err) {
+    console.error('Error Mainnet account:', err.response?.data || err.message);
+    res.status(500).json({ error: 'Error obteniendo cuenta Mainnet' });
   }
 });
 
 // 📊 Posiciones
 app.get("/api/binance/futures/positions", requireAuth,async (req, res) => {
   const { apiKey, apiSecret } = req.user;
-//console.log("🔍 Usuario en endpoint:", req.user.id, req.user.role);
-//console.log("🔑 apiKey:", req.user.apiKey?.substring(0,10) + '...');
   if (!apiKey || !apiSecret) return res.status(500).json({ error: "Claves no configuradas" });
   try {
     const timestamp = await getServerTime(); // ✅ CORREGIDO
@@ -320,9 +342,21 @@ app.post('/api/binance/futures/order', requireAuth, async (req, res) => {
     res.json(orderRes.data);
   } catch (err) {
     console.error('❌ Error en /order (CORREGIDO):', err.response?.data || err.message || err);
+
+    // ✅ MANEJO ESPECÍFICO PARA TIMEOUT (-1007)
+    const errorCode = err.response?.data?.code;
+    if (errorCode === -1007) {
+      return res.status(202).json({
+        code: -1007,
+        msg: "Timeout: estado de la orden desconocido. Verifique su posición en Binance.",
+        status: "UNKNOWN"
+      });
+    }
+
+    // Otros errores
     res.status(500).json({
       msg: 'Error al abrir orden',
-      code: err.response?.data?.code,
+      code: errorCode,
       details: err.response?.data?.msg || err.message
     });
   }
@@ -407,7 +441,7 @@ app.post("/api/binance/futures/close-position", requireAuth, async (req, res) =>
 📌 ${symbol} | ${side === 'BUY' ? 'SHORT' : 'LONG'}
 💵 PnL: ${isProfit ? '+' : ''}${pnl.toFixed(2)} USDT`;
 
-    await enviarMensajeTelegram(mensajeCierre);
+   // await enviarMensajeTelegram(mensajeCierre);
 
     res.json({ ...result, formattedQty, avgPrice });
 
@@ -471,33 +505,32 @@ app.post('/api/binance/futures/leverage', requireAuth,  async (req, res) => {
 app.get("/favicon.ico", (req, res) => res.status(204).end());
 
 // === ALERTAS POR TELEGRAM ===
-async function enviarMensajeTelegram(mensaje) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
+//async function enviarMensajeTelegram(mensaje) {
+  //const token = process.env.TELEGRAM_BOT_TOKEN;
+  //const chatId = process.env.TEL/EGRAM_CHAT_ID;
   
-  if (!token || !chatId) {
-    console.warn("⚠️ Telegram no configurado");
-    return;
-  }
+  //if (!token || !chatId) {
+  //  console.warn("⚠️ Telegram no configurado-Backend");
+ //   return;
+ // }
 
-  const url = `https://api.telegram.org/bot${token}/sendMessage`;
-  const data = {
-    chat_id: chatId,
-    text: mensaje,
-    parse_mode: "HTML"
-  };
+  //const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  //const data = {
+  //  chat_id: chatId,
+ //   text: mensaje,
+ //   parse_mode: "HTML"
+ // };
 
-  try {
-    await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    console.log("✅ Alerta enviada a Telegram");
-  } catch (err) {
-    console.error("❌ Error al enviar alerta:", err.message);
-  }
-}
+ // try {
+ //   await fetch(url, {
+//      method: 'POST',
+//     headers: { 'Content-Type': 'application/json' },
+//   });
+ // /  console.log("✅ Alerta enviada a Telegram");
+ /// } catch (err) {
+ //   console.error("❌ Error al enviar alerta:", err.message);
+ // }
+//}
 
 app.listen(PORT, () => {
   console.log(`✅ Servidor en http://localhost:${PORT}`);

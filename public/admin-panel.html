@@ -523,16 +523,99 @@
     margin: 8px 0 0 0;
     font-weight: bold;
   }
+
+
+/*-- ESTILO DE LA CUADRÍCULA -->*/
+
+.grid-modulos {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.modulo {
+  background: #1f1f1f;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.titulo-modulo {
+  font-weight: bold;
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dato {
+  margin: 6px 0;
+  font-family: monospace;
+  font-size: 0.95em;
+  display: flex;
+  justify-content: space-between;
+}
+
+.estado-senal {
+  margin-top: 12px;
+  padding: 8px;
+  border-radius: 6px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.estado-ok { background: #065f46; color: #68d391; }
+.estado-alerta { background: #667007; color: #fed7aa; }
+.estado-error { background: #573f42; color: #fca5a5; }
+
+.estadistica {
+  display: flex;
+  justify-content: space-between;
+  margin: 6px 0;
+}
+
+.control-operaciones label {
+  display: block;
+  margin: 6px 0;
+}
+
+.control-operaciones input[type="number"] {
+  width: 60px;
+  padding: 4px;
+  margin-left: 8px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: white;
+  border-radius: 4px;
+}
+
+@media (max-width: 900px) {
+  .grid-modulos {
+    grid-template-columns: 1fr;
+  }
+}
+
+.btn-mainnet {
+  background-color: #ff6b6b !important;
+  margin-left: 10px;
+}
+
+.cuenta-indicador {
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  display: inline-block;
+}
+
   </style>
-
 </head>
-
-
-
 <body>
 
-
- R<div class="container" id="main-container" style="display:none;">
+ <div class="container" id="main-container" style="display:none;">
     <!-- Sidebar -->
     <aside class="sidebar">
       <!--  <div class="status-bar">Esperando...</div> -->
@@ -550,7 +633,7 @@
         <label for="tpsl-mode">TP/SL</label>
         <select id="tpsl-mode">
           <option value="dinamico">Dinámico (ATR)</option>
-          <option value="manual">Manual (%)</option>
+           <option value="manual">Manual(%)</option>
         </select>
       </div>
       <div class="control-group" id="tpsl-manual-group" style="display:none;">
@@ -561,9 +644,13 @@
         <label for="stopLoss">Stop-Loss (%)</label>
         <input type="number" id="stopLoss" value="1.5" step="0.1" min="0.5">
       </div>
+
+      <label>MULT-TP x ATR: <input type="number" id="tp-mult" value="2.0" step="0.1"></label>
+        <label>MULT-SL x ATR: <input type="number" id="sl-mult" value="1.0" step="0.1"></label>
+
       <div class="control-group">
         <label for="apalancamiento">Apalancamiento (x)</label>
-        <input type="number" id="apalancamiento" value="4" min="1" max="125">
+        <input type="number" id="apalancamiento" value="2" min="1" max="125">
       </div>
       <div class="control-group">
         <label for="modo-mercado">Modo de Mercado</label>
@@ -573,9 +660,17 @@
           <option value="bajista">Tendencia Bajista</option>
         </select>
       </div>
+
+
       <div class="control-group">
-        <label for="simbolo">Símbolo</label>
-        <input type="text" id="simbolo" value="BTCUSDT" style="width: 100%; text-align: center;">
+<select id="selector-simbolo" onchange="window.simboloActual = this.value;">
+  <option value="BTCUSDT">BTCUSDT</option>
+  <option value="SOLUSDT" selected>SOLUSDT</option>
+  <option value="ETHUSDT">ETHUSDT</option>
+</select>
+
+
+
       </div>
 
 
@@ -586,29 +681,180 @@
         </div>
       </div>
 
-
-      <!-- ✅ Botón de prueba forzada (solo para desarrollo) -->
-      <div class="control-group">
-        <label>Prueba Forzada IA</label>
-        <button class="btn btn-outline" onclick="forzarCierreIA()"
-          style="width:100%; background:#333; border-color:#555;">
-          <i class="fas fa-bolt"></i> Forzar Cierre por IA
-        </button>
+      
+      <!-- Modo de Operación -->
+      <div style="margin: 12px 0; padding: 10px; background: #1e2a38; border-radius: 6px; border: 1px solid #3a5b7c;">
+        <h4 style="margin-top: 0; color: #e0e0e0; font-size: 14px;">🧭 Modo de Operación en Reversion</h4>
+        <label style="display: block; margin: 6px 0;">
+          <input type="radio" name="modo-operacion" value="both" checked>
+          <span style="color: #4fc3f7;">🔄 LONG + SHORT</span>
+        </label>
+        <label style="display: block; margin: 6px 0;">
+          <input type="radio" name="modo-operacion" value="long">
+          <span style="color: #66bb6a;">📈 SOLO LONG</span>
+        </label>
+        <label style="display: block; margin: 6px 0;">
+          <input type="radio" name="modo-operacion" value="short">
+          <span style="color: #ef5350;">📉 SOLO SHORT</span>
+        </label>
       </div>
-         
+
+        <!---- <div class="control-group">
+         <label>
+           <input type="checkbox" id="trailing-enabled" checked>
+           Trailing Stop (después de ROE ≥ 1%)
+         </label>
+          </div>-->
+
+        <!-- ========== MODO REVERSIÓN MACD ========== -->
+   <!-- ========== MODO REVERSIÓN MACD ========== -->
+
+                       <!-- 🔹 MODO GAUSS -->
+        <div style="margin-top: 12px; padding: 8px; background:#1e2a38; border-radius:6px;border: 1px solid #3a5b7c; ">
+          <div>
+            <label>
+              <input type="checkbox" id="modo-gauss-activo">
+              <strong>Sistema Gauss</strong> (Tendencia-3m-5m-30-1h)
+            </label>
+          </div>
+          <div style="margin-top:6px;">
+            <label><input type="radio" name="modo-gauss" value="auto" checked> Automático</label>
+            <label style="margin-left:12px;"><input type="radio" name="modo-gauss" value="manual"> Manual</label>
+          </div>
+          <button id="btn-abrir-gauss" style="display:none;">Abrir Orden Gauss</button>
+          <button id="btn-cerrar-gauss" style="display:none; margin-top:6px;" class="btn btn-outline">CloseOperation
+            Gauss</button>
+              <label>
+        <input type="checkbox" id="gauss-notif-telegram">
+        Notificar estado por Telegram (cada 10 min)
+      </label>
+        </div>
+       
+      <!-- 🔹 MODO MERCADO -->
+      <div style="margin-top: 12px; padding: 8px; background:#1e2a38; border-radius:6px; border: 1px solid #3a5b7c;  ">
+        <label>
+          <input type="checkbox" id="modo-mercado-activo">
+          <strong>Modo Mercado</strong> (IA + Tendencia)
+        </label>
+        <div style="margin-top:6px; font-size:0.9em; color:#fdfdfd;">
+          Operación basada en IA fuerte + modo de mercado (alcista/bajista/volátil)
+        </div>
+      </div>
+
+        <div id="panel-reversion" style="
+          background: #1e2a38;
+          border: 1px solid #3a5b7c;
+          border-radius: 8px;
+          padding: 12px;
+          margin: 10px 0;
+          font-family: Arial, sans-serif;
+          color: #e0e6ef;
+        ">
+          <h4 style="margin: 0 0 8px; font-size: 14px; color: #64b5f6;">⚡ Modo Reversión MACD</h4>
+        
+          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="checkbox" id="modo-reversion-activo" style="cursor: pointer;">
+              <span>Activar</span>
+            </label>
+        
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span style="font-size: 12px; opacity: 0.8;">Modo:</span>
+              <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 12px;">
+                <input type="radio" name="modo-reversion" value="auto" checked>
+                Automático
+              </label>
+              <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 12px;">
+                <input type="radio" name="modo-reversion" value="manual">
+                Manual
+              </label>
+            </div>
+          </div>
+        
+          <!-- Botones de acción -->
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button id="btn-operar-reversion"
+              style="padding: 6px 12px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; display: none;"
+              disabled>
+              ⚡ ABRIR POSICIÓN
+            </button>
+        
+            <button id="btn-cerrar-reversion"
+              style="padding: 6px 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; display: none;"
+              disabled>
+              🔒 CERRAR POSICIÓN
+            </button>
+          </div>
+        
+          <div id="estado-reversion" style="
+            margin-top: 10px;
+            font-size: 11px;
+            color: #ffd700;
+            min-height: 16px;
+          "></div>
+        </div>
+
+
+
+      <!-- ========== REGISTRO DE EVENTOS IA ========== -->
+      <div id="panel-registro" style="
+        background: #1e2a38;
+        border: 1px solid #3a5b7c;
+        border-radius: 8px;
+        padding: 12px;
+        margin: 10px 0;
+        font-family: Arial, sans-serif;
+        color: #e0e6ef;
+      ">
+        <h4 style="margin: 0 0 8px; font-size: 14px; color: #64b5f6;">📊 Registro de Eventos IA</h4>
+      
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <input type="checkbox" id="registro-activo" style="cursor: pointer;">
+            <span>Activar registro</span>
+          </label>
+       
+          <button id="btn-exportar-registro"
+            style="padding: 5px 10px; background: #64b5f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;"
+            disabled>
+            📥 Exportar a CSV
+          </button>
+         <button id="btn-reset-ia" style="
+            padding: 6px 12px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer;
+         ">🧠 Reset Eventos IA</button>
+          <span id="contador-eventos" style="font-size: 12px; opacity: 0.8;">0/50</span>
+        </div>
+      </div>
+
+
+      <!-- Exportar y Reset Historial -->
+      <div style="margin: 12px 0; display: flex; gap: 8px; flex-wrap: wrap;">
+        <button id="btn-exportar" style="
+          padding: 6px 12px; background: #388e3c; color: white; border: none; border-radius: 4px; cursor: pointer;
+        ">📤 Exportar a CSV</button>
+      
+        <button id="btn-reset-historial" style="
+          padding: 6px 12px; background: #d32f2f; color: white; border: none; border-radius: 4px; cursor: pointer;
+        ">🗑️ Reset Historial</button>
+      </div>
+
+
+
+        <!-- ✅ Botón de prueba forzada (solo para desarrollo) -->
+        <div class="control-group">
+        </div>
 
       <div class="btn-group">
         <button class="btn btn-primary" onclick="iniciarStreaming()">
           <i class="fas fa-play"></i> Iniciar Streaming
         </button>
-        <button class="btn btn-danger" onclick="detenerStreaming()">
-          <i class="fas fa-stop"></i> Parar Streaming
-        </button>
-        <button id="reiniciar-flujo" class="btn btn-outline">
-         🔄 Reiniciar Flujo
-         </button>
+       <!-- <button class="btn btn-danger" onclick="detenerStreaming()">
+       <i class="fas fa-stop"></i> Parar Streaming
+        </button>-->
+
+         
                 <button class="btn btn-outline" onclick="operacionPrueba()">
-          <i class="fas fa-magic"></i> Prueba Manual
+          <i class="fas fa-magic"></i> Orden Sell o Buy Manual 
         </button>
       </div>
       <div class="btn-group">
@@ -618,10 +864,20 @@
         <button class="btn btn-outline" id="btn-exportar">
           <i class="fas fa-file-csv"></i> Exportar CSV
         </button>
-        <button class="btn btn-recargar" onclick="recargarTestnet()">
-          <i class="fas fa-coins"></i> Recargar Testnet
-        </button>
+       <!-- Botones de recarga -->
+<div class="controles-cuenta">
+  <button class="btn btn-recargar" onclick="recargarTestnet()">
+    <i class="fas fa-coins"></i> Recargar Testnet
+  </button>
+  <button class="btn btn-mainnet" onclick="recargarMainnet()" style="background-color: #ff6b6b;">
+    <i class="fas fa-wallet"></i> Recargar Mainnet
+  </button>
+  <div id="cuenta-actual" class="cuenta-indicador" style="margin-top: 10px; font-weight: bold;"></div>
+</div>
       </div>
+      <button onclick="actualizarPosicionesAbiertas()">🔄 Actualizar Posiciones</button>
+      <button onclick="window.posicionGauss = null; console.log('🔄 Reset Gauss')">Reset Gauss</button>
+
       <div class="section-title">
         <i class="fas fa-coins"></i> Capital Testnet
       </div>
@@ -664,26 +920,22 @@
         <div class="stat-title">SL</div>
         <div class="stat-value" id="sl-dinamico">—</div>
       </div>
+       <!-- Selector de intervalo -->
+      <label>Intervalo:</label>
+        <select id="intervalo-backtest">      
+        <option value="5m">5m</option>
+        <option value="15m">15m</option>
+        <option value="1h" selected>1h</option>
+        <option value="4h">4h</option>
+        </select>
 
-
-<!-- Selector de intervalo -->
-<label>Intervalo:</label>
-<select id="intervalo-backtest">
-  <option value="5m">5m</option>
-  <option value="15m">15m</option>
-  <option value="1h" selected>1h</option>
-  <option value="4h">4h</option>
-</select>
-
-<!-- Umbral de ADX -->
-<label>ADX Umbral:</label>
-<input type="number" id="adx-umbral" step="0.1" value="20" min="10" max="50" style="width: 80px;">
-      <div class="control-group">
+           <!-- Umbral de ADX -->
+           <label>ADX Umbral:</label>
+          <input type="number" id="adx-umbral" step="0.1" value="20" min="10" max="50" style="width: 80px;">
+         <div class="control-group">
         <label for="backtest-dias">Días históricos</label>
-        <input type="number" id="backtest-dias" value="3" min="1" max="30" step="1">
-      </div>
-
-
+       <input type="number" id="backtest-dias" value="3" min="1" max="30" step="1">
+       </div>
       <div class="section-title">
         <i class="fas fa-chart-bar"></i> Backtesting & Métricas
       </div>
@@ -774,7 +1026,11 @@
         <div class="logo">
            <!--<i class="fas fa-robot"></i>-->
              Trading Predictivo T  IA   PA 🔐
-        </div>
+          </div>
+          <div style="margin-top: 10px; font-weight: bold; font-size: 16px;">
+           <span id="semaforo-operacion">⚫ ESPERANDO DATOS</span>
+          </div>
+
       </header>
       <div class="controls-row">
         <button class="btn btn-primary" onclick="entrenarRed()">
@@ -785,53 +1041,183 @@
       <div class="chart-container">
         <div id="chart"></div>
       </div>
+   
+   
 
-      <div id="semaforo" class="semaforo">
-          <h4>🚦 Semáforo de Trading</h4>
-          <div>Tendencia (ADX):   
-            <span id="cond-adx" class="luz"></span> 
-            <span id="adx1-valor">—</span>
-           
-            <div>Modo (modo): 
-            <span id="cond-modo" class="luz"></span> 
-           <span id="modo-valor">—</span>
-           </div>
+<!-- GRILLA DE 4 MÓDULOS -->
+<div class="grid-modulos">
+  <!-- MÓDULO 1: Semáforo de Trading -->
+  <div class="modulo">
+    <div class="titulo-modulo">🚦 Semáforo de Trading</div>
+    <div class="dato">
+      <span>Tendencia (ADX):</span>
+      <span id="cond-adx" class=  "luz"></span>
+      <span id="adx1-valor">--</span>
+    </div>
+    <div class="dato">
+      <span>Modo (modo):</span>
+       <span id="cond-modo" class=    "luz"></span> 
+      <span id="modo-valor">VOLATIL</span>
+    </div>
+    <div class="dato">
+      <span>Confianza IA:</span>
+      <span id="cond-pred" class=  "luz"></span> 
+      <span id="confianza-valor">--</span>
+    </div>
+    <div class="dato">
+      <span>Datos suficientes:</span>
+      <span id="cond-datos" class="luz"></span> 
+      <span id="datos-valor">--</span>
+    </div>
+     <p id="semaforo-msg" style="margin-top: 10px;">⏳ Inicializando...</p>
+       <div id="semaforo" class="semaforo"></div>
+  </div>
 
-          <div>Confianza IA: 
-            <span id="cond-pred" class="luz"></span> 
-           <span id="confianza-valor">—</span>
+  <!-- MÓDULO 2: Indicadores Técnicos -->
+  <div class="modulo">
+    <div class="titulo-modulo">📊 Indicadores Técnicos</div>
+    <div class="dato">
+      <span>Último Precio:</span>
+      <span id="precio-actual">—</span>
+    </div>
+    <div class="dato">
+      <span>EMA-50:</span>
+      <span id="ema-valor">—</span>
+    </div>
+    <div class="dato">
+      <span>RSI:</span>
+      <span id="rsi-valor">—</span>
+    </div>
+    <div class="dato">
+      <span>ATR:</span>
+      <span id="atr-valor">—</span>
+    </div>
+  </div>
+
+  <!-- MÓDULO 3: Estadísticas de IA -->
+  <div class="modulo">
+    <div class="titulo-modulo">🧠 Estadísticas de IA</div>
+    <div class="estadistica">
+      <span>Objetivo:</span>
+      <span>20 predicciones</span>
+    </div>
+    <div class="estadistica">
+      <span>Progreso:</span>
+      <span id="progreso-predicciones">0</span>
+    </div>
+    <div class="estadistica">
+      <span>Aciertos:</span>
+      <span id="aciertos-predicciones">0</span>
+      </div>
+      <div class="estadistica">
+        <span>Precisión actual:</span>
+        <span id="precision-actual">—</span>
+      
+      </div>
+      <div style="margin-top: 10px;">
+        <button id="btn-exportar-ia"
+          style="padding: 6px 12px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer;">
+          📥 Exportar a CSV
+        </button>
+        <div id="resumen-final" style="margin-top: 12px; font-weight: bold; color: #4caf50; display: none;"></div>
+        <button id="btn-reiniciar-ia"
+          style="padding: 6px 12px; margin-left: 8px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">
+          🔄 Reiniciar
+        </button>
+      
+        <div id="panel-estadisticas-ia"
+          style="margin-top: 20px; padding: 12px; background: #1e1e1e; border-radius: 8px; display: none;">
+          <div style="margin-top: 10px;">
           </div>
-
-          <div>Datos suficientes: 
-          <span id="cond-datos" class="luz"></span> 
-          <span id="datos-valor">—</span>
-           </div>
-          <p id="semaforo-msg" style="margin-top: 10px;">⏳ Inicializando...</p>
-       </div>
+        </div>
+      
+      </div>
+  </div>
+  
+  <!-- MÓDULO 4: Control de Operaciones -->
+  <div class="modulo control-operaciones">
+    <div class="titulo-modulo">⚙️ Control de Operaciones</div>
+    <label>
+      <input type="checkbox" id="limitar-operaciones" checked>
+      Limitar operaciones diarias
+    </label>
+    <label>
+      Máximo:
+      <input type="number" id="max-ops" value="2" min="1" max="10">
+    </label>
+    <div style="margin-top: 12px; font-size: 0.9em; color: #94a3b8;">
+      ⏹️ Autotrading se detendrá al alcanzar el límite.
+    </div>
+     <input type="checkbox" id="limitar-operaciones" checked>
+  </div>
+  </div>
+    
+       
+       
        <!--<div class="sidebar">
         Indicador de estado de conexión 
        <div style="margin-top: 10px; padding: 8px; background: #1a1a1a; border-radius: 6px; font-size: 12px;">
          <strong>📡 Estado Conexión</strong>
          <p id="streamingActivo " style="margin: 5px 0; color: orange;">🟡 Inicializando...</p>
        </div>
-      </div>-->
-          <div id="indicators" class="ïndicators">
-             <h4> Indicadores Tecnicos</h4>
-             <div>
-               <div>Ultimo Precio:
-                 <div id="precio-actual">—</div>
-                 </div>
-                 <div>EMA-50:
-                 <div id="ema-valor">—</div>
-                 </div>  
-                  <div>RSI: 
-                 <div id="rsi-valor">—</div>
-                  </div>
-                  <div>ATR:             
-                 <div id="atr-valor">—</div>
-                  </div>
-                  </div>
-                  </div>
+      </div>-->        
+
+        <!-- ========== MONITOR MACD EN TIEMPO REAL ========== -->
+    <div id="monitor-macd" style="
+      border: 1px solid #3a5b7c;
+      border-radius: 8px;
+      padding: 10px;
+      margin: 10px 0;
+      font-family: 'Consolas', monospace;
+      color: #e0e6ef;
+      font-size: 12px;
+        ">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span>📊 <b>MACD SIGNAL LIVE</b></span>
+           <span id="macd-signal-valores" style="color: #64b5f6; font-size: 11px;">
+             MACD: -- | Signal: --
+          </span>
+          </div>
+          <div style="height: 20px; background: #2c3e50; border-radius: 4px; position: relative; overflow: hidden;">
+        <!-- Zona de COMPRA: Signal < -10 -->
+         <div style="position: absolute; left: 0; width: 40%; height: 100%; background: rgba(13, 204, 76, 0.753);"></div>
+
+
+           <!-- Zona de VENTA: Signal > 10 -->
+          <div style="position: absolute; right: 0; width: 40%; height: 100%; background: rgba(197, 16, 40, 0.938);"></div>
+            <!-- Indicador de posición actual -->
+            <div id="signal-indicador" style="
+              position: absolute; top: 0; height: 100%; width: 4px; background: #ffd700;
+              transform: translateX(-50%);
+            "></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 10px; color: #90a4ae;">
+            <span>–1 (🟢)</span>
+            <span>–0.0355</span>
+            <span>0</span>
+            <span>+0.0355</span>
+            <span>+1 (🔴)</span>
+          </div>
+          <div id="estado-senal" style="margin-top: 6px; font-weight: bold; color: #ffd700; min-height: 16px;">
+            Esperando datos...
+          </div>
+     </div>
+
+
+        <!-- ========== GRÁFICO MACD (réplica Binance) ========== 
+        <div id="macd-chart" style="
+            height: 320px;
+            background: #161c26;
+            border-top: 1px solid #333;
+            overflow-x: auto;
+            margin-top: 10px;
+            position: relative;
+             "></div> 
+
+                 <div id="debug-panel" style="
+            background: #222; color: #ff0; padding: 8px; font-size: 12px;
+            border: 1px solid #555; margin-top: 10px; 
+            "></div> ---->
                   
                   <div class="prediction-section fade-in">
                     <div class="prediction-header">
@@ -844,29 +1230,10 @@
                       <div id="prediccion-progreso" class="pred-progress"></div>
                     </div>
                   </div>
-               <!-- Panel de Estadísticas de IA -->
-              
-               <div id="panel-estadisticas-ia" style="margin-top: 20px; padding: 12px; background: #1e1e1e; border-radius: 8px; display: none;">
-                 <div>
-                 📊 Estadísticas de IA<br>
-                     Objetivo: 20 predicciones<br>
-                     Progreso: <span id="progreso-predicciones">0</span>/20<br>
-                     Aciertos: <span id="aciertos-predicciones">0</span><br>
-                     Precisión actual: <span id="precision-actual">—</span>
-                  </div>                 
-                  <div style="margin-top: 10px;">
-                   <button id="btn-exportar-ia" style="padding: 6px 12px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                     📥 Exportar a CSV
-                   </button>
-                    <div id="resumen-final" style="margin-top: 12px; font-weight: bold; color: #4caf50; display: none;"></div>
-                   <button id="btn-reiniciar-ia" style="padding: 6px 12px; margin-left: 8px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                     🔄 Reiniciar
-                  </button> 
-                 </div>
-               </div>
+                  
                   <div class="table-container">
                     <h3 style="padding: 15px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border);">
-                      Posiciones Abiertas (Testnet)</h3>
+                      Posiciones Abiertas de Ordenes</h3>
                     <table id="operaciones-abiertas">
                       <thead>
                         <tr>
@@ -874,95 +1241,100 @@
                           <th>Tipo</th>
                           <th>Precio</th>
                           <th>ROE</th>
-                         <th>PnL</th>
-                        <th>Acción</th>
+                          <th>PnL</th>
+                          <th>Acción</th>
                         </tr>
-                        </thead>
-                        <tbody></tbody>
-                         </table>
+                      </thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                  
+
+
+                  <div class="table-container">
+                    <h3 style="padding: 15px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border);">
+                      Ultimas 10  Ordenes Registradas</h3>
+                    <table id="historial">
+                      <thead>
+                        <tr>
+                          <th>Entrada</th>
+                          <th>Salida</th>
+                          <th>Precio Entrada</th>
+                          <th>Precio Salida</th>
+                          <th>Ganancia</th>
+                          <th>Resultado</th>
+                        </tr>
+                      </thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                  
+
+                  
+                  <!-- Gestión de Usuarios -->
+                  <div class="section-title">
+                    <i class="fas fa-users"></i> Gestión de Usuarios
+                  </div>
+                  <div class="table-container">
+                    <table id="tabla-usuarios">
+                      <thead>
+                        <tr>
+                          <th>Código</th>
+                          <th>Rol</th>
+                          <th>Activo</th>
+                          <th>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody id="cuerpo-usuarios">
+                        <!-- Los usuarios se cargarán aquí -->
+                      </tbody>
+                    </table>
+                    <button class="btn btn-primary" style="margin-top: 10px;" onclick="crearNuevoUsuario()">
+                      <i class="fas fa-plus"></i> Añadir Usuario
+                    </button>
+                  </div>
+                  
+                  
+                  </main>
                   </div>
 
-              <div class="table-container">
-                <h3 style="padding: 15px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border);">
-                  Últimas 10 Órdenes</h3>
-                <table id="historial">
-                  <thead>
-                    <tr>
-                      <th>Entrada</th>
-                      <th>Salida</th>
-                      <th>Precio Entrada</th>
-                      <th>Precio Salida</th>
-                      <th>Ganancia</th>
-                      <th>Resultado</th>
-                    </tr>
-                  </thead>
-                  <tbody></tbody>
-                </table>
-              </div>
 
-               
-             <!-- Gestión de Usuarios -->
-<div class="section-title">
-  <i class="fas fa-users"></i> Gestión de Usuarios
-</div>
-<div class="table-container">
-  <table id="tabla-usuarios">
-    <thead>
-      <tr>
-        <th>Código</th>
-        <th>Rol</th>
-        <th>Activo</th>
-        <th>Acciones</th>
-      </tr>
-    </thead>
-    <tbody id="cuerpo-usuarios">
-      <!-- Los usuarios se cargarán aquí -->
-    </tbody>
-  </table>
-  <button class="btn btn-primary" style="margin-top: 10px;" onclick="crearNuevoUsuario()">
-    <i class="fas fa-plus"></i> Añadir Usuario
-  </button>
-</div>
+                  <script>
+                    (function () {
+                      function initTPSL() {
+                        const select = document.getElementById('tpsl-mode');
+                        const tpGroup = document.getElementById('tpsl-manual-group');
+                        const slGroup = document.getElementById('tpsl-manual-group2');
 
-              
-              </main>
-              </div>
-              <script>
-                (function () {
-                  function initTPSL() {
-                    const select = document.getElementById('tpsl-mode');
-                    const tpGroup = document.getElementById('tpsl-manual-group');
-                    const slGroup = document.getElementById('tpsl-manual-group2');
+                        if (!select || !tpGroup || !slGroup) return false;
 
-                    if (!select || !tpGroup || !slGroup) return false;
+                        const update = () => {
+                          const show = select.value === 'manual';
+                          tpGroup.style.display = show ? 'block' : 'none';
+                          slGroup.style.display = show ? 'block' : 'none';
+                        };
 
-                    const update = () => {
-                      const show = select.value === 'manual';
-                      tpGroup.style.display = show ? 'block' : 'none';
-                      slGroup.style.display = show ? 'block' : 'none';
-                    };
+                        // Aplicar estado actual
+                        update();
 
-                  // Aplicar estado actual
-                 update();
+                        // Vincular evento (remover previos para evitar duplicados)
+                        select.removeEventListener('change', update);
+                        select.addEventListener('change', update);
 
-                 // Vincular evento (remover previos para evitar duplicados)
-                     select.removeEventListener('change', update);
-                select.addEventListener('change', update);
+                        return true;
+                      }
 
-               return true;
-                }
+                      // Intentar iniciar al cargar
+                      if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', initTPSL);
+                      } else {
+                        initTPSL();
+                      }
 
-              // Intentar iniciar al cargar
-                if (document.readyState === 'loading') {
-               document.addEventListener('DOMContentLoaded', initTPSL);
-              } else {
-               initTPSL();
-                 }
-
-             // ¡Y también ejecutarlo ahora, por si ya está cargado!
-            setTimeout(initTPSL, 100);
-            })();
-            </script>
+                      // ¡Y también ejecutarlo ahora, por si ya está cargado!
+                      setTimeout(initTPSL, 100);
+                    })();
+                  </script>
              <!-- <script>
 // Cargar usuarios al iniciar
 async function cargarUsuarios() {
