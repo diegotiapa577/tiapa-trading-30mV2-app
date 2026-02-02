@@ -115,16 +115,11 @@ function requireAuth(req, res, next) {
     return res.status(403).json({ error: 'Token inválido' });
   }
 }
-// nuevo autententicacion llega
-
 
 // 🔑 URL CORREGIDA: solo Futures Testnet (sin espacios)
 const BINANCE_FUTURES_URL = "https://testnet.binancefuture.com";
 
-const BINANCE_MAINNET_URL = "https://fapi.binance.com"; // Solo para klines/ticker (backtesting)
-
-
-
+//const BINANCE_MAINNET_URL = "https://fapi.binance.com"; // Solo para klines/ticker (backtesting)
 
 function signParams(params, secret) {
   const queryString = new URLSearchParams(params).toString();
@@ -142,7 +137,7 @@ async function getServerTime() {
 // 📈 Klines (Mainnet) - CORREGIDO para usar fetch importado
 app.get("/api/binance/klines", async (req, res) => {
   const { symbol = "BTCUSDT", interval = "1m", limit = 100 } = req.query;
-  const url = `${BINANCE_MAINNET_URL}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  const url = `${BINANCE_FUTURES_URL}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
   try {
     // Usar fetch importado
     const response = await fetch(url);
@@ -160,7 +155,7 @@ app.get("/api/binance/klines", async (req, res) => {
 // 💰 Ticker (Mainnet) - CORREGIDO para usar fetch importado
 app.get("/api/binance/ticker", async (req, res) => {
   const { symbol = "BTCUSDT" } = req.query;
-  const url = `${BINANCE_MAINNET_URL}/fapi/v1/ticker/price?symbol=${symbol}`;
+  const url = `${BINANCE_FUTURES_URL}/fapi/v1/ticker/price?symbol=${symbol}`;
   try {
     // Usar fetch importado
     const response = await fetch(url);

@@ -3803,13 +3803,6 @@ ws.onmessage = async (event) => {
       const ultimosVolumenes = volumes.slice(-10);
       const cambios = ultimosPrecios.map((p, idx) => idx === 0 ? 0 : (p - ultimosPrecios[idx - 1]) / ultimosPrecios[idx - 1]);
 
-          
-
-
-      //const macdRedondeado = macdValues.map(v => parseFloat(v.toFixed(4)));
-      //const signalRedondeado = signalValues .map(v => parseFloat(v.toFixed(4)));
-      // Calcular indicadores
-      // ✅ CORRECTO: usar las variables que sí existen
       window.indicadores = {
         macdLine: macdValues,
         signalLine: signalValues,
