@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Android - Trading</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #0f0f1b;
+            color: white;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            justify-content: center;
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #4ade80;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #334155;
+            border-radius: 8px;
+            background: #1e293b;
+            color: white;
+            font-size: 16px; /* Evita zoom en móviles */
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            background: #4ade80;
+            color: #0f0f1b;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #22c55e;
+        }
+        #message {
+            text-align: center;
+            margin-top: 15px;
+            min-height: 20px;
+        }
+        .error {
+            color: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>📱 Login Android</h2>
+        <div class="input-group">
+            <label for="code">Código de Acceso</label>
+            <input type="text" id="code" placeholder="Ej: tiapa01" autocomplete="off">
+        </div>
+        <div class="input-group">
+            <label for="apiKey">API Key</label>
+            <input type="password" id="apiKey" placeholder="Tu API Key">
+        </div>
+        <div class="input-group">
+            <label for="apiSecret">API Secret</label>
+            <input type="password" id="apiSecret" placeholder="Tu API Secret">
+        </div>
+        <button id="login-btn" onclick="loginUser()">Iniciar Sesión</button>
+        <div id="message"></div>
+    </div>
+
+    <script>
+        async function loginUser() {
+            const code = document.getElementById('code').value.trim();
+            const apiKey = document.getElementById('apiKey').value;
+            const apiSecret = document.getElementById('apiSecret').value;
+            const msg = document.getElementById('message');
+            const btn = document.getElementById('login-btn');
+
+            if (!code || !apiKey || !apiSecret) {
+                msg.innerHTML = '<span class="error">Completa todos los campos</span>';
+                return;
+            }
+
+            btn.disabled = true;
+            msg.innerHTML = '';
+
+            try {
+                const res = await fetch('/api/user/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code, apiKey, apiSecret })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    localStorage.setItem('authToken', data.token);
+                    window.location.href = '/android-panel.html'; // 👈 Redirección a panel móvil
+                } else {
+                    msg.innerHTML = `<span class="error">${data.error || 'Error al iniciar sesión'}</span>`;
+                }
+            } catch (err) {
+                console.error('Error:', err);
+                msg.innerHTML = '<span class="error">⚠️ No se pudo conectar al servidor</span>';
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        document.getElementById('apiSecret').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') loginUser();
+        });
+    </script>
+</body>
+</html>

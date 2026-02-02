@@ -121,7 +121,7 @@ function requireAuth(req, res, next) {
 // 🔑 URL CORREGIDA: solo Futures Testnet (sin espacios)
 const BINANCE_FUTURES_URL = "https://testnet.binancefuture.com";
 
-//const BINANCE_MAINNET_URL = "https://fapi.binance.com"; // Solo para klines/ticker (backtesting)
+const BINANCE_MAINNET_URL = "https://fapi.binance.com"; // Solo para klines/ticker (backtesting)
 
 
 
@@ -142,7 +142,7 @@ async function getServerTime() {
 // 📈 Klines (Mainnet) - CORREGIDO para usar fetch importado
 app.get("/api/binance/klines", async (req, res) => {
   const { symbol = "BTCUSDT", interval = "1m", limit = 100 } = req.query;
-  const url = `${BINANCE_FUTURES_URL}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  const url = `${BINANCE_MAINNET_URL}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
   try {
     // Usar fetch importado
     const response = await fetch(url);
@@ -160,7 +160,7 @@ app.get("/api/binance/klines", async (req, res) => {
 // 💰 Ticker (Mainnet) - CORREGIDO para usar fetch importado
 app.get("/api/binance/ticker", async (req, res) => {
   const { symbol = "BTCUSDT" } = req.query;
-  const url = `${BINANCE_FUTURES_URL}/fapi/v1/ticker/price?symbol=${symbol}`;
+  const url = `${BINANCE_MAINNET_URL}/fapi/v1/ticker/price?symbol=${symbol}`;
   try {
     // Usar fetch importado
     const response = await fetch(url);
@@ -543,9 +543,19 @@ app.listen(PORT, () => {
 
 // ✅ Público: cualquier usuario puede llamarlo
 app.post('/api/user/login', express.json(), (req, res) => {
-  const { code } = req.body; // el usuario envía su código (ej: "TIAPA_USER_001")
-  const USERS = getUSERS(); // ✅
-  if (USERS[code] && USERS[code].role === 'user') {
+  const { code } = req.body;
+  console.log('🔍 Código recibido:', JSON.stringify(code));
+  
+  // Verificar si las variables de entorno están cargadas
+  console.log('⚙️ USER_1_ID desde .env:', process.env.USER_1_ID);
+  
+  const USERS = getUSERS();
+  console.log('👥 Usuarios generados:', Object.keys(USERS));
+  
+  const user = USERS[code];
+  console.log('👤 Usuario encontrado:', user ? 'SÍ' : 'NO');
+  
+  if (user && user.role === 'user') {
     const token = jwt.sign(
       { id: code, role: 'user' },
       process.env.JWT_SECRET,

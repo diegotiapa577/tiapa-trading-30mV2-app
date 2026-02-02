@@ -413,33 +413,6 @@
       font-weight: bold;
     }
    
-    /* Resto de estilos (igual que indexV4.txt) */
-    
-    /*.semaforo-container {
-      background: var(--bg-card);
-      border-radius: 8px;
-      padding: 10px 15px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 0.85em;
-      margin-top: 8px;
-    }
-
-    .semaforo-indicator {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      display: inline-block;
-      background: #ef5350;
-    }
-
-    .semaforo-msg {
-      margin-left: auto;
-      font-weight: bold;
-      color: #ef5350;
-    }
-   */
 
     @media (max-width: 1024px) {
       .container {
@@ -609,8 +582,188 @@
   border-radius: 4px;
   font-size: 12px;
   display: inline-block;
+  text-align: center;
 }
 
+/* ===== ADAPTACIÓN PARA MÓVILES - ANDROID PANEL ===== */
+@media (max-width: 768px) {
+  /* Layout principal */
+  .container {
+    grid-template-columns: 1fr !important;
+    padding: 8px !important;
+    gap: 12px !important;
+  }
+  
+  .sidebar {
+    width: 100% !important;
+    max-width: none !important;
+    position: relative !important;
+    top: 0 !important;
+    padding: 12px !important;
+  }
+  
+  .main-content {
+    gap: 12px !important;
+  }
+  
+  /* Encabezado */
+  header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    padding: 8px 0 !important;
+  }
+  
+  .logo {
+    font-size: 1.4em !important;
+  }
+  
+  /* Gráficos */
+  .chart-container {
+    height: 300px !important;
+  }
+  
+  #tradingview_chart {
+    height: 350px !important;
+  }
+  
+  /* Controles y botones */
+  .control-group {
+    margin-bottom: 12px !important;
+  }
+  
+  input[type="number"],
+  select,
+  input[type="text"] {
+    padding: 12px !important;
+    font-size: 16px !important; /* Evita zoom en móviles */
+  }
+  
+  .btn {
+    padding: 12px !important;
+    font-size: 16px !important;
+    min-height: 44px !important; /* Tamaño táctil adecuado */
+  }
+  
+  .btn-group {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  
+  .btn-group button {
+    width: 100% !important;
+  }
+  
+  /* Tablas */
+  table {
+    font-size: 12px !important;
+  }
+  
+  th, td {
+    padding: 8px 6px !important;
+  }
+  
+  /* Estadísticas y métricas */
+  .capital-stats {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  
+  .stat-card {
+    padding: 12px !important;
+  }
+  
+  .stat-title {
+    font-size: 0.85em !important;
+  }
+  
+  .stat-value {
+    font-size: 1.1em !important;
+  }
+  
+  /* Módulos de grilla */
+  .grid-modulos {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  
+  .modulo {
+    padding: 12px !important;
+    font-size: 14px !important;
+  }
+  
+  .dato {
+    font-size: 14px !important;
+  }
+  
+  /* Secciones de predicción */
+  .prediction-section {
+    padding: 15px !important;
+  }
+  
+  .pred-direccion {
+    font-size: 1.4em !important;
+  }
+  
+  .pred-porcentaje {
+    font-size: 1.2em !important;
+  }
+  
+  /* Scroll horizontal para tablas si es necesario */
+  .table-container {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
+  /* Ajustes específicos para elementos críticos */
+  #estado-sistema,
+  #precio-actual,
+  #posicion-actual {
+    font-size: 14px !important;
+  }
+  
+  /* Asegurar que los controles no se superpongan */
+  .controls-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+  
+  .controls-row button {
+    width: 100% !important;
+    min-height: 44px !important;
+  }
+  
+  /* Panel de control - hacer más compacto */
+  .section-title {
+    font-size: 1em !important;
+    margin-bottom: 10px !important;
+  }
+  
+  /* Modo Gauss y Reversión */
+  .gauss-section, #panel-reversion, #panel-registro {
+    padding: 12px !important;
+    font-size: 14px !important;
+  }
+  
+  /* Botones de recarga */
+  .controles-cuenta {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  
+  .controles-cuenta button {
+    width: 100% !important;
+    padding: 12px !important;
+    font-size: 16px !important;
+  }
+  
+  .cuenta-indicador {
+    font-size: 14px !important;
+    padding: 8px 12px !important;
+  }
+}
   </style>
 </head>
 <body>
@@ -848,9 +1001,6 @@
         <button class="btn btn-primary" onclick="iniciarStreaming()">
           <i class="fas fa-play"></i> Iniciar Streaming
         </button>
-       <!-- <button class="btn btn-danger" onclick="detenerStreaming()">
-       <i class="fas fa-stop"></i> Parar Streaming
-        </button>-->
          
         <button class="btn btn-outline" onclick="operacionPrueba()">
           <i class="fas fa-magic"></i> Orden Sell o Buy Manual 
@@ -977,18 +1127,6 @@
     <!-- Solo visible si role === 'admin' -->
 
 <script>
-// Al inicio del script, después de DOMContentLoaded
-//document.addEventListener('DOMContentLoaded', () => {
-//  const role = getRoleFromToken(); // tu función para obtener el rol
-  
-  // ✅ Solo el admin ve el botón de entrenamiento
- // const btnEntrenar = document.querySelector('button[onclick="entrenarRed()"]');
- // if (btnEntrenar && role !== 'admin') {
- //   btnEntrenar.remove(); // o btnEntrenar.style.display = 'none';
- // }
-//});
-</script>
-<script>
 
 
   // ✅ Define la función ANTES de usarla
@@ -1040,30 +1178,45 @@
       <div class="chart-container">
         <div id="chart"></div>
       </div>
-   <!-- En tu android-panel.html o admin-panel.html -->
 <div id="tradingview_chart" style="width:100%; height:400px;"></div>
 
 <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
 <script type="text/javascript">
 new TradingView.widget({
-    "autosize": true,
+    "container_id": "tradingview_chart",
     "symbol": "BINANCE:SOLUSDT",
-    "interval": "30",  // timeframe 30m
-    "timezone": "Etc/UTC",
+    "interval": "30",
+    "timezone": "Etc/UTC", 
     "theme": "dark",
     "style": "1",
     "toolbar_bg": "#131722",
     "enable_publishing": false,
     "allow_symbol_change": false,
-    "container_id": "tradingview_chart",
+    "autosize": true,
+    
+    // 👇 Solo EMA20 y EMA50 (sin MACD automático)
     "studies": [
-        "MASimple@tv-basicstudies",      // EMA/SMA
-        "MACD@tv-basicstudies"           // MACD
+        "MASimple@tv-basicstudies",    // EMA20
+        "MASimple@tv-basicstudies"     // EMA50  
     ],
+    
+    "study_overrides": {
+        // EMA20 - Azul
+        "MASimple@tv-basicstudies.length": 20,
+        "MASimple@tv-basicstudies.type": "ema", 
+        "MASimple@tv-basicstudies.color": "#2196f3",
+        
+        // EMA50 - Naranja  
+        "MASimple@tv-basicstudies.2.length": 50,
+        "MASimple@tv-basicstudies.2.type": "ema",
+        "MASimple@tv-basicstudies.2.color": "#ff9800"
+    },
+    
     "overrides": {
         "paneProperties.background": "#0f0f1b",
-        "paneProperties.vertGridProperties.color": "#2a2e39",
-        "paneProperties.horzGridProperties.color": "#2a2e39"
+        "paneProperties.vertGridProperties.color": "#2a2e39", 
+        "paneProperties.horzGridProperties.color": "#2a2e39",
+        "scalesProperties.textColor": "#ffffff"
     }
 });
 </script>
@@ -1179,13 +1332,6 @@ new TradingView.widget({
     
        
        
-       <!--<div class="sidebar">
-        Indicador de estado de conexión 
-       <div style="margin-top: 10px; padding: 8px; background: #1a1a1a; border-radius: 6px; font-size: 12px;">
-         <strong>📡 Estado Conexión</strong>
-         <p id="streamingActivo " style="margin: 5px 0; color: orange;">🟡 Inicializando...</p>
-       </div>
-      </div>-->        
 
         <!-- ========== MONITOR MACD EN TIEMPO REAL ========== -->
     <div id="monitor-macd" style="
@@ -1229,20 +1375,6 @@ new TradingView.widget({
      </div>
 
 
-        <!-- ========== GRÁFICO MACD (réplica Binance) ========== 
-        <div id="macd-chart" style="
-            height: 320px;
-            background: #161c26;
-            border-top: 1px solid #333;
-            overflow-x: auto;
-            margin-top: 10px;
-            position: relative;
-             "></div> 
-
-                 <div id="debug-panel" style="
-            background: #222; color: #ff0; padding: 8px; font-size: 12px;
-            border: 1px solid #555; margin-top: 10px; 
-            "></div> ---->
                   
                   <div class="prediction-section fade-in">
                     <div class="prediction-header">
@@ -1360,103 +1492,6 @@ new TradingView.widget({
                       setTimeout(initTPSL, 100);
                     })();
                   </script>
-             <!-- <script>
-// Cargar usuarios al iniciar
-async function cargarUsuarios() {
-  try {
-    const res = await fetch('/api/admin/users', {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
-    });
-    const usuarios = await res.json();
-
-    const cuerpo = document.getElementById('cuerpo-usuarios');
-    cuerpo.innerHTML = '';
-
-    usuarios.forEach(u => {
-      const fila = document.createElement('tr');
-      fila.innerHTML = `
-        <td>${u.id}</td>
-        <td>${u.role}</td>
-        <td>${u.isActive ? '✅ Sí' : '❌ No'}</td>
-        <td>
-          <button class="btn btn-outline" onclick="editarUsuario('${u.id}')">Editar</button>
-          <button class="btn btn-outline btn-danger" onclick="eliminarUsuario('${u.id}')">Eliminar</button>
-        </td>
-      `;
-      cuerpo.appendChild(fila);
-    });
-  } catch (err) {
-    console.error('Error al cargar usuarios:', err);
-  }
-}
-
-// Llamar al cargar el panel
-//document.addEventListener('DOMContentLoaded', () => {
-  // ... otras inicializaciones ...
- // if (getRoleFromToken() === 'admin') {
-  //  cargarUsuarios();
- // }
-//});
-
-// Funciones de acción (puedes implementarlas después)
-function crearNuevoUsuario() { alert('Crear usuario'); }
-function editarUsuario(id) { alert('Editar: ' + id); }
-function eliminarUsuario(id) { alert('Eliminar: ' + id); }
-</script> -->
-
-
-<!--<script> 
-  // ✅ Verificación segura de autenticación
-  async function inicializarPanel() {
-    const token = localStorage.getItem('authToken');
-    
-    // Si no hay token, redirigir al login
-    if (!token) {
-      window.location.href = '/admin-login.html';
-      return;
-    }
-
-    // Verificar si el token es válido consultando al backend
-    try {
-      const res = await fetch('/api/binance/futures/account', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (!res.ok) {
-        throw new Error('Token inválido o expirado');
-      }
-
-      // ✅ Token válido: mostrar el panel y crear el gráfico
-      document.getElementById('main-container').style.display = 'grid';
-      
-      // Inicializar gráfico (si aún no está creado)
-      if (typeof crearGrafico === 'function' && !window.chart) {
-        crearGrafico();
-      }
-
-      // Iniciar WebSocket (si tienes una función para eso)
-      if (typeof iniciarStreaming === 'function') {
-        iniciarStreaming();
-      }
-
-    } catch (err) {
-      console.warn('Token inválido:', err.message);
-       if (err.message.includes('API Keys no configuradas')) {
-       alert('⚠️ Su cuenta no tiene claves de Binance configuradas. Contacte al administrador.');
-       }
-       
-      localStorage.removeItem('authToken');
-      window.location.href = '/admin-login.html';
-    }
-  }
-
-  // Ejecutar al cargar la página
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', inicializarPanel);
-  } else {
-    inicializarPanel();
-  }
-</script> -->
 
                    <script>
                   // Primero verificar autenticación
