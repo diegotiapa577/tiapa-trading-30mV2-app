@@ -413,33 +413,6 @@
       font-weight: bold;
     }
    
-    /* Resto de estilos (igual que indexV4.txt) */
-    
-    /*.semaforo-container {
-      background: var(--bg-card);
-      border-radius: 8px;
-      padding: 10px 15px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 0.85em;
-      margin-top: 8px;
-    }
-
-    .semaforo-indicator {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      display: inline-block;
-      background: #ef5350;
-    }
-
-    .semaforo-msg {
-      margin-left: auto;
-      font-weight: bold;
-      color: #ef5350;
-    }
-   */
 
     @media (max-width: 1024px) {
       .container {
@@ -977,18 +950,6 @@
     <!-- Solo visible si role === 'admin' -->
 
 <script>
-// Al inicio del script, después de DOMContentLoaded
-//document.addEventListener('DOMContentLoaded', () => {
-//  const role = getRoleFromToken(); // tu función para obtener el rol
-  
-  // ✅ Solo el admin ve el botón de entrenamiento
- // const btnEntrenar = document.querySelector('button[onclick="entrenarRed()"]');
- // if (btnEntrenar && role !== 'admin') {
- //   btnEntrenar.remove(); // o btnEntrenar.style.display = 'none';
- // }
-//});
-</script>
-<script>
 
 
   // ✅ Define la función ANTES de usarla
@@ -1360,104 +1321,6 @@ new TradingView.widget({
                       setTimeout(initTPSL, 100);
                     })();
                   </script>
-             <!-- <script>
-// Cargar usuarios al iniciar
-async function cargarUsuarios() {
-  try {
-    const res = await fetch('/api/admin/users', {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
-    });
-    const usuarios = await res.json();
-
-    const cuerpo = document.getElementById('cuerpo-usuarios');
-    cuerpo.innerHTML = '';
-
-    usuarios.forEach(u => {
-      const fila = document.createElement('tr');
-      fila.innerHTML = `
-        <td>${u.id}</td>
-        <td>${u.role}</td>
-        <td>${u.isActive ? '✅ Sí' : '❌ No'}</td>
-        <td>
-          <button class="btn btn-outline" onclick="editarUsuario('${u.id}')">Editar</button>
-          <button class="btn btn-outline btn-danger" onclick="eliminarUsuario('${u.id}')">Eliminar</button>
-        </td>
-      `;
-      cuerpo.appendChild(fila);
-    });
-  } catch (err) {
-    console.error('Error al cargar usuarios:', err);
-  }
-}
-
-// Llamar al cargar el panel
-//document.addEventListener('DOMContentLoaded', () => {
-  // ... otras inicializaciones ...
- // if (getRoleFromToken() === 'admin') {
-  //  cargarUsuarios();
- // }
-//});
-
-// Funciones de acción (puedes implementarlas después)
-function crearNuevoUsuario() { alert('Crear usuario'); }
-function editarUsuario(id) { alert('Editar: ' + id); }
-function eliminarUsuario(id) { alert('Eliminar: ' + id); }
-</script> -->
-
-
-<!--<script> 
-  // ✅ Verificación segura de autenticación
-  async function inicializarPanel() {
-    const token = localStorage.getItem('authToken');
-    
-    // Si no hay token, redirigir al login
-    if (!token) {
-      window.location.href = '/admin-login.html';
-      return;
-    }
-
-    // Verificar si el token es válido consultando al backend
-    try {
-      const res = await fetch('/api/binance/futures/account', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (!res.ok) {
-        throw new Error('Token inválido o expirado');
-      }
-
-      // ✅ Token válido: mostrar el panel y crear el gráfico
-      document.getElementById('main-container').style.display = 'grid';
-      
-      // Inicializar gráfico (si aún no está creado)
-      if (typeof crearGrafico === 'function' && !window.chart) {
-        crearGrafico();
-      }
-
-      // Iniciar WebSocket (si tienes una función para eso)
-      if (typeof iniciarStreaming === 'function') {
-        iniciarStreaming();
-      }
-
-    } catch (err) {
-      console.warn('Token inválido:', err.message);
-       if (err.message.includes('API Keys no configuradas')) {
-       alert('⚠️ Su cuenta no tiene claves de Binance configuradas. Contacte al administrador.');
-       }
-       
-      localStorage.removeItem('authToken');
-      window.location.href = '/admin-login.html';
-    }
-  }
-
-  // Ejecutar al cargar la página
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', inicializarPanel);
-  } else {
-    inicializarPanel();
-  }
-</script> -->
-
                    <script>
                   // Primero verificar autenticación
                  if (!localStorage.getItem('authToken')) {

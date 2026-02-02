@@ -499,41 +499,11 @@ app.post('/api/binance/futures/leverage', requireAuth,  async (req, res) => {
 
 app.get("/favicon.ico", (req, res) => res.status(204).end());
 
-// === ALERTAS POR TELEGRAM ===
-//async function enviarMensajeTelegram(mensaje) {
-  //const token = process.env.TELEGRAM_BOT_TOKEN;
-  //const chatId = process.env.TEL/EGRAM_CHAT_ID;
-  
-  //if (!token || !chatId) {
-  //  console.warn("⚠️ Telegram no configurado-Backend");
- //   return;
- // }
-
-  //const url = `https://api.telegram.org/bot${token}/sendMessage`;
-  //const data = {
-  //  chat_id: chatId,
- //   text: mensaje,
- //   parse_mode: "HTML"
- // };
-
- // try {
- //   await fetch(url, {
-//      method: 'POST',
-//     headers: { 'Content-Type': 'application/json' },
-//   });
- // /  console.log("✅ Alerta enviada a Telegram");
- /// } catch (err) {
- //   console.error("❌ Error al enviar alerta:", err.message);
- // }
-//}
 
 app.listen(PORT, () => {
   console.log(`✅ Servidor en http://localhost:${PORT}`);
   console.log("🧪 Conectado a Binance Futures TESTNET Y MAIN");
 });
-
-// genera-hash.js
-// Endpoint para crear usuario (solo admin)
 
 
 // ✅ Público: cualquier usuario puede llamarlo

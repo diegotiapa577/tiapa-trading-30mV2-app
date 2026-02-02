@@ -153,7 +153,7 @@
         if (data.success) {
              localStorage.removeItem('authToken'); // ← Asegura que no queden tokens antiguos
              localStorage.setItem('authToken', data.token);
-          window.location.href = '/androit-panel.html';// ✅ Redirección correcta
+          window.location.href = '/android-panel.html';// ✅ Redirección correcta
 
         } else {
           msg.textContent = data.error || 'Error al iniciar sesión';
