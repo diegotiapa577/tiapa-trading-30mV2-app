@@ -92,12 +92,12 @@
 </head>
 <body>
 
-    <!-- Mensaje de orientación para usuarios -->
+    <!-- Mensaje de orientación para usuarios 
 <div id="mensaje-fin-semana" style="background: #1e293b; padding: 12px; border-left: 3px solid #3b82f6; margin: 15px 0; border-radius: 8px; display: none;">
   <h4>ℹ️ Importante: Tiempo de espera</h4>
   <p>Tras registrarte, el sistema necesita <strong><span id="horas-espera">27.5</span> horas</strong> para preparar las señales (basado en timeframe de 30m).</p>
   <p><strong>💡 Recomendación:</strong> Regístrate el <strong>fin de semana</strong> para poder operar el lunes sin interrupciones.</p>
-</div>
+</div> -->
 
 <script>
 // Mostrar el mensaje al cargar
@@ -169,7 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.success) {
              localStorage.removeItem('authToken'); // ← Asegura que no queden tokens antiguos
              localStorage.setItem('authToken', data.token);
-          localStorage.setItem('authToken', data.token);
           window.location.href = '/admin-panel.html';// ✅ Redirección correcta
         } else {
           msg.textContent = data.error || 'Error al iniciar sesión';
@@ -192,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     localStorage.removeItem('authToken'); // ← Asegura que no queden tokens antiguos
-localStorage.setItem('authToken', data.token);
+
   </script>
 </body>
 </html>
