@@ -90,7 +90,6 @@ posicionActual = null; // para cierre
 window.historialOperaciones = [];
 
 // Mostrar el panel desde el inicio
-document.getElementById('panel-estadisticas-ia').style.display = 'block';
   //document.getElementById('objetivo-predicciones').textContent = window.configEstadisticasIA.objetivo;
 //document.getElementById('total-objetivo').textContent = window.configEstadisticasIA.objetivo;
 // Al iniciar

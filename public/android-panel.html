@@ -39,106 +39,163 @@
 
     .container {
       display: grid;
-      grid-template-columns: 280px 1fr;
-      gap: 20px;
+      grid-template-columns: 1fr;
+      gap: 15px;
       max-width: 1400px;
-      margin: 20px auto;
-      padding: 15px;
+      margin: 15px auto;
+      padding: 10px;
       min-height: 100vh;
     }
 
-
-    /* Resto de estilos (igual que indexV4.txt) */
     header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 20px;
-      padding-bottom: 15px;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
       border-bottom: 1px solid var(--border);
       color: var(--text);
     }
 
     .logo {
-      font-size: 1.8em;
+      font-size: 1.6em;
       font-weight: bold;
       color: var(--text);
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
 
     .logo i {
       color: var(--accent-green);
     }
 
-    .status-bar {
-      background: var(--bg-secondary);
-      padding: 10px 20px;
+    .btn {
+      padding: 12px 15px;
+      border: none;
       border-radius: 8px;
-      text-align: right;
-      font-size: 0.9em;
-      color: var(--text-muted);
-      margin-bottom: 15px;
-      box-shadow: var(--shadow);
-    }
-
-    .sidebar {
-      background: var(--bg-card);
-      border-radius: 12px;
-      padding: 20px;
-      box-shadow: var(--shadow);
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      position: sticky;
-      top: 20px;
-      height: fit-content;
-      width: 100%;
-      max-width: 280px;
-    }
-
-    .section-title {
-      font-size: 1.1em;
+      cursor: pointer;
       font-weight: 600;
-      color: var(--text);
-      margin-bottom: 15px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
+      font-size: 16px;
+      transition: var(--transition);
+      margin: 0;
+      display: inline-block;
+      text-align: center;
+      white-space: nowrap;
+      min-height: 44px;
     }
 
-    .section-title i {
+    .btn-primary {
+      background: var(--accent-green);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #1e8c7c;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 2px solid var(--accent-green);
       color: var(--accent-green);
     }
 
-    .control-group {
+    .btn-outline:hover {
+      background: var(--bg-secondary);
+    }
+
+    .btn-recargar {
+      background: linear-gradient(135deg, #ffd700, #ffa500);
+      color: #000;
+      font-weight: bold;
+    }
+
+    .btn-recargar:hover {
+      filter: brightness(1.1);
+    }
+
+    .main-content {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .chart-container {
+      background: var(--bg-card);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      height: 250px;
+      position: relative;
+    }
+
+    #chart {
+      width: 100%;
+      height: 100%;
+    }
+
+    .controls-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      gap: 10px;
+    }
+
+    .controls-row button {
+      flex: 1;
+      min-width: 140px;
+      font-size: 16px;
+    }
+
+    /* Panel de controles compacto */
+    .panel-controles {
+      background: var(--bg-card);
+      border-radius: 12px;
+      padding: 15px;
+      box-shadow: var(--shadow);
       margin-bottom: 15px;
     }
 
-    .control-group label {
-      display: block;
-      font-size: 0.9em;
-      margin-bottom: 5px;
+    .controles-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 15px;
+    }
+
+    @media (min-width: 769px) {
+      .controles-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    .control-item {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .control-item label {
+      font-size: 0.85em;
       color: var(--text-muted);
+      font-weight: 500;
     }
 
     input[type="number"],
-    select,
-    input[type="text"] {
+    select {
       width: 100%;
       padding: 10px;
       border: 1px solid var(--border);
       background: var(--bg-secondary);
       color: var(--text);
-      border-radius: 8px;
-      font-size: 0.9em;
+      border-radius: 6px;
+      font-size: 16px;
       transition: var(--transition);
     }
 
     input[type="number"]:focus,
-    select:focus,
-    input[type="text"]:focus {
+    select:focus {
       outline: none;
       border-color: var(--accent-green);
     }
@@ -147,7 +204,6 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-bottom: 15px;
     }
 
     .toggle-switch input[type="checkbox"] {
@@ -181,106 +237,11 @@
       left: 22px;
     }
 
-    .btn {
-      padding: 10px 15px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 0.9em;
-      transition: var(--transition);
-      margin-top: 5px;
-      display: inline-block;
-      text-align: center;
-      white-space: nowrap;
-    }
-
-    .btn-primary {
-      background: var(--accent-green);
-      color: white;
-    }
-
-    .btn-primary:hover {
-      background: #1e8c7c;
-    }
-
-    .btn-danger {
-      background: var(--accent-red);
-      color: white;
-    }
-
-    .btn-danger:hover {
-      background: #d33b3b;
-    }
-
-    .btn-outline {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--text);
-      margin-right: 5px;
-    }
-
-    .btn-outline:hover {
-      background: var(--bg-secondary);
-    }
-
-    .btn-recargar {
-      background: linear-gradient(135deg, #ffd700, #ffa500);
-      color: #000;
-      font-weight: bold;
-    }
-
-    .btn-recargar:hover {
-      filter: brightness(1.1);
-    }
-
-    .btn-group {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .main-content {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-
-    .chart-container {
-      background: var(--bg-card);
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: var(--shadow);
-      height: 500px;
-      position: relative;
-    }
-
-    #chart {
-      width: 100%;
-      height: 100%;
-    }
-
-    .controls-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 15px;
-      padding: 0 20px;
-      gap: 10px;
-    }
-
-    .controls-row button {
-      flex: 1;
-      min-width: 120px;
-      font-size: 0.9em;
-    }
-
     .prediction-section {
       background: var(--bg-card);
       border-radius: 12px;
       padding: 20px;
       box-shadow: var(--shadow);
-      margin-top: 20px;
     }
 
     .prediction-header {
@@ -298,7 +259,7 @@
     }
 
     .pred-direccion {
-      font-size: 1.8em;
+      font-size: 1.6em;
       font-weight: bold;
       text-align: center;
       margin-bottom: 10px;
@@ -306,7 +267,7 @@
     }
 
     .pred-porcentaje {
-      font-size: 1.4em;
+      font-size: 1.3em;
       font-weight: bold;
       text-align: center;
       color: var(--text);
@@ -330,53 +291,11 @@
       transition: width 0.5s ease;
     }
 
-    .capital-stats {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 15px;
-      margin-bottom: 20px;
-    }
-
-    .stat-card {
-      background: var(--bg-secondary);
-      border-radius: 10px;
-      padding: 15px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-      transition: var(--transition);
-    }
-
-    .stat-card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-    }
-
-    .stat-title {
-      font-size: 0.9em;
-      color: var(--text-muted);
-      margin-bottom: 10px;
-      text-transform: uppercase;
-    }
-
-    .stat-value {
-      font-size: 1.3em;
-      font-weight: bold;
-      color: var(--text);
-    }
-
-    .stat-value.positive {
-      color: var(--accent-green);
-    }
-
-    .stat-value.negative {
-      color: var(--accent-red);
-    }
-
     .table-container {
       background: var(--bg-card);
       border-radius: 12px;
       overflow: hidden;
       box-shadow: var(--shadow);
-      margin-top: 20px;
     }
 
     table {
@@ -412,458 +331,269 @@
       color: var(--accent-red);
       font-weight: bold;
     }
-   
 
-    @media (max-width: 1024px) {
-      .container {
-        grid-template-columns: 1fr;
-      }
-
-      .sidebar {
-        margin-bottom: 20px;
-      }
+    .grid-modulos {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+      margin: 15px 0;
     }
 
+    .modulo {
+      background: #1f1f1f;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .titulo-modulo {
+      font-weight: bold;
+      margin-bottom: 10px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 1em;
+    }
+
+    .dato {
+      margin: 5px 0;
+      font-family: monospace;
+      font-size: 0.9em;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .estadistica {
+      display: flex;
+      justify-content: space-between;
+      margin: 5px 0;
+    }
+
+    .capital-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin: 15px 0;
+    }
+
+    .stat-card {
+      background: var(--bg-secondary);
+      border-radius: 10px;
+      padding: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .stat-title {
+      font-size: 0.85em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      font-size: 1.2em;
+      font-weight: bold;
+      color: var(--text);
+    }
+
+    .stat-value.positive {
+      color: var(--accent-green);
+    }
+
+    .stat-value.negative {
+      color: var(--accent-red);
+    }
+
+    .controles-cuenta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .controles-cuenta button {
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .cuenta-indicador {
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      display: inline-block;
+      text-align: center;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+
+    /* Responsive */
     @media (max-width: 768px) {
       .container {
-        padding: 10px;
+        padding: 8px;
+        gap: 12px;
       }
-
-      .controls-row {
-        flex-direction: column;
-        gap: 10px;
+      
+      .chart-container {
+        height: 00px;
       }
-
-      .controls-row button {
-        width: 100%;
+      
+      #tradingview_chart {
+        height: 420px !important;
       }
-
+      
+      .controles-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .grid-modulos {
+        grid-template-columns: 1fr;
+      }
+      
       .capital-stats {
         grid-template-columns: 1fr;
       }
-    }
-
-    @keyframes fadeIn {
-      from {
-        opacity: 0;
+      
+      .controls-row {
+        flex-direction: column;
+        align-items: stretch;
       }
-
-      to {
-        opacity: 1;
+      
+      .controls-row button {
+        width: 100%;
+      }
+      
+      .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
       }
     }
-
-    .fade-in {
-      animation: fadeIn 0.5s ease-in;
-    }
-
-    .semaforo-msg {
-      font-size: 0.9em !important;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    #tpsl-manual-group,
-    #tpsl-manual-group2 {
-      transition: opacity 0.3s ease, height 0.3s ease;
-    }
-   .chart-container {
-  width: 100%;
-  height: 500px; /* ¡Debe estar en px o %, no solo en .main-content */
-  background: var(--bg-card);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: var(--shadow);
-  position: relative;
-  }
-  .semaforo {
-    padding: 12px;
-    background: #1e1e1e;
-    border-radius: 8px;
-    color: white;
-    font-size: 14px;
-    margin: 10px 0;
-  }
-  .luz {
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    margin-left: 8px;
-  }
-  #semaforo-msg {
-    margin: 8px 0 0 0;
-    font-weight: bold;
-  }
-
-
-/*-- ESTILO DE LA CUADRÍCULA -->*/
-
-.grid-modulos {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-  margin: 16px 0;
-}
-
-.modulo {
-  background: #1f1f1f;
-  padding: 16px;
-  border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
-
-.titulo-modulo {
-  font-weight: bold;
-  margin-bottom: 12px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid #334155;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.dato {
-  margin: 6px 0;
-  font-family: monospace;
-  font-size: 0.95em;
-  display: flex;
-  justify-content: space-between;
-}
-
-.estado-senal {
-  margin-top: 12px;
-  padding: 8px;
-  border-radius: 6px;
-  font-weight: bold;
-  text-align: center;
-}
-
-.estado-ok { background: #065f46; color: #68d391; }
-.estado-alerta { background: #667007; color: #fed7aa; }
-.estado-error { background: #573f42; color: #fca5a5; }
-
-.estadistica {
-  display: flex;
-  justify-content: space-between;
-  margin: 6px 0;
-}
-
-.control-operaciones label {
-  display: block;
-  margin: 6px 0;
-}
-
-.control-operaciones input[type="number"] {
-  width: 60px;
-  padding: 4px;
-  margin-left: 8px;
-  background: #0f172a;
-  border: 1px solid #334155;
-  color: white;
-  border-radius: 4px;
-}
-
-@media (max-width: 900px) {
-  .grid-modulos {
-    grid-template-columns: 1fr;
-  }
-}
-
-.btn-mainnet {
-  background-color: #ff6b6b !important;
-  margin-left: 10px;
-}
-
-.cuenta-indicador {
-  padding: 5px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-  display: inline-block;
-  text-align: center;
-}
-
-/* ===== ADAPTACIÓN PARA MÓVILES - ANDROID PANEL ===== */
-@media (max-width: 768px) {
-  /* Layout principal */
-  .container {
-    grid-template-columns: 1fr !important;
-    padding: 8px !important;
-    gap: 12px !important;
-  }
-  
-  .sidebar {
-    width: 100% !important;
-    max-width: none !important;
-    position: relative !important;
-    top: 0 !important;
-    padding: 12px !important;
-  }
-  
-  .main-content {
-    gap: 12px !important;
-  }
-  
-  /* Encabezado */
-  header {
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 8px !important;
-    padding: 8px 0 !important;
-  }
-  
-  .logo {
-    font-size: 1.4em !important;
-  }
-  
-  /* Gráficos */
-  .chart-container {
-    height: 300px !important;
-  }
-  
-  #tradingview_chart {
-    height: 350px !important;
-  }
-  
-  /* Controles y botones */
-  .control-group {
-    margin-bottom: 12px !important;
-  }
-  
-  input[type="number"],
-  select,
-  input[type="text"] {
-    padding: 12px !important;
-    font-size: 16px !important; /* Evita zoom en móviles */
-  }
-  
-  .btn {
-    padding: 12px !important;
-    font-size: 16px !important;
-    min-height: 44px !important; /* Tamaño táctil adecuado */
-  }
-  
-  .btn-group {
-    flex-direction: column !important;
-    gap: 8px !important;
-  }
-  
-  .btn-group button {
-    width: 100% !important;
-  }
-  
-  /* Tablas */
-  table {
-    font-size: 12px !important;
-  }
-  
-  th, td {
-    padding: 8px 6px !important;
-  }
-  
-  /* Estadísticas y métricas */
-  .capital-stats {
-    grid-template-columns: 1fr !important;
-    gap: 10px !important;
-  }
-  
-  .stat-card {
-    padding: 12px !important;
-  }
-  
-  .stat-title {
-    font-size: 0.85em !important;
-  }
-  
-  .stat-value {
-    font-size: 1.1em !important;
-  }
-  
-  /* Módulos de grilla */
-  .grid-modulos {
-    grid-template-columns: 1fr !important;
-    gap: 12px !important;
-  }
-  
-  .modulo {
-    padding: 12px !important;
-    font-size: 14px !important;
-  }
-  
-  .dato {
-    font-size: 14px !important;
-  }
-  
-  /* Secciones de predicción */
-  .prediction-section {
-    padding: 15px !important;
-  }
-  
-  .pred-direccion {
-    font-size: 1.4em !important;
-  }
-  
-  .pred-porcentaje {
-    font-size: 1.2em !important;
-  }
-  
-  /* Scroll horizontal para tablas si es necesario */
-  .table-container {
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-  }
-  
-  /* Ajustes específicos para elementos críticos */
-  #estado-sistema,
-  #precio-actual,
-  #posicion-actual {
-    font-size: 14px !important;
-  }
-  
-  /* Asegurar que los controles no se superpongan */
-  .controls-row {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 8px !important;
-  }
-  
-  .controls-row button {
-    width: 100% !important;
-    min-height: 44px !important;
-  }
-  
-  /* Panel de control - hacer más compacto */
-  .section-title {
-    font-size: 1em !important;
-    margin-bottom: 10px !important;
-  }
-  
-  /* Modo Gauss y Reversión */
-  .gauss-section, #panel-reversion, #panel-registro {
-    padding: 12px !important;
-    font-size: 14px !important;
-  }
-  
-  /* Botones de recarga */
-  .controles-cuenta {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 8px !important;
-  }
-  
-  .controles-cuenta button {
-    width: 100% !important;
-    padding: 12px !important;
-    font-size: 16px !important;
-  }
-  
-  .cuenta-indicador {
-    font-size: 14px !important;
-    padding: 8px 12px !important;
-  }
-}
   </style>
 </head>
 <body>
 
- <div class="container" id="main-container" style="display:none;">
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <!--  <div class="status-bar">Esperando...</div> -->
-      <div class="section-title">
-        <i class="fas fa-sliders-h"></i> Panel de Control
-         <!--<span style="font-size: 0.8em; color: #aaa; margin-left: 10px;">Avanzado</span>-->
+<div class="container" id="main-container" style="display:none;">
+  <!-- Main Content -->
+  <main class="main-content">
+    <header>
+      <div class="logo">
+        <i class="fas fa-mobile-alt"></i>
+        Trading Predictivo TIAPA 🔐
       </div>
-      
-      <div class="control-group">
-        <label for="montoCompra">Monto Compra (USDT)</label>
-        <input type="number" id="montoCompra" value="240" step="1" min="130">
+      <div style="margin-top: 8px; font-weight: bold; font-size: 14px;">
+        <span id="semaforo-operacion">⚫ ESPERANDO DATOS</span>
       </div>
-             <!-- (El resto de tu HTML) -->
-      <div class="control-group">
-        <label for="tpsl-mode">TP/SL</label>
-        <select id="tpsl-mode">
-          <option value="dinamico">Dinámico (ATR)</option>
-           <option value="manual">Manual(%)</option>
-        </select>
-      </div>
-      <div class="control-group" id="tpsl-manual-group" style="display:none;">
-        <label for="takeProfit">Take-Profit (%)</label>
-        <input type="number" id="takeProfit" value="3" step="0.1" min="0.5">
-      </div>
-      <div class="control-group" id="tpsl-manual-group2" style="display:none;">
-        <label for="stopLoss">Stop-Loss (%)</label>
-        <input type="number" id="stopLoss" value="1.5" step="0.1" min="0.5">
-      </div>
+    </header>
 
-      <label>MULT-TP x ATR: <input type="number" id="tp-mult" value="2.0" step="0.1"></label>
-        <label>MULT-SL x ATR: <input type="number" id="sl-mult" value="1.0" step="0.1"></label>
+    <!-- Botones principales -->
+    <div class="controls-row">
+      <button class="btn btn-primary" onclick="entrenarRed()">
+        <i class="fas fa-brain"></i> Entrenar Red Neuronal
+      </button>
+      <button class="btn btn-primary" onclick="iniciarStreaming()">
+        <i class="fas fa-brain"></i> Iniciar Streaming
+      </button>
+      <div class="status" id="estado">Esperando...</div>
+    </div>
 
-      <div class="control-group">
-        <label for="apalancamiento">Apalancamiento (x)</label>
-        <input type="number" id="apalancamiento" value="2" min="1" max="125">
-      </div>
-      <div class="control-group">
-        <label for="modo-mercado">Modo de Mercado</label>
-        <select id="modo-mercado">
-          <option value="volatil">Volátil (automático)</option>
-          <option value="alcista">Tendencia Alcista</option>
-          <option value="bajista">Tendencia Bajista</option>
-        </select>
-      </div>
+    <!-- Gráficos -->
+    <div class="chart-container">
+      <div id="chart"></div>
+    </div>
+    
+    <div id="tradingview_chart" style="width:100%; height:320px;"></div>
 
-
-      <div class="control-group">
-<select id="selector-simbolo" onchange="window.simboloActual = this.value;">
-  <option value="BTCUSDT">BTCUSDT</option>
-  <option value="SOLUSDT" selected>SOLUSDT</option>
-  <option value="ETHUSDT">ETHUSDT</option>
-</select>
-
-
-
-      </div>
-
-
-      <div class="control-group">
-        <label for="autoTrading">Auto-Trading (IA)</label>
-        <div class="toggle-switch">
-          <input type="checkbox" id="autoTrading" checked>
+    <!-- Panel de controles compacto -->
+    <div class="panel-controles">
+      <div class="controles-grid">
+        <div class="control-item">
+          <label for="montoCompra">Monto Compra (USDT)</label>
+          <input type="number" id="montoCompra" value="240" step="1" min="130">
+        </div>
+        
+        <div class="control-item">
+          <label for="apalancamiento">Apalancamiento (x)</label>
+          <input type="number" id="apalancamiento" value="2" min="1" max="125">
+        </div>
+        
+        <div class="control-item">
+          <label for="tpsl-mode">TP/SL</label>
+          <select id="tpsl-mode">
+            <option value="dinamico">Dinámico (ATR)</option>
+            <option value="manual">Manual(%)</option>
+          </select>
+        </div>
+        
+        <div class="control-item" id="tpsl-manual-group" style="display:none;">
+          <label for="takeProfit">Take-Profit (%)</label>
+          <input type="number" id="takeProfit" value="3" step="0.1" min="0.5">
+        </div>
+        
+        <div class="control-item" id="tpsl-manual-group2" style="display:none;">
+          <label for="stopLoss">Stop-Loss (%)</label>
+          <input type="number" id="stopLoss" value="1.5" step="0.1" min="0.5">
+        </div>
+        
+        <div class="control-item">
+          <label>MULT-TP x ATR</label>
+          <input type="number" id="tp-mult" value="2.0" step="0.1">
+        </div>
+        
+        <div class="control-item">
+          <label>MULT-SL x ATR</label>
+          <input type="number" id="sl-mult" value="1.0" step="0.1">
+        </div>
+        
+        <div class="control-item">
+          <label for="modo-mercado">Modo de Mercado</label>
+          <select id="modo-mercado">
+            <option value="volatil">Volátil</option>
+            <option value="alcista">Alcista</option>
+            <option value="bajista">Bajista</option>
+          </select>
+        </div>
+        
+        <div class="control-item">
+          <label for="selector-simbolo">Símbolo</label>
+          <select id="selector-simbolo" onchange="window.simboloActual = this.value;">
+            <option value="BTCUSDT">BTCUSDT</option>
+            <option value="SOLUSDT" selected>SOLUSDT</option>
+            <option value="ETHUSDT">ETHUSDT</option>
+          </select>
+        </div>
+        <button class="btn btn-outline" onclick="operacionPrueba()">
+          <i class="fas fa-magic"></i> Orden Sell o Buy Manual 
+        </button>
+       
+       <button class="btn btn-outline" onclick="actualizarPosicionesAbiertas()">
+          <i class="fas fa-magic"></i>  Actualizar Posiciones
+        </button>
+        
+        <div class="control-item">
+          <label for="autoTrading">Auto-Trading (IA)</label>
+          <div class="toggle-switch">
+            <input type="checkbox" id="autoTrading" checked>
+          </div>
         </div>
       </div>
-
       
-      <!-- Modo de Operación -->
-      <div style="margin: 12px 0; padding: 10px; background: #1e2a38; border-radius: 6px; border: 1px solid #3a5b7c;">
-        <h4 style="margin-top: 0; color: #e0e0e0; font-size: 14px;">🧭 Modo de Operación en Reversion</h4>
-        <label style="display: block; margin: 6px 0;">
-          <input type="radio" name="modo-operacion" value="both" checked>
-          <span style="color: #4fc3f7;">🔄 LONG + SHORT</span>
-        </label>
-        <label style="display: block; margin: 6px 0;">
-          <input type="radio" name="modo-operacion" value="long">
-          <span style="color: #66bb6a;">📈 SOLO LONG</span>
-        </label>
-        <label style="display: block; margin: 6px 0;">
-          <input type="radio" name="modo-operacion" value="short">
-          <span style="color: #ef5350;">📉 SOLO SHORT</span>
-        </label>
+      <!-- Botones de recarga -->
+      <div class="controles-cuenta">
+        <button class="btn btn-recargar" onclick="recargarTestnet()">
+          <i class="fas fa-coins"></i> Recargar Testnet
+        </button>
+        <button class="btn btn-recargar" style="background-color: #ff6b6b;" onclick="recargarMainnet()">
+          <i class="fas fa-wallet"></i> Recargar Mainnet
+        </button>
       </div>
+      <div id="cuenta-actual" class="cuenta-indicador"></div>
+    </div>
 
-        <!---- <div class="control-group">
-         <label>
-           <input type="checkbox" id="trailing-enabled" checked>
-           Trailing Stop (después de ROE ≥ 1%)
-         </label>
-          </div>-->
+    <!-- GRILLA DE MÓDULOS -->
+    <div class="grid-modulos">
 
-        <!-- ========== MODO REVERSIÓN MACD ========== -->
-   <!-- ========== MODO REVERSIÓN MACD ========== -->
-
-                       <!-- 🔹 MODO GAUSS -->
-        <div style="margin-top: 12px; padding: 8px; background:#1e2a38; border-radius:6px;border: 1px solid #3a5b7c; ">
+            <div style="margin-top: 12px; padding: 8px; background:#1e2a38; border-radius:6px;border: 1px solid #3a5b7c; ">
           <div>
             <label>
               <input type="checkbox" id="modo-gauss-activo">
@@ -894,171 +624,87 @@
         </div>
       </div>
 
-        <div id="panel-reversion" style="
-          background: #1e2a38;
-          border: 1px solid #3a5b7c;
-          border-radius: 8px;
-          padding: 12px;
-          margin: 10px 0;
-          font-family: Arial, sans-serif;
-          color: #e0e6ef;
-        ">
-          <h4 style="margin: 0 0 8px; font-size: 14px; color: #64b5f6;">⚡ Modo Reversión MACD</h4>
-        
-          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
-            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-              <input type="checkbox" id="modo-reversion-activo" style="cursor: pointer;">
-              <span>Activar</span>
-            </label>
-        
-            <div style="display: flex; gap: 8px; align-items: center;">
-              <span style="font-size: 12px; opacity: 0.8;">Modo:</span>
-              <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 12px;">
-                <input type="radio" name="modo-reversion" value="auto" checked>
-                Automático
-              </label>
-              <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 12px;">
-                <input type="radio" name="modo-reversion" value="manual">
-                Manual
-              </label>
-            </div>
-          </div>
-        
-          <!-- Botones de acción -->
-          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <button id="btn-operar-reversion"
-              style="padding: 6px 12px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; display: none;"
-              disabled>
-              ⚡ ABRIR POSICIÓN
-            </button>
-        
-            <button id="btn-cerrar-reversion"
-              style="padding: 6px 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; display: none;"
-              disabled>
-              🔒 CERRAR POSICIÓN
-            </button>
-          </div>
-        
-          <div id="estado-reversion" style="
-            margin-top: 10px;
-            font-size: 11px;
-            color: #ffd700;
-            min-height: 16px;
-          "></div>
+
+
+      <!-- MÓDULO 1: Semáforo de Trading -->
+      <div class="modulo">
+        <div class="titulo-modulo">🚦 Semáforo de Trading</div>
+        <div class="dato">
+          <span>Tendencia (ADX):</span>
+          <span id="cond-adx" class="luz"></span>
+          <span id="adx1-valor">--</span>
         </div>
+        <div class="dato">
+          <span>Modo:</span>
+          <span id="cond-modo" class="luz"></span> 
+          <span id="modo-valor">VOLATIL</span>
+        </div>
+        <div class="dato">
+          <span>Confianza IA:</span>
+          <span id="cond-pred" class="luz"></span> 
+          <span id="confianza-valor">--</span>
+        </div>
+        <div class="dato">
+          <span>Datos suficientes:</span>
+          <span id="cond-datos" class="luz"></span> 
+          <span id="datos-valor">--</span>
+        </div>
+        <p id="semaforo-msg" style="margin-top: 8px; font-size: 0.9em;">⏳ Inicializando...</p>
+      </div>
 
+      <!-- MÓDULO 2: Indicadores Técnicos -->
+      <div class="modulo">
+        <div class="titulo-modulo">📊 Indicadores Técnicos</div>
+        <div class="dato">
+          <span>Último Precio:</span>
+          <span id="precio-actual">—</span>
+        </div>
+        <div class="dato">
+          <span>EMA-50:</span>
+          <span id="ema-valor">—</span>
+        </div>
+        <div class="dato">
+          <span>RSI:</span>
+          <span id="rsi-valor">—</span>
+        </div>
+        <div class="dato">
+          <span>ATR:</span>
+          <span id="atr-valor">—</span>
+        </div>
+      </div>
 
-
-      <!-- ========== REGISTRO DE EVENTOS IA ========== -->
-      <div id="panel-registro" style="
-        background: #1e2a38;
-        border: 1px solid #3a5b7c;
-        border-radius: 8px;
-        padding: 12px;
-        margin: 10px 0;
-        font-family: Arial, sans-serif;
-        color: #e0e6ef;
-      ">
-        <h4 style="margin: 0 0 8px; font-size: 14px; color: #64b5f6;">📊 Registro de Eventos IA</h4>
-      
-        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-            <input type="checkbox" id="registro-activo" style="cursor: pointer;">
-            <span>Activar registro</span>
-          </label>
-       
-          <button id="btn-exportar-registro"
-            style="padding: 5px 10px; background: #64b5f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;"
-            disabled>
+      <!-- MÓDULO 3: Estadísticas de IA -->
+      <div class="modulo">
+        <div class="titulo-modulo">🧠 Estadísticas de IA</div>
+        <div class="estadistica">
+          <span>Objetivo:</span>
+          <span>20 predicciones</span>
+        </div>
+        <div class="estadistica">
+          <span>Progreso:</span>
+          <span id="progreso-predicciones">0</span>
+        </div>
+        <div class="estadistica">
+          <span>Aciertos:</span>
+          <span id="aciertos-predicciones">0</span>
+        </div>
+        <div class="estadistica">
+          <span>Precisión actual:</span>
+          <span id="precision-actual">—</span>
+        </div>
+        <div style="margin-top: 8px;">
+          <button id="btn-exportar-ia" style="padding: 6px 12px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
             📥 Exportar a CSV
           </button>
-         <button id="btn-reset-ia" style="
-            padding: 6px 12px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer;
-         ">🧠 Reset Eventos IA</button>
-          <span id="contador-eventos" style="font-size: 12px; opacity: 0.8;">0/50</span>
+
+           <div id="resumen-final" style="margin-top: 12px; font-weight: bold; color: #4caf50; display: none;"></div>
+          <button id="btn-reiniciar-ia" style="padding: 6px 12px; margin-left: 8px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+            🔄 Reiniciar
+          </button>
         </div>
       </div>
-
-
-      <!-- Exportar y Reset Historial -->
-      <div style="margin: 12px 0; display: flex; gap: 8px; flex-wrap: wrap;">
-        <button id="btn-exportar" style="
-          padding: 6px 12px; background: #388e3c; color: white; border: none; border-radius: 4px; cursor: pointer;
-        ">📤 Exportar a CSV</button>
-      
-        <button id="btn-reset-historial" style="
-          padding: 6px 12px; background: #d32f2f; color: white; border: none; border-radius: 4px; cursor: pointer;
-        ">🗑️ Reset Historial</button>
-      </div>
-
-
-
-        <!-- ✅ Botón de prueba forzada (solo para desarrollo) -->
-        <div class="control-group">
-        </div>
-
-      <div class="btn-group">
-        <button class="btn btn-primary" onclick="iniciarStreaming()">
-          <i class="fas fa-play"></i> Iniciar Streaming
-        </button>
-         
-        <button class="btn btn-outline" onclick="operacionPrueba()">
-          <i class="fas fa-magic"></i> Orden Sell o Buy Manual 
-        </button>
-      </div>
-      <div class="btn-group">
-        <button class="btn btn-outline" id="btn-reiniciar">
-          <i class="fas fa-sync"></i> Reiniciar Capital
-        </button>
-        <button class="btn btn-outline" id="btn-exportar">
-          <i class="fas fa-file-csv"></i> Exportar CSV
-        </button>
-       <!-- Botones de recarga -->
-<div class="controles-cuenta">
-  <button class="btn btn-recargar" onclick="recargarTestnet()">
-    <i class="fas fa-coins"></i> Recargar Testnet
-  </button>
-  <button class="btn btn-mainnet" onclick="recargarMainnet()" style="background-color: #ff6b6b;">
-    <i class="fas fa-wallet"></i> Recargar Mainnet
-  </button>
-  <div id="cuenta-actual" class="cuenta-indicador" style="margin-top: 10px; font-weight: bold;"></div>
-</div>
-      </div>
-      <button onclick="actualizarPosicionesAbiertas()">🔄 Actualizar Posiciones</button>
-      <button onclick="window.posicionGauss = null; console.log('🔄 Reset Gauss')">Reset Gauss</button>
-
-      <div class="section-title">
-        <i class="fas fa-coins"></i> Capital Testnet
-      </div>
-      <div class="capital-stats">
-        <div class="stat-card">
-          <div class="stat-title">USDT</div>
-          <div class="stat-value" id="saldo-usdt">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-title">BTC</div>
-          <div class="stat-value" id="saldo-btc">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-title">Invertir</div>
-          <div class="stat-value" id="monto-invertir">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-title">ROI</div>
-          <div class="stat-value" id="roi">0.00%</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-title">Ganancias</div>
-          <div class="stat-value" id="ganancias">$0.00</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-title">Pérdidas</div>
-          <div class="stat-value" id="perdidas">$0.00</div>
-        </div>
-      </div>
-
-
-      <div class="section-title">
+    <div>
+            <div class="section-title">
         <i class="fas fa-chart-line"></i> TP/SL Dinámico
       </div>
       <div class="stat-card">
@@ -1069,120 +715,187 @@
         <div class="stat-title">SL</div>
         <div class="stat-value" id="sl-dinamico">—</div>
       </div>
-       <!-- Selector de intervalo -->
-      <label>Intervalo:</label>
-        <select id="intervalo-backtest">      
-        <option value="5m">5m</option>
-        <option value="15m">15m</option>
-        <option value="1h" selected>1h</option>
-        <option value="4h">4h</option>
-        </select>
+    </div>
+<!-- MÓDULO 5: Métricas Avanzadas -->
+<div class="modulo">
+  <div class="titulo-modulo">📈 Métricas Avanzadas</div>
+  <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+    <div class="dato" style="flex: 1; min-width: 120px;">
+      <span>Profit Factor:</span>
+      <span id="pf">—</span>
+    </div>
+    <div class="dato" style="flex: 1; min-width: 120px;">
+      <span>Expectancy:</span>
+      <span id="expectancy">—</span>
+    </div>
+    <div class="dato" style="flex: 1; min-width: 120px;">
+      <span>Sharpe Ratio:</span>
+      <span id="sharpe">—</span>
+    </div>
+    <div class="dato" style="flex: 1; min-width: 120px;">
+      <span>Max DD:</span>
+      <span id="max-dd">—</span>
+    </div>
+  </div>
+</div>
 
-           <!-- Umbral de ADX -->
-           <label>ADX Umbral:</label>
-          <input type="number" id="adx-umbral" step="0.1" value="20" min="10" max="50" style="width: 80px;">
-         <div class="control-group">
-        <label for="backtest-dias">Días históricos</label>
-       <input type="number" id="backtest-dias" value="3" min="1" max="30" step="1">
-       </div>
-      <div class="section-title">
-        <i class="fas fa-chart-bar"></i> Backtesting & Métricas
+      <!-- MÓDULO 4: Capital Actual -->
+      <div class="modulo">
+        <div class="titulo-modulo">💰 Capital Actual</div>
+        <div class="dato">
+          <span>USDT:</span>
+          <span id="saldo-usdt">—</span>
+        </div>
+        <div class="dato">
+          <span>BTC:</span>
+          <span id="saldo-btc">—</span>
+        </div>
+        <div class="dato">
+          <span>Invertir:</span>
+          <span id="monto-invertir">—</span>
+        </div>
+        <div class="dato">
+          <span>ROI:</span>
+          <span id="roi">0.00%</span>
+        </div>
+        <div class="dato">
+          <span>Ganancias:</span>
+          <span id="ganancias">$0.00</span>
+        </div>
+        <div class="dato">
+          <span>Pérdidas:</span>
+          <span id="perdidas">$0.00</span>
+        </div>
       </div>
-      <!-- ✅ PANEL DE MÉTRICAS AVANZADAS -->
-      <div class="stat-card">
-        <div class="stat-title">Profit Factor</div>
-        <div class="stat-value" id="pf">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-title">Expectancy</div>
-        <div class="stat-value" id="expectancy">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-title">Sharpe Ratio</div>
-        <div class="stat-value" id="sharpe">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-title">Max DD</div>
-        <div class="stat-value" id="max-dd">—</div>
-      </div>
-      <!-- ✅ BACKTESTING -->
-      <div class="stat-card" id="backtesting-results">
-        <div class="stat-title">Estado</div>
-        <div class="stat-value" id="backtesting-msg">No ejecutado</div>
-      </div>
-      <div class="btn-group">
-        <button class="btn btn-outline" onclick="ejecutarBacktesting()">
-          <i class="fas fa-play"></i> Ejecutar Simulación
-        </button>
-      </div>
-      <!-- ✅ Inputs ocultos para backtesting robusto -->
-      <input type="hidden" id="backtest-interval" value="5m">
-      <input type="hidden" id="backtest-dias" value="2">
+    </div>
 
-      <button class="btn btn-outline" onclick="exportarBacktest()">
-        <i class="fas fa-file-export"></i> Exportar Backtest
-      </button>
+    <!-- Predicción IA -->
+    <div class="prediction-section">
+      <div class="prediction-header">
+        <i class="fas fa-microchip"></i>
+        Predicción IA
+      </div>
+      <div class="pred-direccion" id="prediccion-direccion">—</div>
+      <div class="pred-porcentaje" id="prediccion-porcentaje">0%</div>
+      <div class="pred-bar-container">
+        <div id="prediccion-progreso" class="pred-progress"></div>
+      </div>
+    </div>
+    
+    <!-- Tablas -->
+    <div class="table-container">
+      <h3 style="padding: 15px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border);">
+        Posiciones Abiertas
+      </h3>
+      <table id="operaciones-abiertas">
+        <thead>
+          <tr>
+            <th>Símbolo</th>
+            <th>Tipo</th>
+            <th>Precio</th>
+            <th>ROE</th>
+            <th>PnL</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
 
+    <div class="table-container">
+      <h3 style="padding: 15px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border);">
+        Últimas 10 Órdenes
+      </h3>
+      <table id="historial">
+        <thead>
+          <tr>
+            <th>Entrada</th>
+            <th>Salida</th>
+            <th>Precio Entrada</th>
+            <th>Precio Salida</th>
+            <th>Ganancia</th>
+            <th>Resultado</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    
+    <!-- Modo Gauss (mantenido para funcionalidad) -->
+    <div style="display:none;">
+      <input type="checkbox" id="modo-gauss-activo">
+      <input type="radio" name="modo-gauss" value="auto" checked>
+      <input type="radio" name="modo-gauss" value="manual">
+      <button id="btn-abrir-gauss"></button>
+      <button id="btn-cerrar-gauss"></button>
+      <input type="checkbox" id="gauss-notif-telegram">
+      <input type="radio" name="modo-operacion" value="both" checked>
+      <input type="radio" name="modo-operacion" value="long">
+      <input type="radio" name="modo-operacion" value="short">
+      <input type="checkbox" id="modo-mercado-activo">
+      <input type="checkbox" id="modo-reversion-activo">
+      <input type="radio" name="modo-reversion" value="auto" checked>
+      <input type="radio" name="modo-reversion" value="manual">
+      <button id="btn-operar-reversion"></button>
+      <button id="btn-cerrar-reversion"></button>
+      <input type="checkbox" id="registro-activo">
+      <button id="btn-exportar-registro"></button>
+      <button id="btn-reset-ia"></button>
+      <span id="contador-eventos"></span>
+    </div>
+  </main>
+</div>
 
-    <!-- Solo visible si role === 'admin' -->
+<!-- Scripts -->
+<script>
+  // Función TPSL
+  (function () {
+    function initTPSL() {
+      const select = document.getElementById('tpsl-mode');
+      const tpGroup = document.getElementById('tpsl-manual-group');
+      const slGroup = document.getElementById('tpsl-manual-group2');
+
+      if (!select || !tpGroup || !slGroup) return false;
+
+      const update = () => {
+        const show = select.value === 'manual';
+        tpGroup.style.display = show ? 'block' : 'none';
+        slGroup.style.display = show ? 'block' : 'none';
+      };
+
+      update();
+      select.removeEventListener('change', update);
+      select.addEventListener('change', update);
+      return true;
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initTPSL);
+    } else {
+      initTPSL();
+    }
+    setTimeout(initTPSL, 100);
+  })();
+</script>
 
 <script>
-
-
-  // ✅ Define la función ANTES de usarla
-  function getRoleFromToken() {
-    const token = localStorage.getItem('authToken');
-    if (!token) return null;
-
-    try {
-      const payloadBase64 = token.split('.')[1];
-      // Manejo seguro de Base64Url
-      const base64 = payloadBase64.replace(/-/g, '+').replace(/_/g, '/');
-      const payloadJson = atob(base64);
-      const payload = JSON.parse(payloadJson);
-      return payload.role || null;
-    } catch (err) {
-      console.warn('No se pudo decodificar el token:', err);
-      return null;
-    }
+  // Autenticación
+  if (!localStorage.getItem('authToken')) {
+    window.location.href = '/login-android.html';
+  } else {
+    document.getElementById('main-container').style.display = 'grid';
+    document.addEventListener('DOMContentLoaded', () => {
+      if (typeof initChart === 'function') {
+        initChart();
+      }
+    });
   }
-
-  // Ahora sí puedes usarla
-  document.addEventListener('DOMContentLoaded', () => {
-    const userRole = getRoleFromToken();
-    if (userRole === 'admin') {
-      const adminControls = document.getElementById('admin-controls');
-      if (adminControls) adminControls.style.display = 'block';
-    }
-  });
 </script>
-    </aside>
-    <!-- Main Content -->
-    <main class="main-content">
-      <header>
-        <div class="logo">
-           <!--<i class="fas fa-robot"></i>-->
-             Trading Predictivo T  IA   PA 🔐
-          </div>
-          <div style="margin-top: 10px; font-weight: bold; font-size: 16px;">
-           <span id="semaforo-operacion">⚫ ESPERANDO DATOS</span>
-          </div>
 
-      </header>
-      <div class="controls-row">
-        <button class="btn btn-primary" onclick="entrenarRed()">
-          <i class="fas fa-brain"></i> Entrenar Red
-        </button>
-        <div class="status" id="estado">Esperando...</div>
-      </div>
-      <div class="chart-container">
-        <div id="chart"></div>
-      </div>
-<div id="tradingview_chart" style="width:100%; height:400px;"></div>
-
-<script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-<script type="text/javascript">
-new TradingView.widget({
+<!-- TradingView -->
+<script src="https://s3.tradingview.com/tv.js"></script>
+<script>
+  new TradingView.widget({
     "container_id": "tradingview_chart",
     "symbol": "BINANCE:SOLUSDT",
     "interval": "30",
@@ -1193,319 +906,25 @@ new TradingView.widget({
     "enable_publishing": false,
     "allow_symbol_change": false,
     "autosize": true,
-    
-    // 👇 Solo EMA20 y EMA50 (sin MACD automático)
     "studies": [
-        "MASimple@tv-basicstudies",    // EMA20
-        "MASimple@tv-basicstudies"     // EMA50  
+      "MASimple@tv-basicstudies",
+      "MASimple@tv-basicstudies"
     ],
-    
     "study_overrides": {
-        // EMA20 - Azul
-        "MASimple@tv-basicstudies.length": 20,
-        "MASimple@tv-basicstudies.type": "ema", 
-        "MASimple@tv-basicstudies.color": "#2196f3",
-        
-        // EMA50 - Naranja  
-        "MASimple@tv-basicstudies.2.length": 50,
-        "MASimple@tv-basicstudies.2.type": "ema",
-        "MASimple@tv-basicstudies.2.color": "#ff9800"
+      "MASimple@tv-basicstudies.length": 20,
+      "MASimple@tv-basicstudies.type": "ema",
+      "MASimple@tv-basicstudies.color": "#2196f3",
+      "MASimple@tv-basicstudies.2.length": 50,
+      "MASimple@tv-basicstudies.2.type": "ema",
+      "MASimple@tv-basicstudies.2.color": "#ff9800"
     },
-    
     "overrides": {
-        "paneProperties.background": "#0f0f1b",
-        "paneProperties.vertGridProperties.color": "#2a2e39", 
-        "paneProperties.horzGridProperties.color": "#2a2e39",
-        "scalesProperties.textColor": "#ffffff"
+      "paneProperties.background": "#0f0f1b",
+      "paneProperties.vertGridProperties.color": "#2a2e39",
+      "paneProperties.horzGridProperties.color": "#2a2e39"
     }
-});
+  });
 </script>
-   
-
-<!-- GRILLA DE 4 MÓDULOS -->
-<div class="grid-modulos">
-  <!-- MÓDULO 1: Semáforo de Trading -->
-  <div class="modulo">
-    <div class="titulo-modulo">🚦 Semáforo de Trading</div>
-    <div class="dato">
-      <span>Tendencia (ADX):</span>
-      <span id="cond-adx" class=  "luz"></span>
-      <span id="adx1-valor">--</span>
-    </div>
-    <div class="dato">
-      <span>Modo (modo):</span>
-       <span id="cond-modo" class=    "luz"></span> 
-      <span id="modo-valor">VOLATIL</span>
-    </div>
-    <div class="dato">
-      <span>Confianza IA:</span>
-      <span id="cond-pred" class=  "luz"></span> 
-      <span id="confianza-valor">--</span>
-    </div>
-    <div class="dato">
-      <span>Datos suficientes:</span>
-      <span id="cond-datos" class="luz"></span> 
-      <span id="datos-valor">--</span>
-    </div>
-     <p id="semaforo-msg" style="margin-top: 10px;">⏳ Inicializando...</p>
-       <div id="semaforo" class="semaforo"></div>
-  </div>
-
-  <!-- MÓDULO 2: Indicadores Técnicos -->
-  <div class="modulo">
-    <div class="titulo-modulo">📊 Indicadores Técnicos</div>
-    <div class="dato">
-      <span>Último Precio:</span>
-      <span id="precio-actual">—</span>
-    </div>
-    <div class="dato">
-      <span>EMA-50:</span>
-      <span id="ema-valor">—</span>
-    </div>
-    <div class="dato">
-      <span>RSI:</span>
-      <span id="rsi-valor">—</span>
-    </div>
-    <div class="dato">
-      <span>ATR:</span>
-      <span id="atr-valor">—</span>
-    </div>
-  </div>
-
-  <!-- MÓDULO 3: Estadísticas de IA -->
-  <div class="modulo">
-    <div class="titulo-modulo">🧠 Estadísticas de IA</div>
-    <div class="estadistica">
-      <span>Objetivo:</span>
-      <span>20 predicciones</span>
-    </div>
-    <div class="estadistica">
-      <span>Progreso:</span>
-      <span id="progreso-predicciones">0</span>
-    </div>
-    <div class="estadistica">
-      <span>Aciertos:</span>
-      <span id="aciertos-predicciones">0</span>
-      </div>
-      <div class="estadistica">
-        <span>Precisión actual:</span>
-        <span id="precision-actual">—</span>
-      
-      </div>
-      <div style="margin-top: 10px;">
-        <button id="btn-exportar-ia"
-          style="padding: 6px 12px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer;">
-          📥 Exportar a CSV
-        </button>
-        <div id="resumen-final" style="margin-top: 12px; font-weight: bold; color: #4caf50; display: none;"></div>
-        <button id="btn-reiniciar-ia"
-          style="padding: 6px 12px; margin-left: 8px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">
-          🔄 Reiniciar
-        </button>
-      
-        <div id="panel-estadisticas-ia"
-          style="margin-top: 20px; padding: 12px; background: #1e1e1e; border-radius: 8px; display: none;">
-          <div style="margin-top: 10px;">
-          </div>
-        </div>
-      
-      </div>
-  </div>
-  
-  <!-- MÓDULO 4: Control de Operaciones -->
-  <div class="modulo control-operaciones">
-    <div class="titulo-modulo">⚙️ Control de Operaciones</div>
-    <label>
-      <input type="checkbox" id="limitar-operaciones" checked>
-      Limitar operaciones diarias
-    </label>
-    <label>
-      Máximo:
-      <input type="number" id="max-ops" value="2" min="1" max="10">
-    </label>
-    <div style="margin-top: 12px; font-size: 0.9em; color: #94a3b8;">
-      ⏹️ Autotrading se detendrá al alcanzar el límite.
-    </div>
-     <input type="checkbox" id="limitar-operaciones" checked>
-  </div>
-  </div>
-    
-       
-       
-
-        <!-- ========== MONITOR MACD EN TIEMPO REAL ========== -->
-    <div id="monitor-macd" style="
-      border: 1px solid #3a5b7c;
-      border-radius: 8px;
-      padding: 10px;
-      margin: 10px 0;
-      font-family: 'Consolas', monospace;
-      color: #e0e6ef;
-      font-size: 12px;
-        ">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-            <span>📊 <b>MACD SIGNAL LIVE</b></span>
-           <span id="macd-signal-valores" style="color: #64b5f6; font-size: 11px;">
-             MACD: -- | Signal: --
-          </span>
-          </div>
-          <div style="height: 20px; background: #2c3e50; border-radius: 4px; position: relative; overflow: hidden;">
-        <!-- Zona de COMPRA: Signal < -10 -->
-         <div style="position: absolute; left: 0; width: 40%; height: 100%; background: rgba(13, 204, 76, 0.753);"></div>
-
-
-           <!-- Zona de VENTA: Signal > 10 -->
-          <div style="position: absolute; right: 0; width: 40%; height: 100%; background: rgba(197, 16, 40, 0.938);"></div>
-            <!-- Indicador de posición actual -->
-            <div id="signal-indicador" style="
-              position: absolute; top: 0; height: 100%; width: 4px; background: #ffd700;
-              transform: translateX(-50%);
-            "></div>
-          </div>
-          <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 10px; color: #90a4ae;">
-            <span>–2 (🟢)</span>
-            <span>–0.05</span>
-            <span>0</span>
-            <span>+0.05</span>
-            <span>+2 (🔴)</span>
-          </div>
-          <div id="estado-senal" style="margin-top: 6px; font-weight: bold; color: #ffd700; min-height: 16px;">
-            Esperando datos...
-          </div>
-     </div>
-
-                  <div class="prediction-section fade-in">
-                    <div class="prediction-header">
-                      <i class="fas fa-microchip"></i>
-                      Predicción IA
-                    </div>
-                    <div class="pred-direccion" id="prediccion-direccion">—</div>
-                    <div class="pred-porcentaje" id="prediccion-porcentaje">0%</div>
-                    <div class="pred-bar-container">
-                      <div id="prediccion-progreso" class="pred-progress"></div>
-                    </div>
-                  </div>
-                  
-                  <div class="table-container">
-                    <h3 style="padding: 15px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border);">
-                      Posiciones Abiertas de Ordenes</h3>
-                    <table id="operaciones-abiertas">
-                      <thead>
-                        <tr>
-                          <th>Símbolo</th>
-                          <th>Tipo</th>
-                          <th>Precio</th>
-                          <th>ROE</th>
-                          <th>PnL</th>
-                          <th>Acción</th>
-                        </tr>
-                      </thead>
-                      <tbody></tbody>
-                    </table>
-                  </div>
-                  
-
-
-                  <div class="table-container">
-                    <h3 style="padding: 15px; background: var(--bg-secondary); margin: 0; border-bottom: 1px solid var(--border);">
-                      Ultimas 10  Ordenes Registradas</h3>
-                    <table id="historial">
-                      <thead>
-                        <tr>
-                          <th>Entrada</th>
-                          <th>Salida</th>
-                          <th>Precio Entrada</th>
-                          <th>Precio Salida</th>
-                          <th>Ganancia</th>
-                          <th>Resultado</th>
-                        </tr>
-                      </thead>
-                      <tbody></tbody>
-                    </table>
-                  </div>
-                  
-
-                  
-                  <!-- Gestión de Usuarios -->
-                  <div class="section-title">
-                    <i class="fas fa-users"></i> Gestión de Usuarios
-                  </div>
-                  <div class="table-container">
-                    <table id="tabla-usuarios">
-                      <thead>
-                        <tr>
-                          <th>Código</th>
-                          <th>Rol</th>
-                          <th>Activo</th>
-                          <th>Acciones</th>
-                        </tr>
-                      </thead>
-                      <tbody id="cuerpo-usuarios">
-                        <!-- Los usuarios se cargarán aquí -->
-                      </tbody>
-                    </table>
-                    <button class="btn btn-primary" style="margin-top: 10px;" onclick="crearNuevoUsuario()">
-                      <i class="fas fa-plus"></i> Añadir Usuario
-                    </button>
-                  </div>
-                  
-                  
-                  </main>
-                  </div>
-
-
-                  <script>
-                    (function () {
-                      function initTPSL() {
-                        const select = document.getElementById('tpsl-mode');
-                        const tpGroup = document.getElementById('tpsl-manual-group');
-                        const slGroup = document.getElementById('tpsl-manual-group2');
-
-                        if (!select || !tpGroup || !slGroup) return false;
-
-                        const update = () => {
-                          const show = select.value === 'manual';
-                          tpGroup.style.display = show ? 'block' : 'none';
-                          slGroup.style.display = show ? 'block' : 'none';
-                        };
-
-                        // Aplicar estado actual
-                        update();
-
-                        // Vincular evento (remover previos para evitar duplicados)
-                        select.removeEventListener('change', update);
-                        select.addEventListener('change', update);
-
-                        return true;
-                      }
-
-                      // Intentar iniciar al cargar
-                      if (document.readyState === 'loading') {
-                        document.addEventListener('DOMContentLoaded', initTPSL);
-                      } else {
-                        initTPSL();
-                      }
-
-                      // ¡Y también ejecutarlo ahora, por si ya está cargado!
-                      setTimeout(initTPSL, 100);
-                    })();
-                  </script>
-
-                   <script>
-                  // Primero verificar autenticación
-                 if (!localStorage.getItem('authToken')) {
-                window.location.href = '/admin-login.html';
-                } else {
-            // Mostrar panel
-                document.getElementById('main-container').style.display = 'grid';
-                    
-           // 👇 Llamar a initChart() al cargar
-              document.addEventListener('DOMContentLoaded', () => {
-            initChart(); // ← esta es tu función
-             });
-             }
-          </script>
-
 
 <script src="script.js"></script>
 
