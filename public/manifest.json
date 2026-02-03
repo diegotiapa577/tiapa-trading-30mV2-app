@@ -2,7 +2,7 @@
   "name": "TIAPA Trading",
   "short_name": "TIAPA",
   "description": "Sistema de trading algorítmico",
-  "start_url": "/login-android.html",
+  "start_url": "/user-android-login.html",
   "display": "standalone",
   "background_color": "#0f0f1b",
   "theme_color": "#26a69a",

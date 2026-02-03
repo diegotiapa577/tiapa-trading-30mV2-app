@@ -2119,6 +2119,7 @@ async function cerrarPosicion(symbol, positionSide = 'BOTH', motivo = 'Manual') 
   if (!hayPosicionSimbolo) {
      // No hay más posiciones (de ningún side) para este símbolo
      window.sideActual = null; // Limpiar la variable global
+     posicionActual=null
      console.log(`[Gráfico] sideActual limpiado para ${symbol} (posición cerrada y no hay otras abiertas para este símbolo).`);
      // Opcional: Ocultar líneas si se cierra la última posición
      // lineaPE.applyOptions({ visible: false });
@@ -2134,9 +2135,6 @@ async function cerrarPosicion(symbol, positionSide = 'BOTH', motivo = 'Manual') 
   // window.sideActual = null;
 }
 
-
-
-
     console.log(`[DEBUG] Cierre ${symbol} | Entrada: $${precioEntrada.toFixed(4)} | Salida: $${precioSalida.toFixed(4)} | Cantidad: ${cantidad} | Side: ${sideActual} | Leverage: ${leverage}`);
     console.log(`[DEBUG] PnL Bruta: $${pnlBruta.toFixed(4)} | Fees: $${feesTotales.toFixed(4)} | PnL Neta Final: $${pnlNeta.toFixed(4)}`);
 
@@ -2146,7 +2144,7 @@ async function cerrarPosicion(symbol, positionSide = 'BOTH', motivo = 'Manual') 
     const estadoEl = document.getElementById('estado');
     if (estadoEl) estadoEl.textContent = msg;
   }
-   posicionActual = null;
+  
    
 }
 
