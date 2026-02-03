@@ -989,7 +989,7 @@ function prepararDatosParaIA(klines, openInterest = 0) {
   return { X: tf.tensor2d(X), y: tf.tensor2d(y, [y.length, 1]) };
 }
 
-// === ENTRENAMIENTO: MULTI-SÍMBOLO (3+), 15m, 15k velas, portable ===
+// === ENTRENAMIENTO: MULTI-SÍMBOLO (3+), 11m, 15k velas, portable ===
 async function entrenarRed() {
 
   // Definir símbolos a usar para entrenamiento
@@ -2239,7 +2239,7 @@ function evaluarAperturaReversion(simbolo, prediccionRaw, indicadores, historial
   const UMBRAL_RSI_MIN = 20;
   const UMBRAL_RSI_MAX = 80;
  // AHORA (suave para pruebas):
-  const UMBRAL_MACD_COMPRA = -0.0355;  // zona de compra , segun estudio dat  MIN +/- 0.0355 equiv. 60 en BTC de trabajo 1m =0.0355. <50
+  const UMBRAL_MACD_COMPRA = -0.0355;  // zona de compra , segun estudio dat  MIN +/- 0.0355 equiv. 60 en BTC de trabajo 5m =0.0355. <50
   const UMBRAL_MACD_VENTA = 0.0355;    // zona de venta
 
   // ─── Validar indicadores ───
@@ -3060,15 +3060,15 @@ const aceleracionBajista = (
     (adx > 25) &&
     (atr > 0.06) &&
     (ema20 > ema50) &&
-    ((ema20 - ema50) / ema50 >= 0.0008) && // >1.5%
+    ((ema20 - ema50) / ema50 >= 0.004) && // >1.5%
 
     (macdActual > 0) &&
     (signalActual > 0);
 
   // ─── ZONA 2: AGOTAMIENTO ALCISTA ───
   const agotamientoAlcista = 
-    (adx < 25) &&
-    (Math.abs(ema20 - ema50) / ema50 <= 0.0002) && // <0.5%
+    (adx < 50) &&
+    (Math.abs(ema20 - ema50) / ema50 <= 0.0005) && // <0.5%
     (prediccionRaw <= 0.40) &&
     (macdActual < 0) &&
     (signalActual < 0);
@@ -3079,14 +3079,14 @@ const aceleracionBajista = (
     (adx > 25) &&
     (atr > 0.06) &&
     (ema20 < ema50) &&
-    ((ema50 - ema20) / ema50 >= 0.0008) &&
+    ((ema50 - ema20) / ema50 >= 0.004) &&
     (macdActual < 0) &&
     (signalActual < 0);
 
   // ─── ZONA 2: AGOTAMIENTO BAJISTA ───
   const agotamientoBajista = 
-    (adx < 30) &&
-    (Math.abs(ema20 - ema50) / ema50 <= 0.0002) &&
+    (adx < 50) &&
+    (Math.abs(ema20 - ema50) / ema50 <= 0.0005) &&
     (prediccionRaw >= 0.60) &&
     (macdActual > 0) &&
     (signalActual > 0);

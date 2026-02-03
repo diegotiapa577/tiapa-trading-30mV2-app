@@ -92,6 +92,20 @@
       color: #94a3b8;
     }
   </style>
+
+<!-- PWA Manifest -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#26a69a">
+<link rel="apple-touch-icon" href="/icon-192.png">
+
+<!-- Para que se pueda instalar -->
+<script>
+if ('serviceWorker' in navigator) {
+  // Opcional: registrar service worker básico
+  navigator.serviceWorker.register('/sw.js').catch(console.log);
+}
+</script>
+
 </head>
 <body>
 

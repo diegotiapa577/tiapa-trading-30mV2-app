@@ -470,6 +470,21 @@
       }
     }
   </style>
+
+<!-- PWA Manifest -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#26a69a">
+<link rel="apple-touch-icon" href="/icon-192.png">
+
+<!-- Para que se pueda instalar -->
+<script>
+if ('serviceWorker' in navigator) {
+  // Opcional: registrar service worker básico
+  navigator.serviceWorker.register('/sw.js').catch(console.log);
+}
+</script>
+
+
 </head>
 <body>
 
@@ -936,29 +951,6 @@
   }
 
 
-
-          // Primero verificar autenticación
-         //        if (!localStorage.getItem('authToken')) {
-            //    window.location.href = '/admin-login.html';
-           //     } else {
-            // Mostrar panel
-           //     document.getElementById('main-container').style.display = 'grid';
-                    
-           // 👇 Llamar a initChart() al cargar
-        //      document.addEventListener('DOMContentLoaded', () => {
-        //    initChart(); // ← esta es tu función
-        //     });
-       //      }
-
-
-
-
-
-
-
-
-
-
  
 </script>
 
@@ -994,6 +986,63 @@
       "paneProperties.horzGridProperties.color": "#2a2e39"
     }
   });
+
+
+// ✅ GUARDAR ESTADO ANTES DE CERRAR (móvil compatible)
+function guardarEstado() {
+  try {
+    if (posicionActual) {
+      localStorage.setItem('posicionGuardada', JSON.stringify(posicionActual));
+    }
+    localStorage.setItem('ultimaActualizacion', Date.now().toString());
+    console.log('✅ Estado guardado:', posicionActual);
+  } catch (error) {
+    console.warn('⚠️ Error al guardar estado:', error);
+  }
+}
+
+// ✅ RESTAURAR ESTADO AL CARGAR
+function restaurarEstado() {
+  try {
+    const posicionGuardada = localStorage.getItem('posicionGuardada');
+    if (posicionGuardada) {
+      posicionActual = JSON.parse(posicionGuardada);
+      console.log('✅ Estado restaurado:', posicionActual);
+      
+      // Actualizar interfaz si hay posición abierta
+      if (document.getElementById('btn-cerrar-gauss')) {
+        document.getElementById('btn-cerrar-gauss').style.display = 'inline-block';
+      }
+    }
+    
+    // Verificar si la sesión es reciente (< 10 minutos)
+    const ultimaActualizacion = localStorage.getItem('ultimaActualizacion');
+    const ahora = Date.now();
+    if (ultimaActualizacion && (ahora - parseInt(ultimaActualizacion)) < 600000) {
+      // No mostrar "esperando entrenar" si la sesión es reciente
+      const estadoElement = document.getElementById('estado');
+      if (estadoElement) {
+        estadoElement.textContent = 'Sesión activa';
+      }
+    }
+  } catch (error) {
+    console.warn('⚠️ Error al restaurar estado:', error);
+  }
+}
+
+// ✅ EVENTOS DE LIFECYCLE
+// Guardar estado cuando la página se va a cerrar
+window.addEventListener('beforeunload', guardarEstado);
+window.addEventListener('pagehide', guardarEstado); // Importante para móviles
+
+// Restaurar estado cuando la página carga
+document.addEventListener('DOMContentLoaded', restaurarEstado);
+
+// También guardar estado periódicamente (cada 30 segundos)
+setInterval(guardarEstado, 30000);
+
+
+
 </script>
 
 <script src="script.js"></script>
