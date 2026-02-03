@@ -5004,6 +5004,23 @@ function predRawValida(modo, p, alcista, bajista) {
 }
 
 
+// Función para obtener el nombre/ID del usuario desde el token
+function getUserNameFromToken() {
+  const token = localStorage.getItem('authToken');
+  if (!token) return null;
+
+  try {
+    const payloadBase64 = token.split('.')[1];
+    const base64 = payloadBase64.replace(/-/g, '+').replace(/_/g, '/');
+    const payloadJson = atob(base64);
+    const payload = JSON.parse(payloadJson);
+    return payload.id || 'Usuario';
+  } catch (err) {
+    console.warn('No se pudo decodificar el token:', err);
+    return 'Usuario';
+  }
+}
+
 
 
 // ✅ FORZAR CIERRE POR IA — Solo para pruebas

@@ -477,10 +477,16 @@
   <!-- Main Content -->
   <main class="main-content">
     <header>
-      <div class="logo">
-        <i class="fas fa-mobile-alt"></i>
-        Trading Predictivo TIAPA 🔐
-      </div>
+       <div class="logo">
+    <i class="fas fa-mobile-alt"></i>
+    Trading Predictivo TIAPA 🔐
+  </div>
+  <div style="margin-top: 8px; font-weight: bold; font-size: 14px; display: flex; align-items: center; gap: 12px;">
+    <span id="nombre-usuario" style="color: #4ade80;">Usuario: —</span>
+    <button class="btn btn-outline" onclick="logout()" style="padding: 6px 12px; font-size: 12px; min-height: auto;">
+      <i class="fas fa-sign-out-alt"></i> Logout
+    </button>
+  </div>
       <div style="margin-top: 8px; font-weight: bold; font-size: 14px;">
         <span id="semaforo-operacion">⚫ ESPERANDO DATOS</span>
       </div>
@@ -879,17 +885,81 @@
 </script>
 
 <script>
-  // Autenticación
+ 
+
+
+// ✅ FUNCIONES DE USUARIO Y LOGOUT (deben estar aquí, antes de usarse)
+  function getUserNameFromToken() {
+    const token = localStorage.getItem('authToken');
+    if (!token) return null;
+
+    try {
+      const payloadBase64 = token.split('.')[1];
+      const base64 = payloadBase64.replace(/-/g, '+').replace(/_/g, '/');
+      const payloadJson = atob(base64);
+      const payload = JSON.parse(payloadJson);
+      return payload.id || 'Usuario';
+    } catch (err) {
+      console.warn('No se pudo decodificar el token:', err);
+      return 'Usuario';
+    }
+  }
+
+  function logout() {
+    localStorage.removeItem('authToken');
+    window.location.href = '/user-android-login.html';
+    
+    // Limpiar variables globales si existen
+    if (typeof posicionActual !== 'undefined') {
+      posicionActual = null;
+    }
+    if (typeof ordenEnCurso !== 'undefined') {
+      ordenEnCurso = false;
+    }
+  }
+
+  // ✅ VERIFICACIÓN DE AUTENTICACIÓN
   if (!localStorage.getItem('authToken')) {
     window.location.href = '/login-android.html';
   } else {
     document.getElementById('main-container').style.display = 'grid';
+    
+    // Mostrar nombre del usuario
     document.addEventListener('DOMContentLoaded', () => {
-      if (typeof initChart === 'function') {
-        initChart();
+       initChart(); // ← esta es tu función
+      const userName = getUserNameFromToken();
+      if (userName && document.getElementById('nombre-usuario')) {
+        document.getElementById('nombre-usuario').textContent = `Usuario: ${userName}`;
       }
+      
     });
   }
+
+
+
+          // Primero verificar autenticación
+         //        if (!localStorage.getItem('authToken')) {
+            //    window.location.href = '/admin-login.html';
+           //     } else {
+            // Mostrar panel
+           //     document.getElementById('main-container').style.display = 'grid';
+                    
+           // 👇 Llamar a initChart() al cargar
+        //      document.addEventListener('DOMContentLoaded', () => {
+        //    initChart(); // ← esta es tu función
+        //     });
+       //      }
+
+
+
+
+
+
+
+
+
+
+ 
 </script>
 
 <!-- TradingView -->
