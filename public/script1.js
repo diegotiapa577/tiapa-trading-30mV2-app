@@ -563,7 +563,7 @@ function retryInitChart(attempts = 0) {
 }
 
 // === DATOS ===
-async function obtenerDatos(symbol , interval = '3m', limit = 60) {
+async function obtenerDatos(symbol , interval = '1m', limit = 60) {
   const res = await fetch(`/api/binance/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
   if (!res.ok) throw new Error(`Error: ${res.status}`);
   const klines = await res.json();
@@ -994,7 +994,7 @@ async function entrenarRed() {
 
   // Definir símbolos a usar para entrenamiento
   const SIMBOLOS_ENTRENAMIENTO = ['SOLUSDT'];
-  const INTERVALO = '3m'; //  3m
+  const INTERVALO = '1m'; //  1m
   const LIMITE_DATOS = 9000; // Ajusta este número. Por ejemplo, 15000 velas de 4h por símbolo
   const VELAS_FUTURAS = 3;
   const EPOCAS = 50;
@@ -1790,7 +1790,7 @@ async function abrirPosicionReal(side) {
       
       // Obtener ATR reciente (mismo que usas en otros lugares)
       const simbolo = document.getElementById('selector-simbolo').value;
-      const k5m = await obtenerDatos(simbolo, '3m', 50);
+      const k5m = await obtenerDatos(simbolo, '1m', 50);
      
       const atrArr = k5m.length >= 20 ? calcularATR(k5m, 14):[];
       const atrVal = atrArr.length > 0 ? atrArr[atrArr.length - 1] : 0;
@@ -2944,32 +2944,10 @@ if (!window.eventosIA) window.eventosIA = [];
       // Vincular botón
       document.getElementById('btn-exportar-registro')?.addEventListener('click', exportarEventosACSV);
 
-  // Variables globales (fuera de funciones)
-   let historialEMAs = []; // Guardará solo las últimas 3 velas con EMAs
-// Esta función se llama cada vez que llega una nueva vela
-function procesarNuevaVela(ema20_actual, ema50_actual) {
-  // Agregar nueva vela al historial
-  historialEMAs.push({
-    ema20: ema20_actual,
-    ema50: ema50_actual,
-    timestamp: Date.now()
-  });
-
-  // Mantener solo las últimas 3 velas
-  if (historialEMAs.length > 3) {
-    historialEMAs.shift(); // Eliminar la más antigua
-  }
-}
-
-
-// Variable global para guardar el historial mínimo de EMAs
-let historialEMAsGauss = [];
-
-
-
 
 // ─── SISTEMA GAUSS: TENDENCIA EN 1H ───
 function evaluarSistemaGauss(simbolo, prediccionRaw, indicadores, historialVelas) {
+
 
 // Ejemplo: al activar Modo Mercado, desactivar Gauss y Reversión
 document.getElementById('modo-gauss-activo')?.addEventListener('change', (e) => {
@@ -2978,6 +2956,7 @@ document.getElementById('modo-gauss-activo')?.addEventListener('change', (e) => 
     document.getElementById('modo-mercado-activo').checked = false;
   }
 });
+
 
   const modoActivo = document.getElementById('modo-gauss-activo')?.checked || false;
   if (!modoActivo) return;
@@ -3000,7 +2979,22 @@ document.getElementById('modo-gauss-activo')?.addEventListener('change', (e) => 
   if (macdLine.length < 2) { 
     console.log("⚠️ Esperando MACD completo...");
     return;
+
   }
+
+  // ─── VERIFICAR QUE TENEMOS HISTORIAL SUFICIENTE PARA ACELERACIÓN ───
+if (historialVelas.length < 3) {
+  console.log("⚠️ [GAUSS] Insuficientes velas para calcular aceleración");
+  return;
+}
+
+ //─── OBTENER VALORES DE EMA20/EMA50 DE LAS ÚLTIMAS 3 VELAS ───
+// Asumiendo que tus indicadores están alineados con historialVelas
+const n = historialVelas.length - 1; // vela actual (índice último)
+
+// Valores actuales (última vela)
+const ema20_actual = ema20;
+const ema50_actual = ema50;
 
   const macdActual = macdLine[macdLine.length - 1];
   const signalActual = signalLine[signalLine.length - 1];
@@ -3029,234 +3023,228 @@ if (notifActiva && (ahora - ultimaNotifGauss) >= INTERVALO_NOTIF) {
   ultimaNotifGauss = ahora;
 }
 
-// ──── CÁLCULO DE ACELERACIÓN (reorganizado) ────
-// Variables para aceleración (definidas al inicio)
-let aceleracionAlcista = false;
-let aceleracionBajista = false;
 
-// Guardar las EMAs actuales en el historial
-historialEMAsGauss.push({
-  ema20: ema20,
-  ema50: ema50,
-  timestamp: Date.now()
-});
+// Valores de la vela anterior (n-1)
+const ema20_anterior1 = historialVelas[n-1].ema20 || ema20; // fallback por si no existe
+const ema50_anterior1 = historialVelas[n-1].ema50 || ema50;
 
-// Mantener solo las últimas 3 velas
-if (historialEMAsGauss.length > 3) {
-  historialEMAsGauss.shift(); // Eliminar la más antigua
-}
+// Valores de la vela anterior anterior (n-2)  
+const ema20_anterior2 = historialVelas[n-2].ema20 || ema20_anterior1;
+const ema50_anterior2 = historialVelas[n-2].ema50 || ema50_anterior1;
 
-// Necesitamos al menos 3 velas para detectar aceleración
-if (historialEMAsGauss.length >= 3) {
-  const velaActual = historialEMAsGauss[2];
-  const velaAnterior1 = historialEMAsGauss[1];
-  const velaAnterior2 = historialEMAsGauss[0];
-  
-  const diffActual = (velaActual.ema20 - velaActual.ema50) / velaActual.ema50;
-  const diffAnterior1 = (velaAnterior1.ema20 - velaAnterior1.ema50) / velaAnterior1.ema50;
-  const diffAnterior2 = (velaAnterior2.ema20 - velaAnterior2.ema50) / velaAnterior2.ema50;
-  
+// ─── CALCULAR DIFERENCIAS NORMALIZADAS ───
+const diffActual = (ema20_actual - ema50_actual) / ema50_actual;
+const diffAnterior1 = (ema20_anterior1 - ema50_anterior1) / ema50_anterior1;
+const diffAnterior2 = (ema20_anterior2 - ema50_anterior2) / ema50_anterior2;
 
-  console.log(`🔍 [GAUSS] diffActual : ${diffActual.toFixed(4)} | diffAnterior1 : ${diffAnterior1.toFixed(4)}| diffAnterior2 : ${diffAnterior2.toFixed(4)}`);
+const mens_diferencias = `🔍 [GAUSS] diffActual : ${(diffActual).toFixed(2)} | diffAnterior1 : ${(diffAnterior1).toFixed(2)}| diffAnterior2 : ${(diffAnterior2).toFixed(2)}}`;
 
-  // ─── DETECTAR ACELERACIÓN ───
-  aceleracionAlcista = (
-    diffActual > diffAnterior1 &&
-    diffAnterior1 > diffAnterior2  && 
-    diffActual > 0
-  );
+console.log(mens_diferencias );
 
-  aceleracionBajista = (
-    diffActual < diffAnterior1 &&
-    diffAnterior1 < diffAnterior2  && 
-    diffActual < 0
-  );
+// ─── CONDICIONES DE ACELERACIÓN ───
+const aceleracionAlcista = (
+  diffAnterior2 < diffAnterior1 && 
+  diffAnterior1 < diffActual &&
+  diffActual >= 0.004
+);
 
-  console.log(`🔍 [GAUSS] aceleracionAlcista: ${aceleracionAlcista} | aceleracionBajista: ${aceleracionBajista}`);
-} else {
-  console.log('🔍 [GAUSS] Esperando más velas para evaluar aceleración');
-}
-// ──── FIN CÁLCULO DE ACELERACIÓN ────
+const aceleracionBajista = (
+  diffAnterior2 > diffAnterior1 && 
+  diffAnterior1 > diffActual &&
+  diffActual <= -0.004
+);
 
-// segun estudio dat en Gaus ATR bueno trabajo=0.1428 , adx =40, pruebas ATR=0.06, adx=30
+const aceleraciones= `🔍 [GAUSS] aceleracionAlcista  : ${(aceleracionAlcista )} | aceleracionBajista: ${(aceleracionBajista)}}`;
 
-// ─── ZONA 1: ARRANQUE DE TENDENCIA ALCISTA ───
-const arranqueAlcista = 
-  (prediccionRaw >= 0.60) &&
-  (adx > 25) &&
-  (atr > 0.06) &&
-  (ema20 > ema50) &&
-  ((ema20 - ema50) / ema50 >= 0.005) && // >1.5%
+console.log(aceleraciones);
 
-  (macdActual > 0) &&
-  (signalActual > 0);
 
-// ─── ZONA 2: AGOTAMIENTO ALCISTA ───
-const agotamientoAlcista = 
-  (Math.abs(ema20 - ema50) / ema50 <= 0.0008) && // <0.5%
-  (macdActual < 0) &&
-  (signalActual < 0);
 
-// ─── ZONA 1: ARRANQUE DE TENDENCIA BAJISTA ───
-const arranqueBajista = 
-  (prediccionRaw <= 0.40) &&
-  (adx > 25) &&
-  (atr > 0.06) &&
-  (ema20 < ema50) &&
-  ((ema50 - ema20) / ema50 >= 0.005) &&
-  (macdActual < 0) &&
-  (signalActual < 0);
 
-// ─── ZONA 2: AGOTAMIENTO BAJISTA ───
-const agotamientoBajista = 
-  (Math.abs(ema20 - ema50) / ema50 <= 0.0008) &&
-  (macdActual > 0) &&
-  (signalActual > 0);
+ // segun estudio dat en Gaus ATR bueno trabajo=0.1428 , adx =40, pruebas ATR=0.06, adx=30
 
-const modoAuto = document.querySelector('input[name="modo-gauss"]:checked')?.value === 'auto';
-const btnCerrar = document.getElementById('btn-cerrar-gauss');
-  const estadoDiv = document.getElementById('estado-reversion');
+  // ─── ZONA 1: ARRANQUE DE TENDENCIA ALCISTA ───
+  const arranqueAlcista = 
+    (prediccionRaw >= 0.60) &&
+    (adx > 25) &&
+    (atr > 0.06) &&
+    (ema20 > ema50) &&
+    ((ema20 - ema50) / ema50 >= 0.0008) && // >1.5%
 
-// ─── CIERRE: si hay posición abierta y hay agotamiento ───
-if (posicionActual && posicionActual.simbolo === simbolo) {
-  const esLong = posicionActual.side === 'BUY';
-  const debeCerrar = (esLong && agotamientoAlcista) || (!esLong && agotamientoBajista);
+    (macdActual > 0) &&
+    (signalActual > 0);
 
-  if (debeCerrar) {
-    if (modoAuto) {
-      console.log(`✅ [GAUSS] Cierre automático por agotamiento`);
-      ordenEnCurso = true;
-      cerrarPosicion(simbolo, 'BOTH', 'Gauss - Agotamiento')
-        .finally(() => {
-          ordenEnCurso = false;
-          posicionActual = null;
-          if (btnCerrar) btnCerrar.style.display = 'none';
-        });
-      if (estadoDiv) estadoDiv.textContent = '✅ Cierre Gauss automático';
-    } else {
-      if (btnCerrar) {
-        btnCerrar.style.display = 'inline-block';
-        btnCerrar.onclick = () => {
-          console.log(`✅ [GAUSS] Cierre manual`);
-          ordenEnCurso = true;
-          cerrarPosicion(simbolo, 'BOTH', 'Gauss - Cierre manual')
-            .finally(() => {
-              ordenEnCurso = false;
-              posicionActual = null;
-              btnCerrar.style.display = 'none';
-            });
-        };
+  // ─── ZONA 2: AGOTAMIENTO ALCISTA ───
+  const agotamientoAlcista = 
+    (adx < 50) &&
+    (Math.abs(ema20 - ema50) / ema50 <= 0.0002) && // <0.5%
+    (prediccionRaw <= 0.40) &&
+    (macdActual < 0) &&
+    (signalActual < 0);
+
+  // ─── ZONA 1: ARRANQUE DE TENDENCIA BAJISTA ───
+  const arranqueBajista = 
+    (prediccionRaw <= 0.40) &&
+    (adx > 25) &&
+    (atr > 0.06) &&
+    (ema20 < ema50) &&
+    ((ema50 - ema20) / ema50 >= 0.0008) &&
+    (macdActual < 0) &&
+    (signalActual < 0);
+
+  // ─── ZONA 2: AGOTAMIENTO BAJISTA ───
+  const agotamientoBajista = 
+    (adx < 50) &&
+    (Math.abs(ema20 - ema50) / ema50 <= 0.0002) &&
+    (prediccionRaw >= 0.60) &&
+    (macdActual > 0) &&
+    (signalActual > 0);
+
+  const modoAuto = document.querySelector('input[name="modo-gauss"]:checked')?.value === 'auto';
+  const btnCerrar = document.getElementById('btn-cerrar-gauss');
+    const estadoDiv = document.getElementById('estado-reversion');
+
+  // ─── CIERRE: si hay posición abierta y hay agotamiento ───
+  if (posicionActual && posicionActual.simbolo === simbolo) {
+    const esLong = posicionActual.side === 'BUY';
+    const debeCerrar = (esLong && agotamientoAlcista) || (!esLong && agotamientoBajista);
+
+    if (debeCerrar) {
+      if (modoAuto) {
+        console.log(`✅ [GAUSS] Cierre automático por agotamiento`);
+        ordenEnCurso = true;
+        cerrarPosicion(simbolo, 'BOTH', 'Gauss - Agotamiento')
+          .finally(() => {
+            ordenEnCurso = false;
+            posicionActual = null;
+            if (btnCerrar) btnCerrar.style.display = 'none';
+          });
+        if (estadoDiv) estadoDiv.textContent = '✅ Cierre Gauss automático';
+      } else {
+        if (btnCerrar) {
+          btnCerrar.style.display = 'inline-block';
+          btnCerrar.onclick = () => {
+            console.log(`✅ [GAUSS] Cierre manual`);
+            ordenEnCurso = true;
+            cerrarPosicion(simbolo, 'BOTH', 'Gauss - Cierre manual')
+              .finally(() => {
+                ordenEnCurso = false;
+                posicionActual = null;
+                btnCerrar.style.display = 'none';
+              });
+          };
+        }
+        if (estadoDiv) estadoDiv.textContent = '🔔 Cierre Gauss recomendado';
       }
-      if (estadoDiv) estadoDiv.textContent = '🔔 Cierre Gauss recomendado';
+      return;
     }
-    return;
   }
-}
 
-// ─── APERTURA: si no hay posición y hay arranque CON ACELERACIÓN ───
-console.log("🔍 [GAUSS] ¿Hay posición guardada?", posicionActual);
-console.log("🔍 [GAUSS] Arranque bajista:", arranqueBajista);
-console.log("🔍 [GAUSS] Arranque alcista:", arranqueAlcista);
+  // ─── APERTURA: si no hay posición y hay arranque CON ACELERACIÓN ───
+  console.log("🔍 [GAUSS] ¿Hay posición guardada?", posicionActual);
+  console.log("🔍 [GAUSS] Arranque bajista:", arranqueBajista, "Aceleración:", aceleracionBajista);
+  console.log("🔍 [GAUSS] Arranque alcista:", arranqueAlcista, "Aceleración:", aceleracionAlcista);
 
-// ─── APERTURA: si no hay posición y hay arranque ───
-if (!posicionActual) {
-  let nuevaOrden = null;
-   let tipoArranque = '';
-  if (arranqueAlcista  && aceleracionAlcista) {
-    
-     nuevaOrden = 'BUY';
-     tipoArranque = 'alcista';
-     console.log('🟢 [GAUSS] Arranque alcista TEMPRANO detectado');
-     
+  // ─── APERTURA: si no hay posición y hay arranque ───
+  if (!posicionActual) {
+    let nuevaOrden = null;
+     let tipoArranque = '';
+    if (arranqueAlcista  && aceleracionAlcista) {
+      
+       nuevaOrden = 'BUY';
+       tipoArranque = 'alcista';
+       console.log('🟢 [GAUSS] Arranque alcista TEMPRANO detectado');
+       
  // ✅ ENVIAR NOTIFICACIÓN DE ARRANQUE ALCISTA
-   const mensajeArranque = `🔻 <b>ARRANQUE BAJISTA DETECTADO</b>\nSímbolo: ${simbolo}\nPrecio: $${precioActual}\nConfianza: ${(prediccionRaw*100).toFixed(1)}%\nModo: ${modoAuto ? 'AUTO' : 'MANUAL'}\nAceleración: ✅ VERDADERA`;
-  enviarTelegram(mensajeArranque);
+     const mensajeArranque = `🔻 <b>ARRANQUE BAJISTA DETECTADO</b>\nSímbolo: ${simbolo}\nPrecio: $${precioActual}\nConfianza: ${(prediccionRaw*100).toFixed(1)}%\nModo: ${modoAuto ? 'AUTO' : 'MANUAL'}\nAceleración: ✅ VERDADERA`;
+    enviarTelegram(mensajeArranque);
 
-  } else if (arranqueBajista && aceleracionBajista) {
-     nuevaOrden = 'SELL';
-     tipoArranque = 'bajista';
-     console.log('🔴 [GAUSS] Arranque bajista TEMPRANO detectado');
+    } else if (arranqueBajista & aceleracionBajista) {
+       nuevaOrden = 'SELL';
+       tipoArranque = 'bajista';
+       console.log('🔴 [GAUSS] Arranque bajista TEMPRANO detectado');
+    
+      // ✅ ENVIAR NOTIFICACIÓN DE ARRANQUE BAJISTA  
+    const mensajeArranque = `🔻 <b>ARRANQUE BAJISTA DETECTADO</b>\nSímbolo: ${simbolo}\nPrecio: $${precioActual}\nConfianza: ${(prediccionRaw*100).toFixed(1)}%\nModo: ${modoAuto ? 'AUTO' : 'MANUAL'}\nAceleración: ✅ VERDADERA`;
+    enviarTelegram(mensajeArranque);
+
+    }
+
+
+  // ─── OPCIONAL: Notificar cuando hay arranque pero SIN aceleración ───
+  if (arranqueAlcista && !aceleracionAlcista) {
+    console.log('⚠️ [GAUSS] Arranque alcista detectado PERO sin aceleración (entrada rechazada)');
+    const mensajeRechazo = `⚠️ <b>ARRANQUE ALCISTA RECHAZADO</b>\nSímbolo: ${simbolo}\nMotivo: Sin aceleración confirmada\nAceleración: ❌ FALSA`;
+    enviarTelegram(mensajeRechazo);
+  }
   
-    // ✅ ENVIAR NOTIFICACIÓN DE ARRANQUE BAJISTA  
-  const mensajeArranque = `🔻 <b>ARRANQUE BAJISTA DETECTADO</b>\nSímbolo: ${simbolo}\nPrecio: $${precioActual}\nConfianza: ${(prediccionRaw*100).toFixed(1)}%\nModo: ${modoAuto ? 'AUTO' : 'MANUAL'}\nAceleración: ✅ VERDADERA`;
-  enviarTelegram(mensajeArranque);
-
+  if (arranqueBajista && !aceleracionBajista) {
+    console.log('⚠️ [GAUSS] Arranque bajista detectado PERO sin aceleración (entrada rechazada)');
+    const mensajeRechazo = `⚠️ <b>ARRANQUE BAJISTA RECHAZADO</b>\nSímbolo: ${simbolo}\nMotivo: Sin aceleración confirmada\nAceleración: ❌ FALSA`;
+    enviarTelegram(mensajeRechazo);
   }
 
 
-// ─── OPCIONAL: Notificar cuando hay arranque pero SIN aceleración ───
-if (arranqueAlcista && !aceleracionAlcista) {
-  console.log('⚠️ [GAUSS] Arranque alcista detectado PERO sin aceleración (entrada rechazada)');
-  const mensajeRechazo = `⚠️ <b>ARRANQUE ALCISTA RECHAZADO</b>\nSímbolo: ${simbolo}\nMotivo: Sin aceleración confirmada\nAceleración: ❌ FALSA`;
-  enviarTelegram(mensajeRechazo);
-}
 
-if (arranqueBajista && !aceleracionBajista) {
-  console.log('⚠️ [GAUSS] Arranque bajista detectado PERO sin aceleración (entrada rechazada)');
-  const mensajeRechazo = `⚠️ <b>ARRANQUE BAJISTA RECHAZADO</b>\nSímbolo: ${simbolo}\nMotivo: Sin aceleración confirmada\nAceleración: ❌ FALSA`;
-  enviarTelegram(mensajeRechazo);
-}
+    if (nuevaOrden) {
+      posicionActual = {
+        side: nuevaOrden,
+        simbolo: simbolo,
+        entrada: precioActual,
+        timestamp: Date.now()
+      };
+      window.sideActual = nuevaOrden === 'BUY' ? 'LONG' : 'SHORT';
 
+     // Calcular SL y TP según tus parámetros
+    //const slPips = document.getElementById('stopLoss');
+    //const tpPips = document.getElementById('takeProfit');
 
+    const tpPips  = parseFloat(document.getElementById('takeProfit')?.value) || 5;
+    const slPips = parseFloat(document.getElementById('stopLoss')?.value) || 3;
 
-  if (nuevaOrden) {
-    posicionActual = {
-      side: nuevaOrden,
-      simbolo: simbolo,
-      entrada: precioActual,
-      timestamp: Date.now()
-    };
-    window.sideActual = nuevaOrden === 'BUY' ? 'LONG' : 'SHORT';
+    const slPrecio = nuevaOrden === 'BUY' 
+      ? precioActual * (1 - slPips/100) 
+      : precioActual * (1 + slPips/100);
+    const tpPrecio = nuevaOrden === 'BUY' 
+      ? precioActual * (1 + tpPips/100) 
+      : precioActual * (1 - tpPips/100);
 
-   // Calcular SL y TP según tus parámetros
-  //const slPips = document.getElementById('stopLoss');
-  //const tpPips = document.getElementById('takeProfit');
-
-  const tpPips  = parseFloat(document.getElementById('takeProfit')?.value) || 5;
-  const slPips = parseFloat(document.getElementById('stopLoss')?.value) || 3;
-
-  const slPrecio = nuevaOrden === 'BUY' 
-    ? precioActual * (1 - slPips/100) 
-    : precioActual * (1 + slPips/100);
-  const tpPrecio = nuevaOrden === 'BUY' 
-    ? precioActual * (1 + tpPips/100) 
-    : precioActual * (1 - tpPips/100);
-
-  // ✅ MENSAJE DE ORDEN MONTADA
-  const mensajeOrden = `📊 <b>ORDEN MONTADA - GAUSS</b>\n${nuevaOrden} ${simbolo}\nEntrada: $${precioActual.toFixed(2)}\nSL: $${slPrecio.toFixed(2)} (${slPips}%)\nTP: $${tpPrecio.toFixed(2)} (${tpPips}%)\nLeverage: 2x\nCapital: $200\nModo: ${modoAuto ? 'AUTOMÁTICO' : 'MANUAL'}`;
-  enviarTelegram(mensajeOrden);
-    // Abrir posición
-    if (modoAuto) {
-      ordenEnCurso = true;
-      abrirPosicionReal(nuevaOrden)
-        .finally(() => {
-          ordenEnCurso = false;
-        });
-      if (estadoDiv) estadoDiv.textContent = `✅ Gauss ${nuevaOrden} abierto`;
-    } else {
-      if (btnCerrar) {
-        btnCerrar.style.display = 'none'; // ocultar cierre (no hay posición)
+    // ✅ MENSAJE DE ORDEN MONTADA
+    const mensajeOrden = `📊 <b>ORDEN MONTADA - GAUSS</b>\n${nuevaOrden} ${simbolo}\nEntrada: $${precioActual.toFixed(2)}\nSL: $${slPrecio.toFixed(2)} (${slPips}%)\nTP: $${tpPrecio.toFixed(2)} (${tpPips}%)\nLeverage: 2x\nCapital: $200\nModo: ${modoAuto ? 'AUTOMÁTICO' : 'MANUAL'}`;
+    enviarTelegram(mensajeOrden);
+      // Abrir posición
+      if (modoAuto) {
+        ordenEnCurso = true;
+        abrirPosicionReal(nuevaOrden)
+          .finally(() => {
+            ordenEnCurso = false;
+          });
+        if (estadoDiv) estadoDiv.textContent = `✅ Gauss ${nuevaOrden} abierto`;
+      } else {
+        if (btnCerrar) {
+          btnCerrar.style.display = 'none'; // ocultar cierre (no hay posición)
+        }
+        const btnAbrir = document.getElementById('btn-abrir-gauss');
+        if (btnAbrir) {
+          btnAbrir.style.display = 'inline-block';
+          btnAbrir.onclick = () => {
+            ordenEnCurso = true;
+           // ✅ ENVIAR CONFIRMACIÓN DE EJECUCIÓN MANUAL
+          const mensajeEjecucion = `✅ <b>ORDEN EJECUTADA MANUALMENTE</b>\n${nuevaOrden} ${simbolo}\nPrecio: $${precioActual.toFixed(2)}`;
+          enviarTelegram(mensajeEjecucion);
+            abrirPosicionReal(nuevaOrden)
+              .finally(() => {
+                ordenEnCurso = false;
+                btnAbrir.style.display = 'none';
+              });
+          };
+        }
+        if (estadoDiv) estadoDiv.textContent = `🔔 Gauss ${nuevaOrden} detectado. Modo manual.`;
       }
-      const btnAbrir = document.getElementById('btn-abrir-gauss');
-      if (btnAbrir) {
-        btnAbrir.style.display = 'inline-block';
-        btnAbrir.onclick = () => {
-          ordenEnCurso = true;
-         // ✅ ENVIAR CONFIRMACIÓN DE EJECUCIÓN MANUAL
-        const mensajeEjecucion = `✅ <b>ORDEN EJECUTADA MANUALMENTE</b>\n${nuevaOrden} ${simbolo}\nPrecio: $${precioActual.toFixed(2)}`;
-        enviarTelegram(mensajeEjecucion);
-          abrirPosicionReal(nuevaOrden)
-            .finally(() => {
-              ordenEnCurso = false;
-              btnAbrir.style.display = 'none';
-            });
-        };
-      }
-      if (estadoDiv) estadoDiv.textContent = `🔔 Gauss ${nuevaOrden} detectado. Modo manual.`;
     }
   }
 }
-}
+
 
 // ─── SISTEMA 1: MODO MERCADO ───
 function evaluarModoMercado(
@@ -3578,14 +3566,14 @@ async function iniciarStreaming() {
     estadoEl.style.fontWeight = 'bold';
   }
 
-  const ws = new WebSocket('wss://stream.binance.com:9443/ws/solusdt@kline_3m');
+  const ws = new WebSocket('wss://stream.binance.com:9443/ws/solusdt@kline_1m');
 
   ws.onopen = () => {
    
     console.log('🟢 ¡CONEXIÓN EXITOSA! WebSocket abierto.');
 
     if (estadoEl) {
-      estadoEl.textContent = '📡 Conectado. Esperando vela cerrada (3m)...';
+      estadoEl.textContent = '📡 Conectado. Esperando vela cerrada (1m)...';
       estadoEl.style.color = '#2196F3';
     }
   };
@@ -3749,7 +3737,7 @@ ws.onmessage = async (event) => {
       console.log(`[DIAGNÓSTICO WS] ultimoPrecio calculado: ${ultimoPrecio} (typeof: ${typeof ultimoPrecio}, isNaN: ${isNaN(ultimoPrecio)})`);
        
        const simbolo = document.getElementById('selector-simbolo').value;
-      const k5m = await obtenerDatos(simbolo, '3m', 50);
+      const k5m = await obtenerDatos(simbolo, '1m', 50);
      
 
       // ✅ Calcular indicadores técnicos (últimos valores de los arrays)
@@ -3823,8 +3811,6 @@ ws.onmessage = async (event) => {
       const ultimosVolumenes = volumes.slice(-10);
       const cambios = ultimosPrecios.map((p, idx) => idx === 0 ? 0 : (p - ultimosPrecios[idx - 1]) / ultimosPrecios[idx - 1]);
 
-
-
       window.indicadores = {
         macdLine: macdValues,
         signalLine: signalValues,
@@ -3836,7 +3822,7 @@ ws.onmessage = async (event) => {
       };
 
           // ✅ Actualizar el monitor visual
-      actualizarMonitorMACD();
+       actualizarMonitorMACD();
 
 
        // Ejemplo:
@@ -4169,7 +4155,7 @@ ws.onmessage = async (event) => {
               // Dinámico: basado en ATR (sin leverage para precios)
               try {
                 const simbolo = document.getElementById('selector-simbolo').value;
-                const k5m = await obtenerDatos(simbolo, '3m', 50);
+                const k5m = await obtenerDatos(simbolo, '1m', 50);
                 if (k5m.length >= 20) {
                   const atrArray = calcularATR(k5m, 14);
                   const atrVal = atrArray .length > 0 ? atrArray [atrArray .length - 1] : 0;// fallback razonable
@@ -4327,6 +4313,8 @@ ws.onmessage = async (event) => {
           evaluarSistemaGauss(document.getElementById('selector-simbolo').value, prediccionRaw,  window.indicadores, historialVelas);
 
 
+          // En 5m, exige ADX un poco más alto (ej: > 25) para filtrar mercados laterales
+
           // 🟢 LÓGICA DE APERTURA (solo si NO hay posición)
           // ───────────────────────────────────────
 
@@ -4381,7 +4369,7 @@ ws.onmessage = async (event) => {
             } else {
               try {
                 const simbolo = document.getElementById('selector-simbolo').value;
-                const k5m = await obtenerDatos(simbolo, '3m', 50);
+                const k5m = await obtenerDatos(simbolo, '1m', 50);
                 if (k5m.length >= 20) {
                   const atrArray = calcularATR(k5m, 14);
                   const atrVal = atrArray.length > 0 ? atrArray[atrArray.length - 1] : 0;// fallback razonable
@@ -4802,7 +4790,7 @@ async function ejecutarBacktesting() {
     const tpslMode = document.getElementById('tpsl-mode')?.value || 'dinamico';
     const leverage = parseInt(document.getElementById('apalancamiento')?.value) || 2;
     const notional = parseFloat(document.getElementById('montoCompra')?.value) || 100;
-    const intervalo = document.getElementById('intervalo-backtest')?.value || '3m'; // ← Selector de intervalo
+    const intervalo = document.getElementById('intervalo-backtest')?.value || '1m'; // ← Selector de intervalo
     const adxUmbral = parseFloat(document.getElementById('adx-umbral')?.value) || 20; // ← Umbral ajustable
 
     // 🔹 Descargar datos reales
