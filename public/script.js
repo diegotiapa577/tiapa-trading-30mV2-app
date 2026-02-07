@@ -563,7 +563,7 @@ function retryInitChart(attempts = 0) {
 }
 
 // === DATOS ===
-async function obtenerDatos(symbol , interval = '3m', limit = 60) {
+async function obtenerDatos(symbol , interval = '1m', limit = 60) {
   const res = await fetch(`/api/binance/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
   if (!res.ok) throw new Error(`Error: ${res.status}`);
   const klines = await res.json();
@@ -994,7 +994,7 @@ async function entrenarRed() {
 
   // Definir símbolos a usar para entrenamiento
   const SIMBOLOS_ENTRENAMIENTO = ['SOLUSDT'];
-  const INTERVALO = '3m'; //  3m
+  const INTERVALO = '1m'; //  1m
   const LIMITE_DATOS = 9000; // Ajusta este número. Por ejemplo, 15000 velas de 4h por símbolo
   const VELAS_FUTURAS = 3;
   const EPOCAS = 50;
@@ -1769,8 +1769,8 @@ async function abrirPosicionReal(side) {
     const simbolo = document.getElementById('selector-simbolo').value;
     const ticker = await (await fetch(`/api/binance/ticker?symbol=${simbolo}`)).json();
     const precio = parseFloat(ticker.price);
-    let monto = parseFloat(document.getElementById('montoCompra').value) || 130;
-    if (monto < 100) monto = 130;
+    let monto = parseFloat(document.getElementById('montoCompra').value) || 90;
+    if (monto < 100) monto = 90;
     let qty = symbolInfo ? calculateQuantity(precio, monto) : Math.floor((monto / precio) / 0.001) * 0.001;
     const lev = parseInt(document.getElementById('apalancamiento').value) || 2;
     console.log(`🔍 [DEBUG] Monto deseado: $${monto}`);
@@ -1790,7 +1790,7 @@ async function abrirPosicionReal(side) {
       
       // Obtener ATR reciente (mismo que usas en otros lugares)
       const simbolo = document.getElementById('selector-simbolo').value;
-      const k5m = await obtenerDatos(simbolo, '3m', 50);
+      const k5m = await obtenerDatos(simbolo, '1m', 50);
      
       const atrArr = k5m.length >= 20 ? calcularATR(k5m, 14):[];
       const atrVal = atrArr.length > 0 ? atrArr[atrArr.length - 1] : 0;
@@ -3169,7 +3169,7 @@ if (!posicionActual) {
      console.log('🟢 [GAUSS] Arranque alcista TEMPRANO detectado');
      
  // ✅ ENVIAR NOTIFICACIÓN DE ARRANQUE ALCISTA
-   const mensajeArranque = `🔻 <b>ARRANQUE BAJISTA DETECTADO</b>\nSímbolo: ${simbolo}\nPrecio: $${precioActual}\nConfianza: ${(prediccionRaw*100).toFixed(1)}%\nModo: ${modoAuto ? 'AUTO' : 'MANUAL'}\nAceleración: ✅ VERDADERA`;
+   const mensajeArranque = `🔻 <b>ARRANQUE ALCISTA DETECTADO</b>\nSímbolo: ${simbolo}\nPrecio: $${precioActual}\nConfianza: ${(prediccionRaw*100).toFixed(1)}%\nModo: ${modoAuto ? 'AUTO' : 'MANUAL'}\nAceleración: ✅ VERDADERA`;
   enviarTelegram(mensajeArranque);
 
   } else if (arranqueBajista && aceleracionBajista) {
@@ -3178,7 +3178,7 @@ if (!posicionActual) {
      console.log('🔴 [GAUSS] Arranque bajista TEMPRANO detectado');
   
     // ✅ ENVIAR NOTIFICACIÓN DE ARRANQUE BAJISTA  
-  const mensajeArranque = `🔻 <b>ARRANQUE BAJISTA DETECTADO</b>\nSímbolo: ${simbolo}\nPrecio: $${precioActual}\nConfianza: ${(prediccionRaw*100).toFixed(1)}%\nModo: ${modoAuto ? 'AUTO' : 'MANUAL'}\nAceleración: ✅ VERDADERA`;
+  const mensajeArranque = `🔻 <b>ARRANQUE BAJISTA DETECTADO</b>\nSímbolo: ${simbolo}\nPrecio: $${precioActual}\nConfianza: ${((1-prediccionRaw)*100).toFixed(1)}%\nModo: ${modoAuto ? 'AUTO' : 'MANUAL'}\nAceleración: ✅ VERDADERA`;
   enviarTelegram(mensajeArranque);
 
   }
@@ -3223,7 +3223,14 @@ if (arranqueBajista && !aceleracionBajista) {
     : precioActual * (1 - tpPips/100);
 
   // ✅ MENSAJE DE ORDEN MONTADA
-  const mensajeOrden = `📊 <b>ORDEN MONTADA - GAUSS</b>\n${nuevaOrden} ${simbolo}\nEntrada: $${precioActual.toFixed(2)}\nSL: $${slPrecio.toFixed(2)} (${slPips}%)\nTP: $${tpPrecio.toFixed(2)} (${tpPips}%)\nLeverage: 2x\nCapital: $200\nModo: ${modoAuto ? 'AUTOMÁTICO' : 'MANUAL'}`;
+
+     const leverage = parseInt(document.getElementById('apalancamiento')?.value) || 2;
+    const montoInvertido= parseFloat(document.getElementById('montoCompra')?.value) || 90;
+   
+
+  // ✅ MENSAJE DE ORDEN MONTADA
+  const mensajeOrden = `📊 <b>ORDEN MONTADA - GAUSS</b>\n${nuevaOrden} ${simbolo}\nEntrada: $${precioActual.toFixed(2)}\nSL: $${slPrecio.toFixed(2)} (${slPips}%)\nTP: $${tpPrecio.toFixed(2)} (${tpPips}%)\nLeverage: ${leverage}\nInversion: ${montoInvertido}\nModo: ${modoAuto ? 'AUTOMÁTICO' : 'MANUAL'}`;
+
   enviarTelegram(mensajeOrden);
     // Abrir posición
     if (modoAuto) {
@@ -3578,14 +3585,14 @@ async function iniciarStreaming() {
     estadoEl.style.fontWeight = 'bold';
   }
 
-  const ws = new WebSocket('wss://stream.binance.com:9443/ws/solusdt@kline_3m');
+  const ws = new WebSocket('wss://stream.binance.com:9443/ws/solusdt@kline_1m');
 
   ws.onopen = () => {
    
     console.log('🟢 ¡CONEXIÓN EXITOSA! WebSocket abierto.');
 
     if (estadoEl) {
-      estadoEl.textContent = '📡 Conectado. Esperando vela cerrada (3m)...';
+      estadoEl.textContent = '📡 Conectado. Esperando vela cerrada (1m)...';
       estadoEl.style.color = '#2196F3';
     }
   };
@@ -3600,34 +3607,7 @@ async function iniciarStreaming() {
 
 ws.onclose = async () => {
   console.log('🟡 WebSocket cerrado. Verificando posiciones abiertas...');
-  streamingActivo = false;
-
-  try {
-    // 1. Obtener posiciones actuales desde Binance
-    const posResponse = await fetchConAuth('/api/binance/futures/positions');
-    const posiciones = await posResponse.json();
-    const posicionesAbiertas = posiciones.filter(p => Math.abs(parseFloat(p.positionAmt)) > 0.0001);
-
-    if (posicionesAbiertas.length > 0) {
-      console.log(`⚠️ ${posicionesAbiertas.length} posición(es) abierta(s). Cerrando antes de reconectar...`);
-      
-      // 2. Cerrar cada posición
-      for (const pos of posicionesAbiertas) {
-        await cerrarPosicion(
-          pos.symbol, 
-          pos.positionSide || 'BOTH', 
-          'WebSocket cerrado' // motivo
-        );
-        console.log(`✅ Posición ${pos.symbol} cerrada por desconexión.`);
-      }
-    } else {
-      console.log('✅ No hay posiciones abiertas. Seguro para reconectar.');
-    }
-
-  } catch (err) {
-    console.error('❌ Error al cerrar posiciones en onclose:', err);
-  }
-
+   streamingActivo = false;
   // 3. Actualizar estado y reconectar
   const estadoEl = document.getElementById('estado-streaming');
   if (estadoEl) {
@@ -3749,7 +3729,7 @@ ws.onmessage = async (event) => {
       console.log(`[DIAGNÓSTICO WS] ultimoPrecio calculado: ${ultimoPrecio} (typeof: ${typeof ultimoPrecio}, isNaN: ${isNaN(ultimoPrecio)})`);
        
        const simbolo = document.getElementById('selector-simbolo').value;
-      const k5m = await obtenerDatos(simbolo, '3m', 50);
+      const k5m = await obtenerDatos(simbolo, '1m', 50);
      
 
       // ✅ Calcular indicadores técnicos (últimos valores de los arrays)
@@ -4169,7 +4149,7 @@ ws.onmessage = async (event) => {
               // Dinámico: basado en ATR (sin leverage para precios)
               try {
                 const simbolo = document.getElementById('selector-simbolo').value;
-                const k5m = await obtenerDatos(simbolo, '3m', 50);
+                const k5m = await obtenerDatos(simbolo, '1m', 50);
                 if (k5m.length >= 20) {
                   const atrArray = calcularATR(k5m, 14);
                   const atrVal = atrArray .length > 0 ? atrArray [atrArray .length - 1] : 0;// fallback razonable
@@ -4381,7 +4361,7 @@ ws.onmessage = async (event) => {
             } else {
               try {
                 const simbolo = document.getElementById('selector-simbolo').value;
-                const k5m = await obtenerDatos(simbolo, '3m', 50);
+                const k5m = await obtenerDatos(simbolo, '1m', 50);
                 if (k5m.length >= 20) {
                   const atrArray = calcularATR(k5m, 14);
                   const atrVal = atrArray.length > 0 ? atrArray[atrArray.length - 1] : 0;// fallback razonable
@@ -4603,7 +4583,7 @@ async function actualizarSaldoCuenta(tipoCuenta = 'testnet') {
   const capitalActual = parseFloat(localStorage.getItem(`${keyPrefix}capitalActual`)) || 
                        (tipoCuenta === 'mainnet' ? 0 : 1000);
   
-  const montoInvertir = parseFloat(document.getElementById('montoCompra')?.value) || 130;
+  const montoInvertir = parseFloat(document.getElementById('montoCompra')?.value) || 90;
   
   // ✅ Obtener precio BTC de forma segura
   let saldoBTC = 0;
@@ -4802,7 +4782,7 @@ async function ejecutarBacktesting() {
     const tpslMode = document.getElementById('tpsl-mode')?.value || 'dinamico';
     const leverage = parseInt(document.getElementById('apalancamiento')?.value) || 2;
     const notional = parseFloat(document.getElementById('montoCompra')?.value) || 100;
-    const intervalo = document.getElementById('intervalo-backtest')?.value || '3m'; // ← Selector de intervalo
+    const intervalo = document.getElementById('intervalo-backtest')?.value || '1m'; // ← Selector de intervalo
     const adxUmbral = parseFloat(document.getElementById('adx-umbral')?.value) || 20; // ← Umbral ajustable
 
     // 🔹 Descargar datos reales
