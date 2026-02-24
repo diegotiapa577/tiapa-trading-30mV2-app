@@ -38,6 +38,10 @@ let lineaPE_Reanclaje = null;
 let lineaTP_Reanclaje = null; 
 let lineaSL_Reanclaje = null;
 
+
+
+// Control manual de dirección IA
+let DIRECCION_MANUAL = '_'; // null = IA normal, 'SUBIDA' o 'BAJADA' = manual
 // ✅ Inicializar sistema de estadísticas de IA
 window.prediccionesPendientes = window.prediccionesPendientes || [];
 
@@ -57,6 +61,7 @@ window.tradingActivo = false;
 let intervaloActualizacionPosiciones = null;
 
 
+
 // Variables globales
 let PARAMETROS = {
   modo: 'normal',
@@ -67,7 +72,6 @@ let PARAMETROS = {
   atrMinimo: 0.5,
   umbralReanclaje: 3.0,
   emaEma50Minimo:0.005,
-  emaEma50MinimoAg:0.001,
   cierreAgotamiento: true,
   tp: 6.0,
   sl: 3.0
@@ -84,7 +88,6 @@ const PRESETS = {
     atrMinimo: 0.5,
     umbralReanclaje: 3.0,
     emaEma50Minimo:0.005,
-    emaEma50MinimoAg:0.001,
     cierreAgotamiento: true,
     tp: 6.0,
     sl: 3.0
@@ -98,7 +101,6 @@ const PRESETS = {
     atrMinimo: 0.3,
     umbralReanclaje: 0.1,
     emaEma50Minimo:0.005,
-    emaEma50MinimoAg:0.001,
     cierreAgotamiento: false,
     tp: 1.0,
     sl: 0.5
@@ -141,8 +143,7 @@ function actualizarFormulario() {
   document.getElementById('param-atr').value = PARAMETROS.atrMinimo;
   document.getElementById('param-reanclaje').value = PARAMETROS.umbralReanclaje;
   document.getElementById('param-ema20ema50').value = PARAMETROS.emaEma50Minimo;
-  document.getElementById('param-ema20ema50Ag').value = PARAMETROS.emaEma50MinimoAg;
-  document.getElementById('cierre-agotamiento').checked = PARAMETROS.cierreAgotamiento;
+   document.getElementById('cierre-agotamiento').checked = PARAMETROS.cierreAgotamiento;
   document.getElementById('takeProfit').value = PARAMETROS.tp;
   document.getElementById('stopLoss').value = PARAMETROS.sl;
 }
@@ -159,7 +160,6 @@ function guardarParametros() {
     atrMinimo: parseFloat(document.getElementById('param-atr').value),
     umbralReanclaje: parseFloat(document.getElementById('param-reanclaje').value),
     emaEma50Minimo: parseFloat(document.getElementById('param-ema20ema50').value),
-    emaEma50MinimoAg: parseFloat(document.getElementById('param-ema20ema50Ag').value),
     cierreAgotamiento : document.getElementById('cierre-agotamiento').checked,
     tp: parseFloat(document.getElementById('takeProfit').value),
     sl: parseFloat(document.getElementById('stopLoss').value)
@@ -200,6 +200,25 @@ document.addEventListener('DOMContentLoaded', () => {
 function getParametro(key) {
   return PARAMETROS[key];
 }
+
+
+
+
+
+
+
+// Función para forzar dirección manual
+function forzarDireccion(direccion) {
+  DIRECCION_MANUAL = direccion;
+  console.log('🎯 Dirección forzada:', direccion);
+}
+
+
+
+
+
+
+
 
 
 
@@ -2035,7 +2054,6 @@ function ocultarLineasPrecios() {
 // === ÓRDENES ===
 async function abrirPosicionReal(side) {
   try {
-    
     const simbolo = document.getElementById('selector-simbolo').value;
     const ticker = await (await fetch(`/api/binance/ticker?symbol=${simbolo}`)).json();
     const precio = parseFloat(ticker.price);
@@ -2289,14 +2307,14 @@ async function cerrarPosicion(symbol, positionSide = 'BOTH', motivo = 'Manual') 
     const cantidad = Math.abs(positionAmt); // Cantidad total cerrada
     const sideActual = positionAmt > 0 ? 'LONG' : 'SHORT';
     const leverage = parseFloat(posicion.leverage) || 1; // <-- Aseguramos usar el leverage real de la posicion
-
+   
     // 4. Cerrar en Binance
     const closeRes = await fetchConAuth('/api/binance/futures/close-position', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ symbol, positionSide })
 
-    });
+    }); 
     const resultado = await closeRes.json();
 
     // ✅ 5. Obtener precio de cierre REAL (promedio ponderado de la orden)
@@ -2389,7 +2407,8 @@ async function cerrarPosicion(symbol, positionSide = 'BOTH', motivo = 'Manual') 
   if (!hayPosicionSimbolo) {
      // No hay más posiciones (de ningún side) para este símbolo
      window.sideActual = null; // Limpiar la variable global
-     posicionActual=null
+     posicionActual=null;
+   //  limpiarAnclaje(simbolo);
      console.log(`[Gráfico] sideActual limpiado para ${symbol} (posición cerrada y no hay otras abiertas para este símbolo).`);
      // Opcional: Ocultar líneas si se cierra la última posición
      // lineaPE.applyOptions({ visible: false });
@@ -2415,7 +2434,7 @@ async function cerrarPosicion(symbol, positionSide = 'BOTH', motivo = 'Manual') 
     if (estadoEl) estadoEl.textContent = msg;
   }
   
-  
+  puntosAnclaje={} 
    
 }
 
@@ -2693,7 +2712,7 @@ function ejecutarApertura(side, simbolo, modoAuto, btnOperar, estadoDiv, signalA
             ordenEnCurso = false;
             btnOperar.style.display = 'none';
           });
-      };
+      };e
     }
     if (estadoDiv) estadoDiv.textContent = `🔔 Confirmación recibida. ¡Confirma apertura!`;
   }
@@ -3220,9 +3239,9 @@ if (!window.eventosIA) window.eventosIA = [];
       document.getElementById('btn-exportar-registro')?.addEventListener('click', exportarEventosACSV);
 
 
-
-// Variables para el modo reanclaje
 let puntosAnclaje = {};
+// Variables para el modo reanclaje
+
 //const UMBRAL_REANCLAJE = PARAMETROS.umbralReanclaje; // 5% para reanclar
 
 function verificarYActualizarAnclaje(simbolo, precioActual, esShort, precioEntradaOriginal) {
@@ -3231,7 +3250,7 @@ function verificarYActualizarAnclaje(simbolo, precioActual, esShort, precioEntra
   
   if (!puntosAnclaje[simbolo]) {
       console.log(`🔄 !puntosAnclaje[simbolo] : ${!puntosAnclaje[simbolo]} `);
-
+    
     puntosAnclaje[simbolo] = {
       anclajeActual: precioEntradaOriginal,
       vecesReanclado: 0,
@@ -3322,10 +3341,10 @@ function evaluarCierreInteligente(leverage, entrada, markPrice, simbolo, precioA
 
     if (precioActual >= slPrecio) {
       cerrar = true;
-      motivo = `🔴 SL ${tipoCierre} (${slPrecio}% desde $${precioReferencia.toFixed(4)})`;
+      motivo = `🔴 SL ${tipoCierre} (${slPrecio.toFixed(4)} desde $${precioReferencia.toFixed(4)})`;
     } else if (precioActual <= tpPrecio) {
       cerrar = true;
-      motivo = `✅ TP ${tipoCierre} (${tpPrecio}% desde $${precioReferencia.toFixed(4)})`;
+      motivo = `✅ TP ${tipoCierre} (${tpPrecio.toFixed(4)} desde $${precioReferencia.toFixed(4)})`;
     }
   } else {
     const slPrecio = precioReferencia * (1 - (slPct/ 100));
@@ -3335,10 +3354,10 @@ function evaluarCierreInteligente(leverage, entrada, markPrice, simbolo, precioA
 
     if (precioActual <= slPrecio) {
       cerrar = true;
-      motivo = `🔴 SL ${tipoCierre} (${slPrecio}% desde $${precioReferencia.toFixed(4)})`;
+      motivo = `🔴 SL ${tipoCierre} (${slPrecio.toFixed(4)} desde $${precioReferencia.toFixed(4)})`;
     } else if (precioActual >= tpPrecio) {
       cerrar = true;
-      motivo = `✅ TP ${tipoCierre} (${tpPrecio}% desde $${precioReferencia.toFixed(4)})`;
+      motivo = `✅ TP ${tipoCierre} (${tpPrecio.toFixed(4)} desde $${precioReferencia.toFixed(4)})`;
     }
   }
   
@@ -3379,15 +3398,22 @@ function evaluarCierreInteligente(leverage, entrada, markPrice, simbolo, precioA
   return { cerrar, motivo };
 }
 
-// Función para limpiar anclaje (segura)
+
+
 function limpiarAnclaje(simbolo) {
-  if (simbolo && puntosAnclaje[simbolo]) {
+  // Eliminar del objeto principal
+  if (puntosAnclaje[simbolo]) {
     delete puntosAnclaje[simbolo];
-    if (document.getElementById('info-reanclaje')) {
-      document.getElementById('info-reanclaje').textContent = '';
-    }
+    console.log(`🗑️ Anclaje de ${simbolo} eliminado`);
+  }
+  
+  // Limpiar también la UI inmediatamente
+  if (document.getElementById('info-anclaje')) {
+    document.getElementById('info-anclaje').textContent = 'Sin posición activa';
   }
 }
+
+
 
 
   // Variables globales (fuera de funciones)
@@ -3535,17 +3561,11 @@ const arranqueAlcista =
   (signalActual > 0);
 
 // ─── ZONA 2: AGOTAMIENTO ALCISTA ───
-  const agotamientoAlcista = 
-    (Math.abs(ema20 - ema50) / ema50 <= PARAMETROS.emaEma50MinimoAg) && 
-    PARAMETROS.cierreAgotamiento &&
+  const agotamientoAlcista = PARAMETROS.cierreAgotamiento ? 
+    (Math.abs(ema20 - ema50) / ema50 <= 0.005) && 
     (macdActual < 0) && 
-    (signalActual < 0) ;
+    (signalActual < 0) : false;
 
-   console.log("🔍 [GAUSS] ¿AgotamietnoAlcista?", agotamientoAlcista);
-   console.log("🔍 [GAUSS] ¿PARAMETROS.cierreAgotamiento?:", PARAMETROS.cierreAgotamiento);
-   console.log("🔍 [GAUSS] ¿(ema20 - ema50) / ema50?:", PARAMETROS.emaEma50MinimoAg);
-    console.log("🔍 [GAUSS] macdActual < 0:", macdActual < 0);
-    console.log("🔍 [GAUSS] signalActual < 0:", signalActual < 0);
 
 // ─── ZONA 1: ARRANQUE DE TENDENCIA BAJISTA ───
 const arranqueBajista = 
@@ -3558,17 +3578,10 @@ const arranqueBajista =
   (signalActual < 0);
 
 // ─── ZONA 2: AGOTAMIENTO BAJISTA ───
-  const agotamientoBajista =
-    (Math.abs(ema20 - ema50) / ema50 <= PARAMETROS.emaEma50MinimoAg) && 
-     PARAMETROS.cierreAgotamiento &&
+  const agotamientoBajista = PARAMETROS.cierreAgotamiento ? 
+    (Math.abs(ema20 - ema50) / ema50 <= 0.005) && 
     (macdActual > 0) && 
-    (signalActual > 0) ;
-
-    console.log("🔍 [GAUSS] ¿agotamientoBajista :", agotamientoBajista);
-    console.log("🔍 [GAUSS] ¿PARAMETROS.cierreAgotamiento:", PARAMETROS.cierreAgotamiento);
-     console.log("🔍 [GAUSS] ¿(ema20 - ema50) / ema50?:", PARAMETROS.emaEma50MinimoAg);
-      console.log("🔍 [GAUSS] macdActual > 0:", macdActual > 0);
-    console.log("🔍 [GAUSS] signalActual > 0:", signalActual > 0);
+    (signalActual > 0) : false;
 
 const modoAuto = document.querySelector('input[name="modo-gauss"]:checked')?.value === 'auto';
 const btnCerrar = document.getElementById('btn-cerrar-gauss');
@@ -4367,6 +4380,19 @@ ws.onmessage = async (event) => {
 
 
 
+      // ✅ DONDE QUIERA QUE USES prediccionRaw EN TU CÓDIGO PRINCIPAL
+      // Reemplaza el valor original con este bloque:
+
+     // let prediccionUsar = prediccionRaw;
+
+      // Aplicar dirección manual si está activa
+      if (DIRECCION_MANUAL === 'SUBIDA') {
+        prediccionRaw = 0.65; // 100% subida
+      } else if (DIRECCION_MANUAL === 'BAJADA') {
+        prediccionRaw = 0.35; // 100% bajada
+      }
+
+
       // [DIAGNÓSTICO] Calcular confianza y dirección ANTES de actualizar UI
       let confianza = 0;
       let dir = '—';
@@ -4483,11 +4509,6 @@ ws.onmessage = async (event) => {
 
 
 
-
-
-
-
-
           if (ahoraMs - window.ultimoCheckPosiciones >= tiempoMinimoEntreChecks) {
             window.ultimoCheckPosiciones = ahoraMs; // Actualizar timestamp
 
@@ -4579,7 +4600,7 @@ ws.onmessage = async (event) => {
           }
 
           // ✅ Solo evaluar cierre si ya se calculó la predicción y hay posición
-          if (historialVelas.length >= 30 && prediccionRaw != null && posicionActual) { // <-- Asegurar que posicionActual no sea null aquí tambiénnano
+          if (historialVelas.length >= 30  && posicionActual) { // <-- Asegurar que posicionActual no sea null aquí tambiénnano
             const size = parseFloat(posicionActual.positionAmt);
             const entryPrice = parseFloat(posicionActual.entryPrice);
             const markPrice = parseFloat(posicionActual.markPrice);
@@ -4743,18 +4764,23 @@ ws.onmessage = async (event) => {
                 motivo = resultado.motivo;
               }
 
-        
 
-              // Mostrar info en UI (solo si hay anclaje)
-              if (modoReanclajeActivo && puntosAnclaje[simbolo]) {
-                const precioAnclaje = puntosAnclaje[simbolo].anclajeActual;
-                const vecesReanclaje = puntosAnclaje[simbolo].vecesReanclado || 0;
+            // Mostrar info en UI (solo si hay anclaje Y posición activa)
+            if (posicionActual && modoReanclajeActivo && puntosAnclaje[simbolo]) {
+              const precioAnclaje = puntosAnclaje[simbolo].anclajeActual;
+              const vecesReanclaje = puntosAnclaje[simbolo].vecesReanclado || 0;
 
-                if (document.getElementById('info-anclaje')) {
-                  document.getElementById('info-anclaje').textContent =
-                    `Anclaje: $${precioAnclaje.toFixed(2)} | Reanclajes: ${vecesReanclaje}`;
-                }
+              if (document.getElementById('info-anclaje')) {
+                document.getElementById('info-anclaje').textContent =
+                  `Anclaje: $${precioAnclaje.toFixed(4)} | Reanclajes: ${vecesReanclaje}`;
               }
+            } else {
+              // Limpiar la UI cuando no hay posición o reanclaje desactivado
+              if (document.getElementById('info-anclaje')) {
+                document.getElementById('info-anclaje').textContent = 'Sin posición activa';
+              }
+            }
+
 
               if (puntosAnclaje[simbolo]) {
               actualizarLineasReanclaje(

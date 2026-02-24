@@ -617,12 +617,6 @@
 
 
 
-
-
-
-
-
-
 .grid-modulos {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -820,19 +814,6 @@
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
   </style>
 </head>
 <body>
@@ -966,6 +947,13 @@
       </label>
         </div>
        
+<!-- Botones para cambiar dirección -->
+<button onclick="forzarDireccion('SUBIDA')">📈 Forzar SUBIDA</button>
+<button onclick="forzarDireccion('BAJADA')">📉 Forzar BAJADA</button>
+<button onclick="forzarDireccion(null)">🤖 IA Normal</button>
+
+
+
       <!-- 🔹 MODO MERCADO -->
       <div style="margin-top: 12px; padding: 8px; background:#1e2a38; border-radius:6px; border: 1px solid #3a5b7c;  ">
         <label>
@@ -1094,7 +1082,7 @@
       <div class="btn-group">
       
         <button class="btn btn-outline" onclick="operacionPrueba()">
-          <i class="fas fa-magic"></i> Orden Sell o Buy Manual 
+          <i class="fas fa-magic"></i> Orden  Manual 
         </button>
       </div>
       <div class="btn-group">
