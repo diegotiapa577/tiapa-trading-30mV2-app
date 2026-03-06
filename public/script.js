@@ -1,5 +1,5 @@
 // === CONFIGURACIÓN GLOBAL ===
-const IS_TESTNET = true; // Cambia a false en Mainnet
+const IS_TESTNET = false; // Cambia a false en Mainnet
 let ws = null; // ← Declárala aquí
 const MAX_VELAS_HISTORICAS = 10;
 let historialVelas = []; // ← Guarda las velas cerradas completas
@@ -8,7 +8,7 @@ let chart = null;
 let dataSeries = null;
 let capitalInicial = 200, capitalActual = 200;
 let operaciones = [], ultimoPrecio = 0, streamingInterval = null;
-window.simboloActual = 'SOLUSDT'; // o el que quieras por defecto
+//window.simboloActual = 'SOLUSDT'; // o el que quieras por defecto
 let symbolInfo = null;
 let lineaPE = null, lineaTP = null, lineaSL = null; // ✅ Líneas de PE/TP/SL
 let autoTrading = false;      // <-- Debe existir
@@ -33,8 +33,17 @@ let streamingActivo = false; // ← Evita múltiples conexiones
 let posicionActual = null;
 
 let velasCerradas = 0;
+// Variables globales para las nuevas líneas (agrega al inicio de tu script)
+let lineaPE_Reanclaje = null;
+let lineaTP_Reanclaje = null; 
+let lineaSL_Reanclaje = null;
+window.histogramaAnterior = window.histogramaAnterior || 0;
+// Variables para monitoreo continuo
+let INTERVALO_CIERRE_REAL = null;
 
 
+// Control manual de dirección IA
+let DIRECCION_MANUAL = '_'; // null = IA normal, 'SUBIDA' o 'BAJADA' = manual
 // ✅ Inicializar sistema de estadísticas de IA
 window.prediccionesPendientes = window.prediccionesPendientes || [];
 
@@ -52,6 +61,173 @@ window.tradingActivo = false;
 
 // ===== CONTROL DE REFRESCO AUTOMÁTICO DE POSICIONES (UI) =====
 let intervaloActualizacionPosiciones = null;
+
+
+
+// Variables globales
+let PARAMETROS = {
+  modo: 'normal',
+  timeframe: '1m',
+  velasEntrenamiento: 12000,
+  confianzaMinima: 0.60,
+  adxMinimo: 25,
+  atrMinimo: 0.5,
+  umbralReanclaje: 3.0,
+  emaEma50Minimo:0.005,
+  cierreAgotamiento: true,
+  cantidadVelas: 55, // ← Nuevo parámetro
+  tp: 6.0,
+  sl: 3.0
+};
+
+// Presets para modos rápidos
+const PRESETS = {
+  normal: {
+    modo: 'normal',
+    timeframe: '1m',
+    velasEntrenamiento: 12000,
+    confianzaMinima: 0.60,
+    adxMinimo: 25,
+    atrMinimo: 0.5,
+    umbralReanclaje: 3.0,
+    emaEma50Minimo:0.005,
+    cierreAgotamiento: true,
+    cantidadVelas: 55, // ← Nuevo parámetro
+    tp: 6.0,
+    sl: 3.0
+  },
+  scalping: {
+    modo: 'scalping',
+    timeframe: '1m',
+    velasEntrenamiento: 12000,
+    confianzaMinima: 0.55,
+    adxMinimo: 20,
+    atrMinimo: 0.3,
+    umbralReanclaje: 0.1,
+    emaEma50Minimo:0.005,
+    cierreAgotamiento: false,
+    cantidadVelas: 55, // ← Nuevo parámetro
+    tp: 1.0,
+    sl: 0.5
+  }
+};
+
+// Función principal para cambiar modo
+function cambiarModo() {
+  const nuevoModo = document.getElementById('modo-trading').value;
+  aplicarPreset(nuevoModo);
+}
+
+// Aplicar preset (usado por botones y cambio de modo)
+function aplicarPreset(modo) {
+  if (!PRESETS[modo]) return;
+  
+  PARAMETROS = { ...PRESETS[modo] };
+  
+  // Actualizar formulario
+  actualizarFormulario();
+  
+  // Guardar en localStorage
+  guardarParametrosEnStorage();
+  
+  // Actualizar variables globales usadas en otras funciones
+  window.UMBRAL_REANCLAJE = PARAMETROS.umbralReanclaje;
+  window.tpPctEquity = PARAMETROS.tp;
+  window.slPctEquity = PARAMETROS.sl;
+  
+  console.log(`🎯 Modo "${modo}" activado con parámetros:`, PARAMETROS);
+}
+
+// Actualizar formulario con valores actuales
+function actualizarFormulario() {
+  document.getElementById('modo-trading').value = PARAMETROS.modo;
+  document.getElementById('param-timeframe').value = PARAMETROS.timeframe;
+  document.getElementById('param-velas').value = PARAMETROS.velasEntrenamiento;
+  document.getElementById('param-confianza').value = PARAMETROS.confianzaMinima;
+  document.getElementById('param-adx').value = PARAMETROS.adxMinimo;
+  document.getElementById('param-atr').value = PARAMETROS.atrMinimo;
+  document.getElementById('param-reanclaje').value = PARAMETROS.umbralReanclaje;
+  document.getElementById('param-ema20ema50').value = PARAMETROS.emaEma50Minimo;
+   document.getElementById('cierre-agotamiento').checked = PARAMETROS.cierreAgotamiento;
+   document.getElementById('cantidad-velas').value = PARAMETROS.cantidadVelas;
+  document.getElementById('takeProfit').value = PARAMETROS.tp;
+  document.getElementById('stopLoss').value = PARAMETROS.sl;
+}
+
+// Guardar parámetros manualmente
+function guardarParametros() {
+  // Leer valores del formulario
+  PARAMETROS = {
+    modo: document.getElementById('modo-trading').value,
+    timeframe: document.getElementById('param-timeframe').value,
+    velasEntrenamiento: parseFloat(document.getElementById('param-velas').value),
+    confianzaMinima: parseFloat(document.getElementById('param-confianza').value),
+    adxMinimo: parseFloat(document.getElementById('param-adx').value),
+    atrMinimo: parseFloat(document.getElementById('param-atr').value),
+    umbralReanclaje: parseFloat(document.getElementById('param-reanclaje').value),
+    emaEma50Minimo: parseFloat(document.getElementById('param-ema20ema50').value),
+    cierreAgotamiento : document.getElementById('cierre-agotamiento').checked,
+    cantidadVelas : parseInt(document.getElementById('cantidad-velas').value) || 55,
+    tp: parseFloat(document.getElementById('takeProfit').value),
+    sl: parseFloat(document.getElementById('stopLoss').value)
+  };
+  
+  guardarParametrosEnStorage();
+  alert('✅ Parámetros guardados!');
+}
+
+// Guardar en localStorage
+function guardarParametrosEnStorage() {
+  localStorage.setItem('parametrosGauss', JSON.stringify(PARAMETROS));
+  // Actualizar variables globales
+  window.UMBRAL_REANCLAJE = PARAMETROS.umbralReanclaje;
+  window.tpPctEquity = PARAMETROS.tp;
+  window.slPctEquity = PARAMETROS.sl;
+}
+
+// Cargar parámetros guardados
+function cargarParametrosGuardados() {
+  const guardados = localStorage.getItem('parametrosGauss');
+  if (guardados) {
+    PARAMETROS = JSON.parse(guardados);
+    actualizarFormulario();
+    guardarParametrosEnStorage(); // Asegurar variables globales
+    alert('✅ Parámetros cargados!');
+  } else {
+    alert('ℹ️ No hay parámetros guardados. Usando valores por defecto.');
+  }
+}
+
+// Inicializar al cargar la página
+document.addEventListener('DOMContentLoaded', () => {
+  cargarParametrosGuardados();
+});
+
+// Función para obtener parámetros en otras partes del código
+function getParametro(key) {
+  return PARAMETROS[key];
+}
+
+
+
+
+
+
+
+// Función para forzar dirección manual
+function forzarDireccion(direccion) {
+  DIRECCION_MANUAL = direccion;
+  console.log('🎯 Dirección forzada:', direccion);
+}
+
+
+
+
+
+
+
+
+
 
 
 
@@ -116,7 +292,7 @@ if (!window.configEstadisticasIA) {
 
 // ─── TELEGRAM NOTIFICATIONS ───
 let ultimaNotifGauss = 0;
-const INTERVALO_NOTIF = 10 * 60 * 1000; // 10 minutos
+const INTERVALO_NOTIF = 15 * 60 * 1000; // 10 minutos
 
 
 function iniciarRefrescoPosiciones() {
@@ -460,6 +636,21 @@ function inicializarGrafico() {
     wickUpColor: '#26a69a',
     wickDownColor: '#ef5350'
   });
+
+  
+  // Inicializar líneas originales
+  lineaPE = chart.createLineSeries({ /* ... */ });
+  lineaTP = chart.createLineSeries({ /* ... */ });
+  lineaSL = chart.createLineSeries({ /* ... */ });
+
+   // Inicializar líneas Reanclaje
+  
+  lineaPE_Reanclaje = chart.createLineSeries({ /* ... */ });
+  lineaTP_Reanclaje = chart.createLineSeries({ /* ... */ });
+  lineaSL_Reanclaje = chart.createLineSeries({ /* ... */ });
+  
+
+
 }
 // === GRÁFICOS CON LÍNEAS PE/TP/SL ===
 function initChart() {
@@ -515,6 +706,11 @@ function initChart() {
   });
 
   console.log('✅ Gráfico inicializado correctamente con líneas de PE/TP/SL');
+  
+     inicializarLineasReanclaje();
+ 
+ 
+
 }
 // === ACTUALIZAR GRÁFICO CON NUEVA VELA ===
 function actualizarGrafico(nuevaVela) {
@@ -550,7 +746,7 @@ function retryInitChart(attempts = 0) {
   try {
 
     initChart();
-    actualizarCapitalTestnet();
+   
     actualizarPosicionesAbiertas();
     renderizarHistorial();
     console.log('✅ Sistema UI inicializado con éxito');
@@ -563,7 +759,7 @@ function retryInitChart(attempts = 0) {
 }
 
 // === DATOS ===
-async function obtenerDatos(symbol , interval = '1m', limit = 60) {
+async function obtenerDatos(symbol , interval = PARAMETROS.timeframe, limit = 60) {
   const res = await fetch(`/api/binance/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
   if (!res.ok) throw new Error(`Error: ${res.status}`);
   const klines = await res.json();
@@ -579,7 +775,7 @@ async function obtenerDatos(symbol , interval = '1m', limit = 60) {
 
 // === ENTRENAMIENTO: OBTENER DATOS HISTÓRICOS EXTENSOS ===
 // Esta función descarga una gran cantidad de velas (klines) para entrenamiento
-// === ENTRENAMIENTO: OBTENER DATOS HISTÓRICOS EXTENSOS (CORREGIDA) ===
+// === ENTRENAMIENTO: ev DATOS HISTÓRICOS EXTENSOS (CORREGIDA) ===
 // Esta función descarga una gran cantidad de velas (klines) para entrenamiento
 // Maneja la limitación de la API de Binance (máx 1000 velas por llamada) realizando múltiples llamadas si es necesario.
 // Asegura que use BINANCE_MAINNET_URL para obtener klines.
@@ -739,7 +935,7 @@ function prepararDatosConEtiquetas(klines) {
       anchoBBRelativo,
       atrRelativo,
       obvNormalizado,
-      0 / 1e6 // openInterest placeholder
+      openInterest / 1e6 // openInterest placeholder
     ];
 
     if (features.length === 23) {
@@ -770,11 +966,21 @@ function prepararDatosConEtiquetas(klines) {
 }
 
 
-async function obtenerOpenInterest(symbol ) {
-  const res = await fetch(`/api/binance/futures/open-interest?symbol=${symbol}`);
-  if (!res.ok) return 0;
-  const data = await res.json();
-  return data.openInterest || 0;
+// Agregar manejo de errores más detallado
+async function obtenerOpenInterest(symbol) {
+  try {
+    const res = await fetch(`/api/binance/futures/open-interest?symbol=${symbol}`);
+    if (!res.ok) {
+      console.error('❌ Error API Open Interest:', res.status, res.statusText);
+      return 0;
+    }
+    const data = await res.json();
+    console.log('✅ Open Interest recibido:', data.openInterest);
+    return data.openInterest || 0;
+  } catch (err) {
+    console.error('❌ Error obteniendo Open Interest:', err.message);
+    return 0;
+  }
 }
 
 // === INDICADORES TÉCNICOS ===
@@ -994,8 +1200,8 @@ async function entrenarRed() {
 
   // Definir símbolos a usar para entrenamiento
   const SIMBOLOS_ENTRENAMIENTO = ['SOLUSDT'];
-  const INTERVALO = '1m'; //  1m
-  const LIMITE_DATOS = 9000; // Ajusta este número. Por ejemplo, 15000 velas de 4h por símbolo
+  const INTERVALO = PARAMETROS.timeframe; //  15m
+  const LIMITE_DATOS = PARAMETROS.velasEntrenamiento; // Ajusta este número. Por ejemplo, 15000 velas de 4h por símbolo
   const VELAS_FUTURAS = 3;
   const EPOCAS = 50;
   const BATCH_SIZE = 32;
@@ -1148,7 +1354,7 @@ async function entrenarRed() {
     console.log(`[Entrenamiento MultiSímbolo] Métricas Finales - Validación: Loss: ${valLossVal.toFixed(4)}, Acc: ${valAccPct.toFixed(2)}%`);
 
     // Actualizar estado final con métricas
-    estadoEl.textContent = `✅ Modelo entrenado. Val Loss: ${valLossVal.toFixed(4)}, Val Acc: ${valAccPct.toFixed(2)}%`;
+    estadoEl.textContent = `✅ Entrenamiento Listo . Val Loss: ${valLossVal.toFixed(4)}, Val Acc: ${valAccPct.toFixed(2)}%`;
     estadoEl.style.color = trainAccPct >= 55 && valAccPct >= 55 ? '#4CAF50' : '#FF9800'; // Verde si >55%, naranja si no
 
     // 9. Limpiar tensores para liberar memoria
@@ -1179,7 +1385,7 @@ async function entrenarRed() {
 window._entrenarRed = entrenarRed;
 
 
-async function predecirprueba(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, macdActual, signalActual, posicionBB, anchoBB, atrActual, obvActual, precioActual, openInterest = 0) {
+async function predecir(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, macdActual, signalActual, posicionBB, anchoBB, atrActual, obvActual, precioActual, openInterest ) {
   if (!modelo) {
     console.warn('[PRED] Modelo no cargado');
     return null;
@@ -1270,7 +1476,7 @@ async function predecirprueba(ultimosPrecios, ultimosVolumenes, rsiActual, emaAc
 
 
 
-async function predecir(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, macdActual, signalActual, posicionBB, anchoBB, atrActual, obvActual, precioActual, openInterest = 0) {
+async function predecirprueba(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, macdActual, signalActual, posicionBB, anchoBB, atrActual, obvActual, precioActual, openInterest=0) {
   if (!modelo) return null;
 
   const ultimos10 = ultimosPrecios.slice(-10);
@@ -1470,7 +1676,7 @@ async function enviarTelegram(mensaje) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: chatId,
-        text: `[RENDER] ${mensaje}`, // ✅ Prefijo para Render
+        text: `[Orden Cerrada] ${mensaje}`, // ✅ Prefijo para Render
         parse_mode: 'HTML',
         disable_web_page_preview: true
       })
@@ -1596,7 +1802,7 @@ function registrarOperacionReal(symbol, side, entrada, salida, cantidad, pnl, mo
   localStorage.setItem('historialOperaciones', JSON.stringify(operaciones));
 
   // 7. Actualizar panel financiero
-  actualizarPanelFinanciero();
+ // actualizarPanelFinanciero();
   renderizarHistorial();
 
   // 8. Preparar mensaje de Telegram con todos los detalles
@@ -1729,6 +1935,106 @@ function actualizarLineasPrecios(entrada, tpPct, slPct, leverage) {
      // El gráfico seguirá usando su comportamiento por defecto.
   }
 }
+
+
+
+// Función para inicializar las líneas de reanclaje (llamar una vez al inicio)
+function inicializarLineasReanclaje() {
+  if (!chart) return;
+   console.log(`  Líneas Reanclaje inicializadas - Anclaje `);
+ 
+  // Línea PE Reanclaje - Color naranja oscuro
+  lineaPE_Reanclaje = chart.addLineSeries({
+    color: '#a2a34a',
+    lineWidth: 3,
+    priceLineVisible: false,
+    lastValueVisible: true
+  });
+  
+  // Línea TP Reanclaje - Color verde oscuro
+  lineaTP_Reanclaje = chart.addLineSeries({
+    color: '#6d8285',
+    lineWidth: 3,
+    priceLineVisible: false,
+    lastValueVisible: true
+  });
+  
+  // Línea SL Reanclaje - Color rojo oscuro  
+  lineaSL_Reanclaje = chart.addLineSeries({
+    color: '#aa0b88',
+    lineWidth: 3,
+    priceLineVisible: false,
+    lastValueVisible: true
+  });
+}
+
+// Función principal para actualizar líneas de reanclaje
+function actualizarLineasReanclaje(precioAnclaje, tpPct, slPct, side) {
+  if (!chart || !lineaPE_Reanclaje || !lineaTP_Reanclaje || !lineaSL_Reanclaje) {
+    return;
+  }
+
+  console.log(`[Gráfico] Líneas Reanclaje actualizadas - Anclaje: ${precioAnclaje.toFixed(4)}, TP: ${ tpPct.toFixed(4)}, SL: ${ slPct.toFixed(4)}`);
+
+  const tiempoActual = Math.floor(Date.now() / 1000);
+  
+  // Calcular niveles desde el anclaje (no desde entrada original)
+  let precioTP_Reanclaje, precioSL_Reanclaje;
+  
+  if (side === 'LONG') {
+    precioTP_Reanclaje = precioAnclaje * (1 + (tpPct / 100));
+    precioSL_Reanclaje = precioAnclaje * (1 - (slPct / 100));
+  } else if (side === 'SHORT') {
+    precioTP_Reanclaje = precioAnclaje * (1 - (tpPct / 100));
+    precioSL_Reanclaje = precioAnclaje * (1 + (slPct / 100));
+  } else {
+    return;
+  }
+
+  // Datos para líneas que se extienden hacia la izquierda (60 segundos atrás)
+  const dataPE_Reanclaje = [
+    { time: tiempoActual - 60, value: precioAnclaje },
+    { time: tiempoActual, value: precioAnclaje }
+  ];
+  const dataTP_Reanclaje = [
+    { time: tiempoActual - 60, value: precioTP_Reanclaje },
+    { time: tiempoActual, value: precioTP_Reanclaje }
+  ];
+  const dataSL_Reanclaje = [
+    { time: tiempoActual - 60, value: precioSL_Reanclaje },
+    { time: tiempoActual, value: precioSL_Reanclaje }
+  ];
+
+  // Actualizar las series
+  lineaPE_Reanclaje.setData(dataPE_Reanclaje);
+  lineaTP_Reanclaje.setData(dataTP_Reanclaje);
+  lineaSL_Reanclaje.setData(dataSL_Reanclaje);
+
+  console.log(`[Gráfico] Líneas Reanclaje actualizadas - Anclaje: ${precioAnclaje.toFixed(4)}, TP: ${precioTP_Reanclaje.toFixed(4)}, SL: ${precioSL_Reanclaje.toFixed(4)}`);
+
+
+
+
+}
+
+function limpiarLineasReanclaje() {
+  if (lineaPE_Reanclaje) {
+    chart.removeSeries(lineaPE_Reanclaje);
+    lineaPE_Reanclaje = null;
+  }
+  if (lineaTP_Reanclaje) {
+    chart.removeSeries(lineaTP_Reanclaje);
+    lineaTP_Reanclaje = null;
+  }
+  if (lineaSL_Reanclaje) {
+    chart.removeSeries(lineaSL_Reanclaje);
+    lineaSL_Reanclaje = null;
+  }
+    console.log(`  Líneas Reanclaje borradas `);
+}
+ 
+
+
 // ✅ FUNCIÓN AUXILIAR PARA TOOLTIPS
 function crearTooltip(id, color, valor) {
   const container = document.getElementById('chart');
@@ -1765,17 +2071,16 @@ function ocultarLineasPrecios() {
 // === ÓRDENES ===
 async function abrirPosicionReal(side) {
   try {
-    
     const simbolo = document.getElementById('selector-simbolo').value;
     const ticker = await (await fetch(`/api/binance/ticker?symbol=${simbolo}`)).json();
     const precio = parseFloat(ticker.price);
-    let monto = parseFloat(document.getElementById('montoCompra').value) || 90;
-    if (monto < 100) monto = 90;
+    let monto = parseFloat(document.getElementById('montoCompra').value) ||30;
+    if (monto < 20) monto = 30;
     let qty = symbolInfo ? calculateQuantity(precio, monto) : Math.floor((monto / precio) / 0.001) * 0.001;
     const lev = parseInt(document.getElementById('apalancamiento').value) || 2;
     console.log(`🔍 [DEBUG] Monto deseado: $${monto}`);
     console.log(`🔍 [DEBUG] Precio: $${precio}`);
-    console.log(`🔍 [DEBUG] Size calculado: ${qty.toFixed(8)} BTC`);
+    console.log(`🔍 [DEBUG] Size calculado: ${qty.toFixed(8)} `);
     console.log(`🔍 [DEBUG] Notional real: $${(qty * precio).toFixed(3)}`);
     
     const tpslMode = document.getElementById('tpsl-mode')?.value || 'dinamico';
@@ -1790,7 +2095,7 @@ async function abrirPosicionReal(side) {
       
       // Obtener ATR reciente (mismo que usas en otros lugares)
       const simbolo = document.getElementById('selector-simbolo').value;
-      const k5m = await obtenerDatos(simbolo, '1m', 50);
+      const k5m = await obtenerDatos(simbolo, PARAMETROS.timeframe, 50);
      
       const atrArr = k5m.length >= 20 ? calcularATR(k5m, 14):[];
       const atrVal = atrArr.length > 0 ? atrArr[atrArr.length - 1] : 0;
@@ -2019,14 +2324,14 @@ async function cerrarPosicion(symbol, positionSide = 'BOTH', motivo = 'Manual') 
     const cantidad = Math.abs(positionAmt); // Cantidad total cerrada
     const sideActual = positionAmt > 0 ? 'LONG' : 'SHORT';
     const leverage = parseFloat(posicion.leverage) || 1; // <-- Aseguramos usar el leverage real de la posicion
-
+   
     // 4. Cerrar en Binance
     const closeRes = await fetchConAuth('/api/binance/futures/close-position', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ symbol, positionSide })
 
-    });
+    }); 
     const resultado = await closeRes.json();
 
     // ✅ 5. Obtener precio de cierre REAL (promedio ponderado de la orden)
@@ -2119,7 +2424,8 @@ async function cerrarPosicion(symbol, positionSide = 'BOTH', motivo = 'Manual') 
   if (!hayPosicionSimbolo) {
      // No hay más posiciones (de ningún side) para este símbolo
      window.sideActual = null; // Limpiar la variable global
-     posicionActual=null
+     posicionActual=null;
+   //  limpiarAnclaje(simbolo);
      console.log(`[Gráfico] sideActual limpiado para ${symbol} (posición cerrada y no hay otras abiertas para este símbolo).`);
      // Opcional: Ocultar líneas si se cierra la última posición
      // lineaPE.applyOptions({ visible: false });
@@ -2145,6 +2451,7 @@ async function cerrarPosicion(symbol, positionSide = 'BOTH', motivo = 'Manual') 
     if (estadoEl) estadoEl.textContent = msg;
   }
   
+    puntosAnclaje={} 
    
 }
 
@@ -2191,6 +2498,7 @@ async function actualizarPosicionesAbiertas() {
     });
     if (posicionesAbiertas.length === 0) {
       ocultarLineasPrecios(); // ✅ Ocultar líneas si no hay posiciones
+       limpiarLineasReanclaje();
       const emptyRow = document.createElement('tr');
       emptyRow.innerHTML = `<td colspan="6" style="text-align:center;color:#666;">Sin posiciones abiertas</td>`;
       tbody.appendChild(emptyRow);
@@ -2233,12 +2541,12 @@ function evaluarAperturaReversion(simbolo, prediccionRaw, indicadores, historial
   const estadoDiv = document.getElementById('estado-reversion');
 
   // ─── UMBRALES DE PRUEBA ───
-  const UMBRAL_IA = 0.60;
+  const UMBRAL_IA = PARAMETROS.confianzaMinima;
   const UMBRAL_RSI_MIN = 20;
   const UMBRAL_RSI_MAX = 80;
  // AHORA (suave para pruebas):
-  const UMBRAL_MACD_COMPRA = -0.0355;  // zona de compra , segun estudio dat  MIN +/- 0.0355 equiv. 60 en BTC de trabajo 5m =0.0355. <50
-  const UMBRAL_MACD_VENTA = 0.0355;    // zona de venta
+  const UMBRAL_MACD_COMPRA = -0.355;  // zona de compra , segun estudio dat  MIN +/- 0.0355 equiv. 60 en BTC de trabajo 5m =0.0355. <50
+  const UMBRAL_MACD_VENTA = 0.355;    // zona de venta
 
   // ─── Validar indicadores ───
   if (!indicadores?.rsi || !indicadores?.adx || !indicadores?.macdLine || !indicadores?.signalLine) {
@@ -2262,7 +2570,7 @@ function evaluarAperturaReversion(simbolo, prediccionRaw, indicadores, historial
   const hayCruce = cruceAlcista || cruceBajista;
 
   // ─── VALIDAR CONDICIONES TÉCNICAS ACTUALES ───
-  const adxValido = adxActual >= 25;
+  const adxValido = adxActual >= PARAMETROS.adxMinimo;
   const rsiValido = rsiActual > UMBRAL_RSI_MIN && rsiActual < UMBRAL_RSI_MAX;
   const condicionesTecnicas = adxValido && rsiValido;
 
@@ -2421,7 +2729,7 @@ function ejecutarApertura(side, simbolo, modoAuto, btnOperar, estadoDiv, signalA
             ordenEnCurso = false;
             btnOperar.style.display = 'none';
           });
-      };
+      };e
     }
     if (estadoDiv) estadoDiv.textContent = `🔔 Confirmación recibida. ¡Confirma apertura!`;
   }
@@ -2872,6 +3180,9 @@ function dibujarMACDBinance(macdLine, signalLine) {
       }
 
 
+
+
+
 // ─── FUNCIÓN: reset eventos IA ───
 document.getElementById('btn-reset-ia')?.addEventListener('click', () => {
   if (confirm("¿Borrar todos los eventos IA y señales pendientes?")) {
@@ -2944,6 +3255,300 @@ if (!window.eventosIA) window.eventosIA = [];
       // Vincular botón
       document.getElementById('btn-exportar-registro')?.addEventListener('click', exportarEventosACSV);
 
+
+let puntosAnclaje = {};
+// Variables para el modo reanclaje
+
+//const UMBRAL_REANCLAJE = PARAMETROS.umbralReanclaje; // 5% para reanclar
+
+function verificarYActualizarAnclaje(simbolo, precioActual, esShort, precioEntradaOriginal) {
+   // ✅ Verificar si es una posición NUEVA (entrada diferente)
+ // const anclajeExistente = puntosAnclaje[simbolo]?.anclajeActual;
+  
+  if (!puntosAnclaje[simbolo]) {
+      console.log(`🔄 !puntosAnclaje[simbolo] : ${!puntosAnclaje[simbolo]} `);
+    
+    puntosAnclaje[simbolo] = {
+      anclajeActual: precioEntradaOriginal,
+      vecesReanclado: 0,
+      activo: true
+    };
+     console.log(`🔄 Anclaje reiniciado para ${simbolo}: $${precioEntradaOriginal}`);
+  }
+  
+console.log(`🔄 precioEntradaOriginal : ${precioEntradaOriginal} `);
+
+  const anclajeAnterior = puntosAnclaje[simbolo].anclajeActual;
+  let debeReanclar = false;
+
+  const UMBRAL_REANCLAJE_ACTUAL = PARAMETROS.umbralReanclaje;
+  
+
+  if (esShort) {
+    if (precioActual < anclajeAnterior) {
+
+    const distancia = ((anclajeAnterior - precioActual) / anclajeAnterior) * 100;
+     console.log(`🔄 distancia : ${distancia } `);
+        debeReanclar = distancia >= UMBRAL_REANCLAJE_ACTUAL; // ✅ Dinámico
+      console.log(`🔄 debeReanclar : ${debeReanclar } `);
+     console.log(`🔄 SHORT - Precio bajó: ${distancia.toFixed(2)}% (Umbral: ${UMBRAL_REANCLAJE}%)`);
+
+      } else {
+      console.log(`🔄 SHORT - Precio subió (${precioActual} > ${anclajeAnterior}), no se reancla`);
+
+      }
+  } else {
+
+    if (precioActual > anclajeAnterior) {
+
+      const distancia = ((precioActual - anclajeAnterior) / anclajeAnterior) * 100;
+      console.log(`🔄 distancia : ${distancia} `);
+       debeReanclar = distancia >= UMBRAL_REANCLAJE_ACTUAL; // ✅ Dinámico
+      console.log(`🔄 debeReanclar : ${debeReanclar} `);
+      console.log(`🔄 LONG - Precio subió: ${distancia.toFixed(2)}% (Umbral: ${UMBRAL_REANCLAJE}%)`);
+
+
+    } else {
+      console.log(`🔄 LONG - Precio bajó (${precioActual} < ${anclajeAnterior}), no se reancla`);
+    }
+  }
+
+  if (debeReanclar) {
+    puntosAnclaje[simbolo].anclajeActual = precioActual;
+    puntosAnclaje[simbolo].vecesReanclado++;
+    console.log(`🔄 Reanclaje #${puntosAnclaje[simbolo].vecesReanclado} en ${simbolo}: $${precioActual.toFixed(4)}`);
+  }
+
+  return puntosAnclaje[simbolo].anclajeActual;
+}
+
+function evaluarCierreInteligente(leverage, entrada, markPrice, simbolo, precioActual, esShort, slPct, tpPct, usarReanclaje) {
+  // ✅ Verificación segura al inicio
+   if (!posicionActual) {
+    return { cerrar: false, motivo: '' };
+  }
+  
+
+ // ✅ INICIAR MONITOREO EN TIEMPO REAL (solo una vez por posición)
+  if (!INTERVALO_CIERRE_REAL) {
+    iniciarMonitoreoCierreReal(simbolo, esShort, slPct, tpPct, usarReanclaje);
+  }
+
+
+
+  let precioReferencia = posicionActual.entrada;
+  let tipoCierre = 'Estático';
+  console.log(`🔍  Precio Actual: $${precioActual.toFixed(4)} |esShort: ${esShort}`);
+  // En tu llamada, verifica que markPrice esté definido
+   console.log('🔍 markPrice:', markPrice);
+   console.log('🔍 posicionActual.entrada:', posicionActual.entrada);
+
+
+  if (usarReanclaje) {
+    // ✅ Llamada correcta: pasar la entrada real
+    precioReferencia = verificarYActualizarAnclaje(
+      simbolo, 
+      precioActual, 
+      esShort, 
+      posicionActual.entrada  // ← ¡Así debe ser!
+    );
+    tipoCierre = 'Dinámico';
+  }
+  
+  let cerrar = false;
+  let motivo = '';
+
+  if (esShort) {
+    const slPrecio = precioReferencia * (1 + (slPct/ 100));
+    const tpPrecio = precioReferencia * (1 - (tpPct/ 100));
+
+      console.log(`🔍 [REANCLAJE] SHORT  Precio: $${precioActual.toFixed(4)} |esShort:${esShort}| Anclaje: $${precioReferencia.toFixed(4)} | SL: $${slPrecio.toFixed(4)} | TP: $${tpPrecio.toFixed(4)}`);
+
+    if (precioActual >= slPrecio) {
+      cerrar = true;
+      motivo = `🔴 SL ${tipoCierre} (${slPrecio.toFixed(4)} desde $${precioReferencia.toFixed(4)})`;
+    } else if (precioActual <= tpPrecio) {
+      cerrar = true;
+      motivo = `✅ TP ${tipoCierre} (${tpPrecio.toFixed(4)} desde $${precioReferencia.toFixed(4)})`;
+    }
+  } else {
+    const slPrecio = precioReferencia * (1 - (slPct/ 100));
+    const tpPrecio = precioReferencia * (1 + (tpPct/ 100));
+    
+   console.log(`🔍 [REANCLAJE] LONG  Precio: $${precioActual.toFixed(4)} | Anclaje: $${precioReferencia.toFixed(4)} | SL: $${slPrecio.toFixed(4)} | TP: $${tpPrecio.toFixed(4)}`);
+
+    if (precioActual <= slPrecio) {
+      cerrar = true;
+      motivo = `🔴 SL ${tipoCierre} (${slPrecio.toFixed(4)} desde $${precioReferencia.toFixed(4)})`;
+    } else if (precioActual >= tpPrecio) {
+      cerrar = true;
+      motivo = `✅ TP ${tipoCierre} (${tpPrecio.toFixed(4)} desde $${precioReferencia.toFixed(4)})`;
+    }
+  }
+  
+  if (cerrar) {
+     const symbolSideKey = `${posicionActual.symbol}_${posicionActual.positionSide}`;
+    ordenEnCurso = true;
+    console.log(motivo);
+    const simbolo = document.getElementById('selector-simbolo').value;
+    ordenEnCurso = true;
+    cerrarPosicion(simbolo, posicionActual.positionSide,  'CIERRE DINAMICO')
+      .finally(() => {
+        ordenEnCurso = false;
+        limpiarAnclaje(simbolo);
+        posicionActual = null; // ✅ Corregido: posiciónActual
+        delete window.estadoPosiciones[symbolSideKey];
+
+ // ✅ Detener monitoreo al cerrar
+        if (INTERVALO_CIERRE_REAL) {
+          clearInterval(INTERVALO_CIERRE_REAL);
+          INTERVALO_CIERRE_REAL = null;
+        }
+
+      });
+  }
+
+
+   console.log(`📊 [REANCLAJE] Modo: ${tipoCierre} | Reanclajes: ${puntosAnclaje[simbolo]?.vecesReanclado || 0}`);
+
+  
+  // Mostrar info en UI si está activo
+  if (usarReanclaje && document.getElementById('info-reanclaje')) {
+    const veces = puntosAnclaje[simbolo]?.vecesReanclado || 0;
+    document.getElementById('info-reanclaje').textContent = 
+      `📍 Anclaje: $${precioReferencia.toFixed(4)} | Reanclajes: ${veces}`;
+  
+
+  }
+  
+
+  
+  return { cerrar, motivo };
+}
+
+// Función interna para monitoreo continuo
+async function iniciarMonitoreoCierreReal(simbolo, esShort, slPct, tpPct, usarReanclaje) {
+   // console.log('🚀 INICIANDO MONITOREO EN TIEMPO REAL');
+  INTERVALO_CIERRE_REAL = setInterval(async () => {
+    //  console.log('🔍 Monitoreando precio real...'); // ← Agrega este log
+    try {
+      if (!posicionActual) {
+        if (INTERVALO_CIERRE_REAL) {
+          clearInterval(INTERVALO_CIERRE_REAL);
+          INTERVALO_CIERRE_REAL = null;
+        }
+        return;
+      }
+      
+      // Obtener precio MARK en tiempo real
+      // Por esta:
+      const simboloActual = document.getElementById('selector-simbolo')?.value || 'SOLUSDT';
+      const response = await fetch(`/api/binance/futures/mark-price?symbol=${simboloActual}`);
+      const data = await response.json();
+      const precioReal = parseFloat(data.markPrice);
+     //  console.log(`📊 Precio real obtenido: $${precioReal}`); // ← Log adicional
+      if (!precioReal) return;
+      
+      // Evaluar cierre con precio real usando tu lógica existente
+      let precioReferencia = posicionActual.entrada;
+      
+      if (usarReanclaje && puntosAnclaje[simbolo]) {
+        const anclajeAnterior = puntosAnclaje[simbolo].anclajeActual;
+        
+        if (esShort) {
+          if (precioReal < anclajeAnterior) {
+            const distancia = ((anclajeAnterior - precioReal) / anclajeAnterior) * 100;
+            if (distancia >= PARAMETROS.umbralReanclaje) {
+              puntosAnclaje[simbolo].anclajeActual = precioReal;
+              puntosAnclaje[simbolo].vecesReanclado++;
+            }
+          }
+        } else {
+          if (precioReal > anclajeAnterior) {
+            const distancia = ((precioReal - anclajeAnterior) / anclajeAnterior) * 100;
+            if (distancia >= PARAMETROS.umbralReanclaje) {
+              puntosAnclaje[simbolo].anclajeActual = precioReal;
+              puntosAnclaje[simbolo].vecesReanclado++;
+            }
+          }
+        }
+        precioReferencia = puntosAnclaje[simbolo].anclajeActual;
+      }
+      
+      // Evaluar SL/TP con precio real
+      let debeCerrar = false;
+      let motivoReal = '';
+      
+      if (esShort) {
+        const slPrecio = precioReferencia * (1 + (slPct / 100));
+        const tpPrecio = precioReferencia * (1 - (tpPct / 100));
+        
+        if (precioReal >= slPrecio) {
+          debeCerrar = true;
+          motivoReal = `🔴 SL Dinámico Real (${slPrecio.toFixed(4)})`;
+        } else if (precioReal <= tpPrecio) {
+          debeCerrar = true;
+          motivoReal = `✅ TP Dinámico Real (${tpPrecio.toFixed(4)})`;
+        }
+      } else {
+        const slPrecio = precioReferencia * (1 - (slPct / 100));
+        const tpPrecio = precioReferencia * (1 + (tpPct / 100));
+        
+        if (precioReal <= slPrecio) {
+          debeCerrar = true;
+          motivoReal = `🔴 SL Dinámico Real (${slPrecio.toFixed(4)})`;
+        } else if (precioReal >= tpPrecio) {
+          debeCerrar = true;
+          motivoReal = `✅ TP Dinámico Real (${tpPrecio.toFixed(4)})`;
+        }
+      }
+      
+      if (debeCerrar) {
+        console.log(`🚨 CIERRE INMEDIATO POR PRECIO REAL: ${motivoReal}`);
+        
+        if (INTERVALO_CIERRE_REAL) {
+          clearInterval(INTERVALO_CIERRE_REAL);
+          INTERVALO_CIERRE_REAL = null;
+        }
+        
+        const symbolSideKey = `${posicionActual.symbol}_${posicionActual.positionSide}`;
+        ordenEnCurso = true;
+        cerrarPosicion(simbolo, posicionActual.positionSide, motivoReal)
+          .finally(() => {
+            ordenEnCurso = false;
+            limpiarAnclaje(simbolo);
+            posicionActual = null;
+            delete window.estadoPosiciones[symbolSideKey];
+          });
+      }
+      
+    } catch (error) {
+      console.warn('⚠️ Error en monitoreo real:', error.message);
+    }
+  }, 3000); // Cada 3 segundos
+}
+
+
+
+
+
+
+function limpiarAnclaje(simbolo) {
+  // Eliminar del objeto principal
+  if (puntosAnclaje[simbolo]) {
+    delete puntosAnclaje[simbolo];
+    console.log(`🗑️ Anclaje de ${simbolo} eliminado`);
+  }
+  
+  // Limpiar también la UI inmediatamente
+  if (document.getElementById('info-anclaje')) {
+    document.getElementById('info-anclaje').textContent = 'Sin posición activa';
+  }
+}
+
+
+
+
   // Variables globales (fuera de funciones)
    let historialEMAs = []; // Guardará solo las últimas 3 velas con EMAs
 // Esta función se llama cada vez que llega una nueva vela
@@ -2962,12 +3567,9 @@ function procesarNuevaVela(ema20_actual, ema50_actual) {
 }
 
 
+
 // Variable global para guardar el historial mínimo de EMAs
 let historialEMAsGauss = [];
-
-
-
-
 // ─── SISTEMA GAUSS: TENDENCIA EN 1H ───
 function evaluarSistemaGauss(simbolo, prediccionRaw, indicadores, historialVelas) {
 
@@ -3082,37 +3684,67 @@ if (historialEMAsGauss.length >= 3) {
 
 // ─── ZONA 1: ARRANQUE DE TENDENCIA ALCISTA ───
 const arranqueAlcista = 
-  (prediccionRaw >= 0.60) &&
-  (adx > 25) &&
-  (atr > 0.06) &&
+  (prediccionRaw >= PARAMETROS.confianzaMinima) &&
+  (adx > PARAMETROS.adxMinimo) &&
+  (atr > PARAMETROS.atrMinimo) &&
   (ema20 > ema50) &&
-  ((ema20 - ema50) / ema50 >= 0.005) && // >1.5%
+  ((ema20 - ema50) / ema50 >= PARAMETROS.emaEma50Minimo) && // >1.5%
 
   (macdActual > 0) &&
   (signalActual > 0);
 
 // ─── ZONA 2: AGOTAMIENTO ALCISTA ───
-const agotamientoAlcista = 
-  (Math.abs(ema20 - ema50) / ema50 <= 0.0008) && // <0.5%
-  (macdActual < 0) &&
-  (signalActual < 0);
+  const agotamientoAlcista = PARAMETROS.cierreAgotamiento ? 
+    (Math.abs(ema20 - ema50) / ema50 <= 0.005) && 
+    (macdActual < 0) && 
+    (signalActual < 0) : false;
+
 
 // ─── ZONA 1: ARRANQUE DE TENDENCIA BAJISTA ───
 const arranqueBajista = 
-  (prediccionRaw <= 0.40) &&
-  (adx > 25) &&
-  (atr > 0.06) &&
+  (prediccionRaw <= 1 - PARAMETROS.confianzaMinima ) &&
+  (adx > PARAMETROS.adxMinimo) &&
+  (atr > PARAMETROS.atrMinimo) &&
   (ema20 < ema50) &&
-  ((ema50 - ema20) / ema50 >= 0.005) &&
+  ((ema50 - ema20) / ema50 >= PARAMETROS.emaEma50Minimo) &&
   (macdActual < 0) &&
   (signalActual < 0);
 
 // ─── ZONA 2: AGOTAMIENTO BAJISTA ───
-const agotamientoBajista = 
-  (Math.abs(ema20 - ema50) / ema50 <= 0.0008) &&
-  (macdActual > 0) &&
-  (signalActual > 0);
+  const agotamientoBajista = PARAMETROS.cierreAgotamiento ? 
+    (Math.abs(ema20 - ema50) / ema50 <= 0.005) && 
+    (macdActual > 0) && 
+    (signalActual > 0) : false;
 
+
+// ─── DETECCIÓN DE CAMBIO DE SIGNO EN HISTOGRAMA ───
+// Variables globales para tracking (agregar al inicio de tu script si no existen)
+
+
+const histogramaActual = macdActual - signalActual;
+const cambioSignoHistograma = (
+  (window.histogramaAnterior > 0 && histogramaActual <= 0) ||
+  (window.histogramaAnterior < 0 && histogramaActual >= 0)
+);
+
+if (cambioSignoHistograma && posicionActual) {
+  // Determinar tipo de cruce
+  const tipoCruce = histogramaActual >= 0 ? 'ALCISTA' : 'BAJISTA';
+  
+  console.log(`🎯 ALERTA: Cambio de signo en histograma MACD - ${tipoCruce}`);
+  
+  // Enviar notificación a Telegram (solo si hay posición abierta)
+  const simbolo = document.getElementById('selector-simbolo')?.value || 'SOLUSDT';
+  const mensajeTelegram = `🎯 <b>ALERTA HISTOGRAMA MACD</b>\n${simbolo}\nCruce: ${tipoCruce}\nEvaluar cierre manual para máxima ganancia`;
+  
+  if (typeof enviarTelegram === 'function') {
+    enviarTelegram(mensajeTelegram);
+  }
+}
+
+// Actualizar valor anterior para próxima iteración
+window.histogramaAnterior = histogramaActual;
+ 
 const modoAuto = document.querySelector('input[name="modo-gauss"]:checked')?.value === 'auto';
 const btnCerrar = document.getElementById('btn-cerrar-gauss');
   const estadoDiv = document.getElementById('estado-reversion');
@@ -3225,7 +3857,7 @@ if (arranqueBajista && !aceleracionBajista) {
   // ✅ MENSAJE DE ORDEN MONTADA
 
      const leverage = parseInt(document.getElementById('apalancamiento')?.value) || 2;
-    const montoInvertido= parseFloat(document.getElementById('montoCompra')?.value) || 90;
+    const montoInvertido= parseFloat(document.getElementById('montoCompra')?.value) ||30;
    
 
   // ✅ MENSAJE DE ORDEN MONTADA
@@ -3245,8 +3877,17 @@ if (arranqueBajista && !aceleracionBajista) {
         btnCerrar.style.display = 'none'; // ocultar cierre (no hay posición)
       }
       const btnAbrir = document.getElementById('btn-abrir-gauss');
+      const btnCancelar = document.getElementById('btn-cancelar-gauss');
       if (btnAbrir) {
         btnAbrir.style.display = 'inline-block';
+        btnCancelar.style.display = 'inline-block';
+         // Función para limpiar los botones
+        const limpiarBotones = () => {
+          btnAbrir.style.display = 'none';
+          btnCancelar.style.display = 'none';
+          ordenEnCurso = false;
+        };
+
         btnAbrir.onclick = () => {
           ordenEnCurso = true;
          // ✅ ENVIAR CONFIRMACIÓN DE EJECUCIÓN MANUAL
@@ -3254,15 +3895,32 @@ if (arranqueBajista && !aceleracionBajista) {
         enviarTelegram(mensajeEjecucion);
           abrirPosicionReal(nuevaOrden)
             .finally(() => {
+              limpiarBotones();
               ordenEnCurso = false;
               btnAbrir.style.display = 'none';
             });
         };
       }
-      if (estadoDiv) estadoDiv.textContent = `🔔 Gauss ${nuevaOrden} detectado. Modo manual.`;
+      // Manejar cancelación
+      if (btnCancelar) {
+        btnCancelar.onclick = () => {
+          if (btnAbrir) btnAbrir.style.display = 'none';
+          btnCancelar.style.display = 'none';
+          ordenEnCurso = false;
+           posicionActual=null;
+            const simbolo = document.getElementById('selector-simbolo').value || 'SOLUSDT';
+            const mensaje = `🚫 <b>APERTURA MANUAL CANCELADA</b>\n${simbolo}`;
+            if (typeof enviarTelegram === 'function') {
+              enviarTelegram(mensaje);
+             
+            }
+          };
+        }
+
+        if (estadoDiv) estadoDiv.textContent = `🔔 Gauss ${nuevaOrden} detectado. Modo manual.`;
+      }
     }
   }
-}
 }
 
 // ─── SISTEMA 1: MODO MERCADO ───
@@ -3300,9 +3958,9 @@ console.log("🔍 [DEBUG] Valores reales antes del if:", {
 });
 
 if (prediccionRaw != null && 
-    confianza >= 0.60 && 
-    adxActual >= 20 && 
-    historialVelas.length >= 55 && 
+    confianza >= PARAMETROS.confianzaMinima && 
+    adxActual >= PARAMETROS.adxMinimo && 
+    historialVelas.length >= PARAMETROS.cantidadVelas && 
     !ordenEnCurso) {
 
   // 🔍 DEBUG: imprimir valores reales
@@ -3333,17 +3991,17 @@ if (prediccionRaw != null &&
 
     // Evaluar según el modo
     if (modo === 'alcista') {
-      if (side === 'BUY' && alcista && rsiSeguroAlcista) {
+      if (side === 'BUY' && alcista ) {
         operar = true;
       }
     } else if (modo === 'bajista') {
-      if (side === 'SELL' && bajista && rsiSeguroBajista) {
+      if (side === 'SELL' && bajista ) {
         operar = true;
       }
     } else if (modo === 'volatil') {
-      if (side === 'BUY' && alcista && rsiSeguroAlcista) {
+      if (side === 'BUY' && alcista ) {
         operar = true;
-      } else if (side === 'SELL' && bajista && rsiSeguroBajista) {
+      } else if (side === 'SELL' && bajista  ) {
         operar = true;
       }
     }
@@ -3356,7 +4014,7 @@ if (prediccionRaw != null &&
       console.log(`[DEBUG] Posicion actual aqui  operar&&!posicionActual:`, posicionActual);
       // 💡 EN VEZ DE ABRIR AHORA, GUARDAMOS PARA EVALUAR EN VELA N+3
       window.prediccionPendiente = {
-        velaObjetivo: historialVelas.length + 3,
+        velaObjetivo: historialVelas.length + 1,
         precioRef: historialVelas[historialVelas.length - 1].close,
         side: side,
         timestamp: Date.now()
@@ -3371,8 +4029,8 @@ if (prediccionRaw != null &&
     } else {
       // 🔍 [DIAGNÓSTICO 4] ¿Cuál condición falló?
       if (prediccionRaw == null) console.log(`❌ Falló: prediccionRaw es null`);
-      if (confianza < 0.63) console.log(`❌ Falló: confianza baja (${(confianza * 100).toFixed(1)}%)`);
-      if (historialVelas.length < 55) console.log(`❌ Falló: velas insuficientes (${historialVelas.length}/55)`);
+      if (confianza < PARAMETROS.confianzaMinima) console.log(`❌ Falló: confianza baja (${(confianza * 100).toFixed(1)}%)`);
+      if (historialVelas.length < PARAMETROS.cantidadVelas) console.log(`❌ Falló: velas insuficientes (${historialVelas.length}/PARAMETROS.cantidadVelas)`);
       if (ordenEnCurso) console.log(`❌ Falló: ordenEnCurso = true`);
     }
   }
@@ -3394,6 +4052,11 @@ function verificarPrediccionPendiente(historialVelas, ordenEnCurso, posicionActu
                               (side === 'SELL' && precioActual < precioRef);
 
     if (movimientoCorrecto) {
+     const simbolo = document.getElementById('selector-simbolo').value;
+    //const mensaje = `✅ <b>ORDEN MANUAL EJECUTADA</b>\n${dir.includes('SUBIDA') ? 'BUY' : 'SELL'} ${simbolo}\nPrecio: $${precioActual.toFixed(2)}`;
+    //enviarTelegram(mensaje);
+
+
       console.log(`✅ Movimiento confirmado en vela #${indiceVelaActual}. Abriendo ${side}.`);
       ordenEnCurso = true;
       abrirPosicionReal(side)
@@ -3414,18 +4077,16 @@ function actualizarSemaforoOperacion(adx, atr) {
   const modoReversionActivo = document.getElementById('modo-reversion-activo');
   const estadoDiv = document.getElementById('estado-reversion');
   
-  if (!semaforoEl || !modoAutoInput) return;
+ if (!semaforoEl || !modoAutoInput) return;
 
-  // 1. Hora local en UTC-4
-  const horaLocal = (new Date().getUTCHours() - 4 + 24) % 24;
+  // ✅ ESTO SIEMPRE da hora en formato 24h (0-23)
+  const horaLocal = new Date().getHours();
 
-  // 2. Condiciones técnicas
+  // Tus condiciones normales
   const adxFuerte = adx > 20;
-  // const atrFuerte = atr > 70;
   const atrFuerte = atr >= 0.007;
-  const enVentanaVerde = horaLocal >= 7 && horaLocal < 13;
+  const enVentanaVerde = horaLocal >= 7 && horaLocal < 17; // 7AM a 1PM
 
-  // 3. Evaluar estado
   let estado = '🔴 ROJO';
   let color = '#ef5350';
   let debeDesactivarAuto = false;
@@ -3435,16 +4096,26 @@ function actualizarSemaforoOperacion(adx, atr) {
     color = '#66bb6a';
     debeDesactivarAuto = false;
     //else if ((horaLocal >= 4 && horaLocal < 16) && (adx > 20 || atr > 50)) {
-  } else if ((horaLocal >= 4 && horaLocal < 16) && (adx > 20 || atr >= 0.007)) {
+  } else if ((horaLocal >= 4 && horaLocal < 18) && (adx > 25 || atr >= 0.06)) {
     estado = '🟡 AMARILLA';
     color = '#ffca28';
     debeDesactivarAuto = false; // permitir manual en amarillo
   }
 
+
+
   // 4. Actualizar UI del semáforo
   semaforoEl.textContent = estado;
   semaforoEl.style.color = color;
-  semaforoEl.title = `Hora: ${horaLocal}:00 | ADX: ${adx.toFixed(1)} | ATR: ${atr.toFixed(1)}`;
+
+// Obtener hora completa en formato local del usuario
+const horaCompleta = new Date().toLocaleTimeString();
+
+semaforoEl.title = `Hora: ${horaCompleta} | ADX: ${adx.toFixed(2)} | ATR: ${atr.toFixed(3)}`;
+
+
+
+ // semaforoEl.title = `Hora: ${horaLocal}:00 | ADX: ${adx.toFixed(1)} | ATR: ${atr.toFixed(1)}`;
 
   // 5. ✅ DESACTIVAR MODO AUTOMÁTICO EN ROJO
   if (debeDesactivarAuto) {
@@ -3477,10 +4148,10 @@ function actualizarSemaforo({ adx = 0,emaActual=0,rsiActual=50,atrActual=0.001, 
 
 
   // ✅ Evaluar condicione0
-  const adxOk = adx >= 25;
-  const datosOk = preciosLen >= 55;
-  const predOk = confianza >= 0.60;
-  const atrok = atrActual >= 0.06;
+  const adxOk = adx >= PARAMETROS.adxMinimo;
+  const datosOk = preciosLen >= PARAMETROS.cantidadVelas;
+  const predOk = confianza >= PARAMETROS.confianzaMinima;
+  const atrok = atrActual >= PARAMETROS.atrMinimo;
 
   let modoOk = false;
   if (modo === 'alcista') modoOk = alcista;
@@ -3584,18 +4255,18 @@ async function iniciarStreaming() {
     estadoEl.style.color = '#FF9800';
     estadoEl.style.fontWeight = 'bold';
   }
+// ✅ CORRECTO - Usa backticks y ${}
+const timeframeReal = PARAMETROS.timeframe; // ej: '1m'
+const ws = new WebSocket(`wss://stream.binance.com:9443/ws/solusdt@kline_${timeframeReal}`);
 
-  const ws = new WebSocket('wss://stream.binance.com:9443/ws/solusdt@kline_1m');
-
-  ws.onopen = () => {
-   
-    console.log('🟢 ¡CONEXIÓN EXITOSA! WebSocket abierto.');
-
-    if (estadoEl) {
-      estadoEl.textContent = '📡 Conectado. Esperando vela cerrada (1m)...';
-      estadoEl.style.color = '#2196F3';
-    }
-  };
+ws.onopen = () => {
+  console.log('🟢 ¡CONEXIÓN EXITOSA! WebSocket abierto.');
+  
+  if (estadoEl) {
+    estadoEl.textContent = `📡 Conectado. Esperando vela cerrada (${timeframeReal})...`;
+    estadoEl.style.color = '#2196F3';
+  }
+};
 
   ws.onerror = (error) => {
     console.error('🔴 ERROR EN LA CONEXIÓN:', error);
@@ -3635,8 +4306,10 @@ ws.onmessage = async (event) => {
     // ✅ Actualizar UI del estado con la vela recibida
     const estadoEl = document.getElementById('estado');
     if (estadoEl) {
-      estadoEl.textContent = `🕒 Recibida vela: ${new Date(kline.t).toLocaleTimeString()} | Cerrada: ${kline.x ? '✅ Sí' : '⏳ No'}`;
-      estadoEl.style.color = kline.x ? '#4CAF50' : '#FF9800';
+      // Usar la longitud del historial de velas cerradas
+      const numeroVela = historialVelas.length;
+      estadoEl.textContent = `🕒 Vela #${numeroVela} | ${new Date(kline.t).toLocaleTimeString()} | Cerrada: ${kline.x ? '✅ Sí' : '⏳ No'}`;
+      estadoEl.style.color = kline.x ? '#11b316' : '#FF9800';
     }
 
     // ✅ Actualizar gráfico incluso si está en curso (como en el primer archivo)
@@ -3683,7 +4356,7 @@ ws.onmessage = async (event) => {
 
     // ✅ Incrementar contador de velas cerradas
     velasCerradas++; // <-- [CORRECCIÓN] Incrementar aquí, después de agregar correctamente
-    console.log(`📊 Velas cerradas acumuladas: ${velasCerradas}/100`);
+    console.log(`📊 Velas cerradas acumuladas: ${velasCerradas}/PARAMETROS.cantidadVelas`);
     
     
     
@@ -3692,7 +4365,7 @@ ws.onmessage = async (event) => {
 
      //cambio diego
     // === PROCESAR DATOS PARA PREDICCIÓN Y TRADING (cuando hay 100 velas cerradas) ===
-    if (velasCerradas >= 55) { // <-- Asegura que haya al menos 100 velas cerradas para procesar
+    if (velasCerradas >= PARAMETROS.cantidadVelas) { // <-- Asegura que haya al menos 100 velas cerradas para procesar
       console.log('✅ 100 velas recibidas. Procesando datos para IA...');
 
 
@@ -3703,13 +4376,13 @@ ws.onmessage = async (event) => {
       
       //cambio diego
       
-      if (historialVelas.length < 55) {
+      if (historialVelas.length < PARAMETROS.cantidadVelas) {
           console.error("[DIAGNÓSTICO WS] historialVelas tiene menos de 100 elementos.");
           return; // Salir si no hay suficientes datos
       }
        // cambio diego
       // ✅ Obtener últimos 100 precios y volúmenes (de historialVelas con estructura {time, open, high, low, close, volume})
-      const ultimas100 = historialVelas.slice(-100);
+      const ultimas100 = historialVelas.slice(-PARAMETROS.cantidadVelas);
       // [DIAGNÓSTICO] Verificar que slice funciona y hay 100 elementos
       console.log(`[DIAGNÓSTICO WS] ultimas100.length: ${ultimas100.length}`);
       console.log(`[DIAGNÓSTICO WS] Primera vela de ultimas100 (close, volume):`, { close: ultimas100[0].close, volume: ultimas100[0].volume });
@@ -3729,7 +4402,7 @@ ws.onmessage = async (event) => {
       console.log(`[DIAGNÓSTICO WS] ultimoPrecio calculado: ${ultimoPrecio} (typeof: ${typeof ultimoPrecio}, isNaN: ${isNaN(ultimoPrecio)})`);
        
        const simbolo = document.getElementById('selector-simbolo').value;
-      const k5m = await obtenerDatos(simbolo, '1m', 50);
+      const k5m = await obtenerDatos(simbolo, PARAMETROS.timeframe, 50);
      
 
       // ✅ Calcular indicadores técnicos (últimos valores de los arrays)
@@ -3823,7 +4496,7 @@ ws.onmessage = async (event) => {
     //const adxActual = indicadores.adx;
      //const atrActual = indicadores.atr; // asegúrate de tener ATR en tus indicadores
 
-     actualizarSemaforoOperacion(adxActual, atrActual);
+     actualizarSemaforoOperacion(adxActual, atrGlobal);
 
       // Asumiendo que window.indicadores existe y tiene macdLine/signalLine
 
@@ -3851,7 +4524,7 @@ ws.onmessage = async (event) => {
           anchoBBRelativo, // 10
           atrRelativo, // 11
           obvNormalizado, // 12
-          0 / 1e6 // 13. openInterest simulado como 0
+           0 / 1e6 // 13. openInterest simulado como 0
           // Total: 10 + 13 = 23
       ];
 
@@ -3865,6 +4538,8 @@ ws.onmessage = async (event) => {
           return; // Salir si las features no tienen la longitud esperada
       }
 
+
+      
       // ✅ Hacer predicción
       let prediccionRaw = null;
       try {
@@ -3880,7 +4555,7 @@ ws.onmessage = async (event) => {
               atrGlobal,           // 9. ATR actual (CORREGIDO)
               obvActual,           // 10. OBV actual (CORREGIDO)
               ultimoPrecio,        // 11. Precio actual
-              0                    // 12. Open Interest (simulado como 0)
+              0 // ← ¡Este es el valor real!
           );
            // Agregado por diego
           window.prediccionRaw = prediccionRaw; // ← Ahora sí podrás verlo en consola
@@ -3893,6 +4568,19 @@ ws.onmessage = async (event) => {
       }
 
 
+
+
+      // ✅ DONDE QUIERA QUE USES prediccionRaw EN TU CÓDIGO PRINCIPAL
+      // Reemplaza el valor original con este bloque:
+
+     // let prediccionUsar = prediccionRaw;
+
+      // Aplicar dirección manual si está activa
+      if (DIRECCION_MANUAL === 'SUBIDA') {
+        prediccionRaw = 0.65; // 100% subida
+      } else if (DIRECCION_MANUAL === 'BAJADA') {
+        prediccionRaw = 0.35; // 100% bajada
+      }
 
 
       // [DIAGNÓSTICO] Calcular confianza y dirección ANTES de actualizar UI
@@ -3943,13 +4631,13 @@ ws.onmessage = async (event) => {
         if (porcEl) porcEl.textContent = `${Math.round(confianza * 100)}%`;
         if (progEl) {
           progEl.style.width = `${Math.round(confianza * 100)}%`;
-          progEl.style.backgroundColor = confianza >= 0.60 ? (dir === 'SUBIDA' ? '#26a69a' : '#ef5350') : '#666';
+          progEl.style.backgroundColor = confianza >= PARAMETROS.confianzaMinima? (dir === 'SUBIDA' ? '#26a69a' : '#ef5350') : '#666';
         }
       }
 
         const direccion = prediccionRaw > 0.5 ? 'SUBIDA' : 'BAJADA';
         const VELAS_FUTURAS = 3; // ajusta según tu modelo
-        const confianzaMinima = 0.60; // 65%
+        const confianzaMinima = PARAMETROS.confianzaMinima; // 65%
         if (confianza >= confianzaMinima || confianza <= (1 - confianzaMinima)) {
          console.log(`🧠 Predicción fuerte: ${direccion} (${(confianza * 100).toFixed(1)}%)`);
 
@@ -4008,11 +4696,6 @@ ws.onmessage = async (event) => {
           const tiempoMinimoEntreChecks = 10000; // 10 segundos en milisegundos (ajusta según sea necesario)
 
           let posiciones = null;
-
-
-
-
-
 
 
 
@@ -4107,7 +4790,7 @@ ws.onmessage = async (event) => {
           }
 
           // ✅ Solo evaluar cierre si ya se calculó la predicción y hay posición
-          if (historialVelas.length >= 30 && prediccionRaw != null && posicionActual) { // <-- Asegurar que posicionActual no sea null aquí también
+          if (historialVelas.length >= 30  && posicionActual) { // <-- Asegurar que posicionActual no sea null aquí tambiénnano
             const size = parseFloat(posicionActual.positionAmt);
             const entryPrice = parseFloat(posicionActual.entryPrice);
             const markPrice = parseFloat(posicionActual.markPrice);
@@ -4149,7 +4832,7 @@ ws.onmessage = async (event) => {
               // Dinámico: basado en ATR (sin leverage para precios)
               try {
                 const simbolo = document.getElementById('selector-simbolo').value;
-                const k5m = await obtenerDatos(simbolo, '1m', 50);
+                const k5m = await obtenerDatos(simbolo, PARAMETROS.timeframe, 50);
                 if (k5m.length >= 20) {
                   const atrArray = calcularATR(k5m, 14);
                   const atrVal = atrArray .length > 0 ? atrArray [atrArray .length - 1] : 0;// fallback razonable
@@ -4207,92 +4890,130 @@ ws.onmessage = async (event) => {
 
 
 
-            // 🔴 DECISIÓN DE CIERRE: SL, TP1, TP2, IA y Trailing (opcional)
 
-            const trailingEnabled = document.getElementById('trailing-enabled')?.checked || false;
+           // const trailingEnabled = document.getElementById('trailing-enabled')?.checked || false;
             let cerrar = false;
             let motivo = 'Manual';
 
-            // 1. 🟢 TP1: Cierre parcial al 50% del ROE objetivo
-            // (Solo si TP1 no se ha ejecutado)
-            if (!estadoLocal.tp1Cerrado && roePct >= tpPctEquity ) {
-              console.log(`✅ TP1 ALCANZADO | ROE: ${roePct.toFixed(2)}%`);
-              estadoLocal.tp1Cerrado = true;
-              window.estadoPosiciones[symbolSideKey] = estadoLocal;
+            // Verificar si el modo reanclaje está activo
+            const modoReanclajeActivo = document.getElementById('modo-reanclaje-activo')?.checked || false;
 
-              ordenEnCurso = true;
-              const simbolo = document.getElementById('selector-simbolo').value;
-              cerrarParcial(simbolo, posicionActual.positionSide, Math.abs(size) * 0.5, `TP1 (100%)`)
-                .finally(() => { ordenEnCurso = false; });
-           }
+            // Solo ejecutar cierre estático si el modo dinámico NO está activo
+            if (!modoReanclajeActivo) {
+              // 🟢 TP COMPLETO: Cerrar toda la posición al alcanzar TP
+              if (!cerrar && roePct >= tpPctEquity) {
+                cerrar = true;
+                motivo = `✅ TP ESTATICO: ${roePct.toFixed(2)}%`;
+              }
 
-            // 2. 📉 Trailing Stop (opcional, solo si hay ganancia)
-            //if (trailingEnabled && roePct >= 0.3) {
-             //  console.log(`🚀 [TRAILING ACTIVADO] ROE=${roePct.toFixed(2)}%`);
-              
-             // if (roePct <= 0.1) {
-             //   cerrar = true;
-             //   motivo = `🟢 Trailing: +${roePct.toFixed(2)}%`;
-             // console.log(`✅ [CIERRE POR TRAILING] ROE=${roePct.toFixed(2)}%`);
-            //  }
-          //  }
+              // 🔴 SL COMPLETO: Cerrar toda la posición al alcanzar SL  
+              if (!cerrar && roePct <= -slPctEquity) {
+                cerrar = true;
+                motivo = `🔴 SL ESTATICO: ${roePct.toFixed(2)}%`;
+              }
 
-            // 3. 🔴 Stop Loss (solo si no se cerró por trailing)
-            if (!cerrar && roePct <= -slPctEquity) {
-              cerrar = true;
-              motivo = `🔴 SL: ${roePct.toFixed(2)}%`;
+
+              if (cerrar) { // <-- Esta es la condición que decide si se cierra
+                // ACTIVAR BANDERA ANTES DE CERRAR TOTAL
+                ordenEnCurso = true;
+                   const simbolo = document.getElementById('selector-simbolo').value;
+                cerrarPosicion(simbolo, posicionActual.positionSide, motivo) // <-- Llamada a la función de cierre total
+                  .finally(() => {
+                    // DESACTIVAR BANDERA DESPUÉS DE CERRAR TOTAL (éxito o error)
+                    ordenEnCurso = false;
+                    // [Corrección] Limpiar estado persistente si se cierra totalmente
+                    delete window.estadoPosiciones[symbolSideKey];
+                  });
+              }
+
+
             }
 
-            // 4. 🎯 TP2 (Take Profit total)
-           // else if (!cerrar && roePct >= tpPctEquity) {
-            //  cerrar = true;
-           //   motivo = `🎯 TP2: +${roePct.toFixed(2)}%`;
-           // }
-
-            // 5. 🤖 Cierre por IA (solo si no se cerró por TP/SL/trailing)
-          //  else if (!cerrar) {
-           //   const esShort = !esLong;
-            //  const debeCerrarPorIA = prediccionRaw != null &&
-            //    confianza >= 0.60 &&
-            //    roePct < 0 &&
-            //    Math.abs(roePct) > (slPctEquity * 0.5) &&
-            ///    ((esLong && prediccionRaw <= 0.35) || (esShort && prediccionRaw >= 0.65));
-
-            //  if (debeCerrarPorIA) {
-            //    cerrar = true;
-           //     motivo = `🤖 IA cambio: ${roePct.toFixed(2)}%`;
-           //   }
-           // }
-
-            if (cerrar) { // <-- Esta es la condición que decide si se cierra
-              // ACTIVAR BANDERA ANTES DE CERRAR TOTAL
-              ordenEnCurso = true;
-              const simbolo = document.getElementById('selector-simbolo').value;
-              cerrarPosicion(simbolo, posicionActual.positionSide, motivo) // <-- Llamada a la función de cierre total
-                .finally(() => {
-                  // DESACTIVAR BANDERA DESPUÉS DE CERRAR TOTAL (éxito o error)
-                  ordenEnCurso = false;
-                  // [Corrección] Limpiar estado persistente si se cierra totalmente
-                  delete window.estadoPosiciones[symbolSideKey];
-                });
-            }
-            
              
             let entrada = entryPrice;
             let tpPct = tpPctEquity;
             let slPct = slPctEquity;
+            
+              const simbolo = posicionActual.simbolo;
+              const precioActual = markPrice; // Asegúrate que entryPrice sea el precio actual del mercado// cambio diego
+              // ✅ NO declares nuevas variables cerrar/motivo aquí
+              if (modoReanclajeActivo) {
+                const resultado = evaluarCierreInteligente(
+                  leverage, 
+                  entrada,
+                  markPrice,
+                  simbolo,
+                  precioActual,
+                  esShort,
+                  slPct,
+                  tpPct,
+                  true
+                );
+                // ✅ Actualiza las variables existentes
+                cerrar = resultado.cerrar;
+                motivo = resultado.motivo;
+              }
+
+
+            // Mostrar info en UI (solo si hay anclaje Y posición activa)
+            if (posicionActual && modoReanclajeActivo && puntosAnclaje[simbolo]) {
+              const precioAnclaje = puntosAnclaje[simbolo].anclajeActual;
+              const vecesReanclaje = puntosAnclaje[simbolo].vecesReanclado || 0;
+
+              if (document.getElementById('info-anclaje')) {
+                document.getElementById('info-anclaje').textContent =
+                  `Anclaje: $${precioAnclaje.toFixed(4)} | Reanclajes: ${vecesReanclaje}`;
+              }
+            } else {
+              // Limpiar la UI cuando no hay posición o reanclaje desactivado
+              if (document.getElementById('info-anclaje')) {
+                document.getElementById('info-anclaje').textContent = 'Sin posición activa';
+              }
+            }
+
+
+              if (puntosAnclaje[simbolo]) {
+              actualizarLineasReanclaje(
+              puntosAnclaje[simbolo].anclajeActual,
+              tpPct,
+              slPct,
+              window.sideActual
+             );
+            }
              
             // ✅ Actualizar líneas de PE/TP/SL (solo si hay posición abierta)
             actualizarLineasPrecios(entrada, tpPct, slPct, leverage);
 
+               // En tu bucle principal
+            if (puntosAnclaje[simbolo]) {
+              // ✅ Asegurar que las líneas existen
+                   console.log('existe puntosAnclaje[simbolo])');
+              if (!lineaPE_Reanclaje) {
+                     console.log('no existen lineaPE_Reanclaje)');
+                inicializarLineasReanclaje();
+                 console.log('se llama a la funcion inicializarLineasReanclaje');
+              }
+               console.log('se llama a la funcion actualizarLineasReanclaje');
+              actualizarLineasReanclaje(
+                puntosAnclaje[simbolo].anclajeActual,
+                tpPct,
+                slPct,
+                window.sideActual
+              );
+               console.log(`🔍 puntosAnclaje[simbolo].anclajeActual: $${puntosAnclaje[simbolo].anclajeActual} |  window.sideActual: $${ window.sideActual} | tpPct: $${tpPct.toFixed(4)} | slPct: $${slPct.toFixed(4)}`);
+
+
+            }
+
+
           } // Fin del if (historialVelas.length >= 30 && prediccionRaw != null && posicionActual)
 
-           console.log("🔍 [GAUSS] ¿Orden en Curso activa?", ordenEnCurso);
 
           // Después de tener: prediccionRaw, window.simboloActual, indicadores, historialVelas
           evaluarAperturaReversion(document.getElementById('selector-simbolo').value, prediccionRaw, window.indicadores, historialVelas);
 
-
+          // Actualizar líneas de REANCLAJE (anclaje actual)
+       
 
           // ❌ Desactivar otros modos si Gauss está activo
          // if (document.getElementById('modo-gauss-activo')?.checked) {
@@ -4333,7 +5054,8 @@ ws.onmessage = async (event) => {
               ordenEnCurso,
               posicionActual,
               alcista,
-              bajista
+              bajista,
+             
             );
           }
           
@@ -4361,7 +5083,7 @@ ws.onmessage = async (event) => {
             } else {
               try {
                 const simbolo = document.getElementById('selector-simbolo').value;
-                const k5m = await obtenerDatos(simbolo, '1m', 50);
+                const k5m = await obtenerDatos(simbolo, PARAMETROS.timeframe, 50);
                 if (k5m.length >= 20) {
                   const atrArray = calcularATR(k5m, 14);
                   const atrVal = atrArray.length > 0 ? atrArray[atrArray.length - 1] : 0;// fallback razonable
@@ -4424,10 +5146,10 @@ ws.onmessage = async (event) => {
         // === MOSTRAR PROGRESO SI AÚN NO SE ALCANZA EL LÍMITE ===
         const estadoEl = document.getElementById('estado');
         if (estadoEl) {
-          estadoEl.textContent = `📊 Recibidas ${velasCerradas}/100 velas. Esperando...`;
-          estadoEl.style.color = '#666';
+          estadoEl.textContent = `📊 Recibidas ${velasCerradas}/PARAMETROS.cantidadVelas velas. Esperando...`;
+          estadoEl.style.color = '#397272';
         }
-        console.log(`[DEBUG] Recibidas ${velasCerradas}/100 velas. Esperando más datos para procesar.`);
+        console.log(`[DEBUG] Recibidas ${velasCerradas}/PARAMETROS.cantidadVelas velas. Esperando más datos para procesar.`);
       }
 
       // ... (todo tu código de procesamiento de vela, indicadores, predicción, UI, trading) ...
@@ -4583,7 +5305,7 @@ async function actualizarSaldoCuenta(tipoCuenta = 'testnet') {
   const capitalActual = parseFloat(localStorage.getItem(`${keyPrefix}capitalActual`)) || 
                        (tipoCuenta === 'mainnet' ? 0 : 1000);
   
-  const montoInvertir = parseFloat(document.getElementById('montoCompra')?.value) || 90;
+  const montoInvertir = parseFloat(document.getElementById('montoCompra')?.value) || 30;
   
   // ✅ Obtener precio BTC de forma segura
   let saldoBTC = 0;
@@ -4721,7 +5443,7 @@ async function operacionPrueba() {
   const ticker = await (await fetch(`/api/binance/ticker?symbol=${simbolo}`)).json();
   const precioActual = parseFloat(ticker.price);
   
-  if (adxActual < 20) {
+  if (adxActual < 15) {
     const continuar = confirm(`⚠️ ADX: ${adxActual.toFixed(1)} (<20). ¿Forzar orden?`);
     if (!continuar) return;
   }
@@ -4782,7 +5504,7 @@ async function ejecutarBacktesting() {
     const tpslMode = document.getElementById('tpsl-mode')?.value || 'dinamico';
     const leverage = parseInt(document.getElementById('apalancamiento')?.value) || 2;
     const notional = parseFloat(document.getElementById('montoCompra')?.value) || 100;
-    const intervalo = document.getElementById('intervalo-backtest')?.value || '1m'; // ← Selector de intervalo
+    const intervalo = document.getElementById('intervalo-backtest')?.value || PARAMETROS.timeframe; // ← Selector de intervalo
     const adxUmbral = parseFloat(document.getElementById('adx-umbral')?.value) || 20; // ← Umbral ajustable
 
     // 🔹 Descargar datos reales
@@ -4878,7 +5600,7 @@ async function ejecutarBacktesting() {
         let cerrar = false, motivo = 'CloseOperation';
         if (roeRestante <= -sl) cerrar = true, motivo = `SL`;
         else if (roeRestante >= tp) cerrar = true, motivo = `TP2 (50%)`;
-        else if (confianza >= 0.60 && roeRestante < -0.5 && Math.abs(roeRestante) > (sl * 0.5)) {
+        else if (confianza >= PARAMETROS.confianzaMinima && roeRestante < -0.5 && Math.abs(roeRestante) > (sl * 0.5)) {
           const debeCerrarIA = (side === 'LONG' && prediccionRaw <= 0.3) || (side === 'SHORT' && prediccionRaw >= 0.7);
           if (debeCerrarIA) cerrar = true, motivo = `IA`;
         }
@@ -4891,7 +5613,7 @@ async function ejecutarBacktesting() {
       }
 
       // 🔹 ABRIR NUEVA POSICIÓN
-      if (!posicionAbierta && confianza >= 0.60 && adxActual > adxUmbral) {
+      if (!posicionAbierta && confianza >= PARAMETROS.confianzaMinima && adxActual > adxUmbral) {
         let side = null;
         if (modo === 'alcista' && prediccionRaw > 0.5 && alcista) side = 'LONG';
         else if (modo === 'bajista' && prediccionRaw <= 0.5 && bajista) side = 'SHORT';
