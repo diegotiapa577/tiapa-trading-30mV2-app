@@ -87,7 +87,13 @@ let PARAMETROS = {
    emaEma50MinimoAg:0.001,
   cierreAgotamiento: true,
   cantidadVelas: 55, // ← Nuevo parámetro
-  tp: 6.0,
+  obvDivisor: 100000000,
+    oiDivisor: 1000000000,
+  rsiDivisor:100,
+  posicionbbDivisor:2.0,
+  velasFuturas : 3,
+  confianzaMinimaStop : 0.57,
+  tp: 6.0,  
   sl: 3.0
 };
 
@@ -105,6 +111,12 @@ const PRESETS = {
      emaEma50MinimoAg:0.001,
     cierreAgotamiento: true,
     cantidadVelas: 55, // ← Nuevo parámetro
+     obvDivisor: 100000000,
+    oiDivisor: 1000000000,
+    rsiDivisor: 100,
+    posicionbbDivisor:2.0,
+    velasFuturas : 3,
+     confianzaMinimaStop : 0.57,
     tp: 6.0,
     sl: 3.0
   },
@@ -120,6 +132,12 @@ const PRESETS = {
      emaEma50MinimoAg:0.001,
     cierreAgotamiento: false,
     cantidadVelas: 55, // ← Nuevo parámetro
+     obvDivisor: 100000000,
+    oiDivisor: 1000000000,
+    rsiDivisor: 100,
+    posicionbbDivisor: 2.0,
+    velasFuturas: 3,
+     confianzaMinimaStop : 0.57,
     tp: 1.0,
     sl: 0.5
   }
@@ -164,6 +182,13 @@ function actualizarFormulario() {
   document.getElementById('param-ema20ema50Ag').value = PARAMETROS.emaEma50MinimoAg;
    document.getElementById('cierre-agotamiento').checked = PARAMETROS.cierreAgotamiento;
    document.getElementById('cantidad-velas').value = PARAMETROS.cantidadVelas;
+
+   document.getElementById('obv_Divisor').value = PARAMETROS.obvDivisor;
+   document.getElementById('oi_Divisor').value = PARAMETROS.oiDivisor;
+   document.getElementById('rsi_Divisor').value = PARAMETROS.rsiDivisor;
+   document.getElementById('posicion_bb_Divisor').value = PARAMETROS.posicionbbDivisor;
+   document.getElementById('posicion_bb_Divisor').value = PARAMETROS.velasFuturas;
+   document.getElementById('confianza_Minima_Stop').value = PARAMETROS.confianzaMinimaStop;
   document.getElementById('takeProfit').value = PARAMETROS.tp;
   document.getElementById('stopLoss').value = PARAMETROS.sl;
 }
@@ -183,6 +208,12 @@ function guardarParametros() {
      emaEma50MinimoAg: parseFloat(document.getElementById('param-ema20ema50Ag').value),
     cierreAgotamiento : document.getElementById('cierre-agotamiento').checked,
     cantidadVelas : parseInt(document.getElementById('cantidad-velas').value) || 55,
+     obvDivisor : parseInt(document.getElementById('obv_Divisor').value) || 1000000000,
+     oiDivisor : parseInt(document.getElementById('oi_Divisor').value) || 1000000,
+     rsiDivisor : parseInt(document.getElementById('rsi_Divisor').value) || 100,
+     posicionbbDivisor: parseInt(document.getElementById('posicion_bb_Divisor').value) || 1.0 ,
+      velasFuturas: parseInt(document.getElementById('velas_Futuras').value) || 3,
+       confianzaMinimaStop: parseInt(document.getElementById('confianza_Minima_Stop').value) || 0.57,
     tp: parseFloat(document.getElementById('takeProfit').value),
     sl: parseFloat(document.getElementById('stopLoss').value)
   };
@@ -905,11 +936,11 @@ async function obtenerOpenInterest(symbol = 'SOLUSDT') {
 
 
 // === ENTRENAMIENTO: PREPARAR DATOS CON ETIQUETAS (V7 — Balanced, ATR-normalizado, 3 velas) ===
- const VELAS_FUTURAS = 3; 
-function prepararDatosConEtiquetas(klines ,openInterest=9500000 ) {
+ const VELAS_FUTURAS = PARAMETROS.velasFuturas ; 
+function prepararDatosConEtiquetas(klines) {
  // const featuresList = [];
   //const labelsList = [];
-  const oiNorm = openInterest / 1e7;
+  
   const closes = klines.map(k => k.close);
   const volumes = klines.map(k => k.volume);
   const rsiArr = calcularRSI(closes, 14);
@@ -923,8 +954,8 @@ function prepararDatosConEtiquetas(klines ,openInterest=9500000 ) {
   const desfaseRsi = 13, desfaseEma = 19, desfaseMacd = 33,
         desfaseBb = 19, desfaseAtr = 13, desfaseAdx = 27, desfaseObv = 0;
   const maxDesfase = Math.max(desfaseRsi, desfaseEma, desfaseMacd, desfaseBb, desfaseAtr, desfaseAdx, desfaseObv, 10);
-  const startIndex = Math.max(maxDesfase, VELAS_FUTURAS);
-  const endIndex = klines.length - VELAS_FUTURAS;
+  const startIndex = Math.max(maxDesfase, PARAMETROS.velasFuturas);
+  const endIndex = klines.length - PARAMETROS.velasFuturas;
 
   if (startIndex >= endIndex) {
     console.error(`[Entrenamiento] No hay suficientes datos: ${klines.length} velas → usable: ${endIndex - startIndex}`);
@@ -945,7 +976,7 @@ function prepararDatosConEtiquetas(klines ,openInterest=9500000 ) {
     const adxActual = adxArr[i - desfaseAdx] || 0;
     const obvActual = obvArr[i - desfaseObv] || 0;
     const precioActual = closes[i];
-    const precioFuturo = closes[i + VELAS_FUTURAS];
+    const precioFuturo = closes[i + PARAMETROS.velasFuturas];
     const retorno = (precioFuturo - precioActual) / precioActual;
     const retornoNormalizado = retorno / (atrActual / precioActual);
 
@@ -960,23 +991,23 @@ function prepararDatosConEtiquetas(klines ,openInterest=9500000 ) {
     const posicionBB = anchoBB > 0 ? (precioActual - bbInf) / anchoBB : 0.5;
     const anchoBBRelativo = anchoBB / precioActual;
     const atrRelativo = atrActual / precioActual;
-    const obvNormalizado = obvActual / 1e6;
+    const obvNormalizado = obvActual / PARAMETROS.obvDivisor;
 
     const features = [
       ...cambios,
       volumes.slice(i - 10, i).reduce((a, b) => a + b, 0) / 10 / 1e6,
-      rsiActual / 100,
+      rsiActual / PARAMETROS.rsiDivisor,
       precioActual > emaActual ? 1 : 0,
       rsiActual > 70 ? 1 : 0,
       rsiActual < 30 ? 1 : 0,
       macdActual / 1000,
       signalActual / 1000,
       (macdActual - signalActual) / 1000,
-      posicionBB,
+      posicionBB / PARAMETROS.posicionbbDivisor,
       anchoBBRelativo,
       atrRelativo,
       obvNormalizado,
-      openInterest / 1e7 // openInterest placeholder
+        0 / 1e7 // openInterest placeholder
     ];
 
    // console.log('🔍 Valor usable de obvNormalizado funcion preparaDatosEtiquetas', obvNormalizado);
@@ -1239,7 +1270,7 @@ function prepararDatosParaIA(klines, openInterest ) {
     const features = [
       ...cambios,
       volumes.slice(i - 10, i).reduce((a, b) => a + b, 0) / 10 / 1e6,
-      (rsi[i] || 50) / 100,
+      (rsi[i] || 50) / PARAMETROS.rsiDivisor,
       closes[i] > (ema[i] || closes[i]) ? 1 : 0,
       (rsi[i] || 50) > 70 ? 1 : 0,
       (rsi[i] || 50) < 30 ? 1 : 0,
@@ -1249,8 +1280,8 @@ function prepararDatosParaIA(klines, openInterest ) {
       ((closes[i] - (bbInferior[i] || closes[i])) / ((bbSuperior[i] || closes[i]) - (bbInferior[i] || closes[i])) || 0.5),
       ((bbSuperior[i] || closes[i]) - (bbInferior[i] || closes[i])) / closes[i],
       (atr[i] || 0) / closes[i],
-      (obv[i] || 0) / 1e6,
-      openInterest / 1e7
+      (obv[i] || 0) / PARAMETROS.obvDivisor,
+      openInterest / PARAMETROS.oiDivisor
     ];
     const futuro = closes[i + 1];
     X.push(features);
@@ -1266,7 +1297,7 @@ async function entrenarRed() {
   const SIMBOLOS_ENTRENAMIENTO = ['SOLUSDT'];
   const INTERVALO = PARAMETROS.timeframe; //  15m
   const LIMITE_DATOS = PARAMETROS.velasEntrenamiento; // Ajusta este número. Por ejemplo, 15000 velas de 4h por símbolo
-  const VELAS_FUTURAS = 3;
+  const VELAS_FUTURAS = PARAMETROS.velasFuturas;
   const EPOCAS = 50;
   const BATCH_SIZE = 32;
   const estadoEl = document.getElementById('estado');
@@ -1469,14 +1500,14 @@ async function predecir(ultimosPrecios, ultimosVolumenes, rsiActual, emaActual, 
   const cambios = ultimos10.map((p, idx) => idx === 0 ? 0 : (p - ultimos10[idx - 1]) / ultimos10[idx - 1]);
 
   const volumenPromedio = ultimosVolumenes.slice(-10).reduce((a, b) => a + b, 0) / 10 / 1e6;
-  const rsiNorm = rsiActual / 100;
+  const rsiNorm = rsiActual / PARAMETROS.rsiDivisor;
   const precioSobreEMA = precioActual > emaActual ? 1 : 0;
   const rsiSobreComprado = rsiActual > 70 ? 1 : 0;
   const rsiSobreVendido = rsiActual < 30 ? 1 : 0;
   const macdNorm = macdActual / 1000;
   const signalNorm = (signalActual || 0) / 1000;
   const histogramaNorm = (macdActual - signalActual) / 1000;
-  const anchoBBRel = anchoBB / precioActual;
+  const anchoBBRel = (anchoBB / precioActual) / PARAMETROS.posicionbbDivisor;
   const atrRel = atrActual / precioActual;
   const obvNorm = obvActual ;      // porque ya es obvNorm
   const oiNorm = openInterest ;    // porque ya es oiNorm
@@ -1559,14 +1590,14 @@ async function predecirprueba(ultimosPrecios, ultimosVolumenes, rsiActual, emaAc
   const features = [
     ...cambios,
     ultimosVolumenes.slice(-10).reduce((a, b) => a + b, 0) / 10 / 1e6,
-    rsiActual / 100,
+    rsiActual / PARAMETROS.rsiDivisor,
     precioActual > emaActual ? 1 : 0,
     rsiActual > 70 ? 1 : 0,
     rsiActual < 30 ? 1 : 0,
     macdActual / 1000,
     (signalActual || 0) / 1000,
     (macdActual - signalActual) / 1000,
-    posicionBB,
+    posicionBB / PARAMETROS.posicionbbDivisor,
     anchoBB / precioActual,
     atrActual / precioActual,
     obvActual / 1e6,//
@@ -3836,7 +3867,7 @@ const btnCerrar = document.getElementById('btn-cerrar-gauss');
 if (posicionActual && posicionActual.simbolo === simbolo) {
   const esLong = posicionActual.side === 'BUY';
   const debeCerrar = (esLong && agotamientoAlcista) || (!esLong && agotamientoBajista);
-   const UMBRAL_CONFIANZA_CIERRE = 0.57; // 60%
+   const UMBRAL_CONFIANZA_CIERRE =  PARAMETROS.confianzaMinimaStop ; // 60%
     const confianza = prediccionRaw > 0.5 ? prediccionRaw : 1 - prediccionRaw;
     const direccionActual = posicionActual.side === 'LONG' ? 'BUY' : 'SELL';
     const direccionIA = prediccionRaw > 0.5 ? 'BUY' : 'SELL';
@@ -4573,7 +4604,7 @@ ws.onmessage = async (event) => {
       const posicionBB = anchoBB > 0 ? (ultimoPrecio - bbInf) / anchoBB : 0.5;
       const anchoBBRelativo = anchoBB / ultimoPrecio;
       const atrRelativo = atrGlobal / ultimoPrecio;
-      const obvNormalizado = obvActual / 1e6;
+      const obvNormalizado = obvActual / PARAMETROS.obvDivisor;
 
       // [DIAGNÓSTICO] Calcular cambios para la predicción
       const ultimosPrecios = closes.slice(-10);
@@ -4617,10 +4648,10 @@ ws.onmessage = async (event) => {
       // actualizarTPSLenUI(); // ← tu bloque debe estar aquí
 
       // [DIAGNÓSTICO] Construir array de features como lo hace prepararDatosParaIA
-         const obvNorm = obvActual / 1e6;      // desde tu cálculo local
+         const obvNorm = obvActual / PARAMETROS.obvDivisor;      // desde tu cálculo local
         // ✅ BIEN
       const oiBruto = await obtenerOpenInterest('SOLUSDT'); // → 9525585.71
-      const oiNorm = oiBruto / 1e7; // → 0.9526
+      const oiNorm = oiBruto / PARAMETROS.oiDivisor; // → 0.9526
 
          
             console.log("🔍 Antes de predecir → obvNorm:", obvNorm);
@@ -4629,14 +4660,14 @@ ws.onmessage = async (event) => {
       const featuresParaPrediccion = [
           ...cambios, // 10
           ultimosVolumenes.reduce((a, b) => a + b, 0) / 10 / 1e6, // 1
-          rsiActual / 100, // 2
+          rsiActual / PARAMETROS.rsiDivisor, // 2
           ultimoPrecio > e20 ? 1 : 0, // 3
           rsiActual > 70 ? 1 : 0, // 4
           rsiActual < 30 ? 1 : 0, // 5
           macdActual / 1000, // 6
           signalActual / 1000, // 7
           (macdActual - signalActual) / 1000, // 8
-          posicionBB, // 9
+          posicionBB / PARAMETROS.posicionbbDivisor, // 9
           anchoBBRelativo, // 10
           atrRelativo, // 11
           obvNorm, // 12
@@ -4757,7 +4788,7 @@ ws.onmessage = async (event) => {
       }
 
         const direccion = prediccionRaw > 0.5 ? 'SUBIDA' : 'BAJADA';
-        const VELAS_FUTURAS = 3; // ajusta según tu modelo
+        const VELAS_FUTURAS = PARAMETROS.velasFuturas; // ajusta según tu modelo
         const confianzaMinima = PARAMETROS.confianzaMinima; // 65%
         if (confianza >= confianzaMinima || confianza <= (1 - confianzaMinima)) {
          console.log(`🧠 Predicción fuerte: ${direccion} (${(confianza * 100).toFixed(1)}%)`);
